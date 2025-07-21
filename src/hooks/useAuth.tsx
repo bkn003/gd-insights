@@ -47,7 +47,8 @@ export const useAuth = () => {
         .single();
 
       if (error) throw error;
-      setProfile(data);
+      // Cast the role to the expected type since we know it's valid
+      setProfile(data as Profile);
     } catch (error) {
       console.error('Error fetching profile:', error);
     } finally {

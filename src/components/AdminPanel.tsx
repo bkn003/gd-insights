@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -54,7 +53,8 @@ export const AdminPanel = () => {
       setShops(shopsRes.data);
       setCategories(categoriesRes.data);
       setSizes(sizesRes.data);
-      setProfiles(profilesRes.data);
+      // Cast the profiles data to ensure proper typing
+      setProfiles(profilesRes.data as Profile[]);
     } catch (error) {
       console.error('Error fetching data:', error);
       toast.error('Failed to load data');
