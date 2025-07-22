@@ -187,7 +187,7 @@ export const ReportsPanel = () => {
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     link.setAttribute('href', url);
-    link.setAttribute('download', `damaged_goods_report_${format(new Date(), 'yyyy-MM-dd')}.csv`);
+    link.setAttribute('download', `gd_report_${format(new Date(), 'yyyy-MM-dd')}.csv`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
@@ -218,7 +218,7 @@ export const ReportsPanel = () => {
             Filters & Export
           </CardTitle>
           <CardDescription>
-            Filter and export damaged goods reports
+            Filter and export GD reports
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -350,7 +350,7 @@ export const ReportsPanel = () => {
 
       <Card>
         <CardHeader>
-          <CardTitle>Damaged Goods Reports</CardTitle>
+          <CardTitle>GD Reports</CardTitle>
           <CardDescription>
             Showing {filteredEntries.length} of {entries.length} entries
           </CardDescription>

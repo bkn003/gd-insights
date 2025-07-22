@@ -32,7 +32,7 @@ export const MainApp = () => {
       case 'admin':
         return isAdmin ? <AdminPanel /> : <div className="text-center text-muted-foreground">Access denied</div>;
       case 'reports':
-        return <ReportsPanel />;
+        return isAdmin ? <ReportsPanel /> : <div className="text-center text-muted-foreground">Access denied</div>;
       default:
         return <DamagedGoodsForm />;
     }
@@ -60,14 +60,16 @@ export const MainApp = () => {
               Dashboard
             </Button>
           )}
-          <Button
-            variant={activeTab === 'reports' ? 'default' : 'ghost'}
-            onClick={() => setActiveTab('reports')}
-            className="flex items-center gap-2"
-          >
-            <FileText className="h-4 w-4" />
-            Reports
-          </Button>
+          {isAdmin && (
+            <Button
+              variant={activeTab === 'reports' ? 'default' : 'ghost'}
+              onClick={() => setActiveTab('reports')}
+              className="flex items-center gap-2"
+            >
+              <FileText className="h-4 w-4" />
+              Reports
+            </Button>
+          )}
           {isAdmin && (
             <Button
               variant={activeTab === 'admin' ? 'default' : 'ghost'}

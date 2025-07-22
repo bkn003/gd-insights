@@ -37,9 +37,11 @@ export const DamagedGoodsForm = () => {
     if (profile?.shop_id) {
       setFormData(prev => ({ ...prev, shop_id: profile.shop_id || '' }));
       // Find the user's shop for display
-      const shop = shops.find(s => s.id === profile.shop_id);
-      if (shop) {
-        setUserShop(shop);
+      if (shops.length > 0) {
+        const shop = shops.find(s => s.id === profile.shop_id);
+        if (shop) {
+          setUserShop(shop);
+        }
       }
     }
   }, [profile, shops]);
@@ -85,13 +87,13 @@ export const DamagedGoodsForm = () => {
           size_id: formData.size_id,
           shop_id: formData.shop_id,
           employee_id: profile.id,
-          employee_name: profile.name, // Store reporter name
+          employee_name: profile.name,
           notes: formData.notes.trim(),
         });
 
       if (error) throw error;
 
-      toast.success('Damaged goods entry created successfully!');
+      toast.success('GD entry created successfully!');
       setFormData({
         category_id: '',
         size_id: '',
@@ -115,9 +117,9 @@ export const DamagedGoodsForm = () => {
   return (
     <Card className="w-full max-w-2xl mx-auto">
       <CardHeader>
-        <CardTitle>Report Damaged Goods</CardTitle>
+        <CardTitle>Report GD</CardTitle>
         <CardDescription>
-          Fill out this form to report damaged goods in your store
+          Fill out this form to report GD in your store
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -167,7 +169,7 @@ export const DamagedGoodsForm = () => {
           <div className="space-y-2">
             <Label htmlFor="shop">Shop *</Label>
             <Input
-              value={userShop?.name || 'Loading...'}
+              value={userShop?.name || (profile?.shop_id ? 'Loading shop...' : 'No shop assigned')}
               disabled
               className="bg-gray-100 cursor-not-allowed"
             />
