@@ -40,6 +40,7 @@ export type Database = {
           category_id: string
           created_at: string | null
           employee_id: string
+          employee_name: string | null
           id: string
           notes: string
           shop_id: string
@@ -50,6 +51,7 @@ export type Database = {
           category_id: string
           created_at?: string | null
           employee_id: string
+          employee_name?: string | null
           id?: string
           notes: string
           shop_id: string
@@ -60,6 +62,7 @@ export type Database = {
           category_id?: string
           created_at?: string | null
           employee_id?: string
+          employee_name?: string | null
           id?: string
           notes?: string
           shop_id?: string
@@ -182,7 +185,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_current_user_role: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
+      get_current_user_shop_id: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
     }
     Enums: {
       [_ in never]: never
