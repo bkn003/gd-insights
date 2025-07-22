@@ -97,6 +97,7 @@ export interface Database {
           category_id: string;
           size_id: string;
           employee_id: string;
+          employee_name: string | null;
           shop_id: string;
           notes: string;
           created_at: string;
@@ -107,6 +108,7 @@ export interface Database {
           category_id: string;
           size_id: string;
           employee_id: string;
+          employee_name?: string | null;
           shop_id: string;
           notes: string;
           created_at?: string;
@@ -117,6 +119,7 @@ export interface Database {
           category_id?: string;
           size_id?: string;
           employee_id?: string;
+          employee_name?: string | null;
           shop_id?: string;
           notes?: string;
           created_at?: string;

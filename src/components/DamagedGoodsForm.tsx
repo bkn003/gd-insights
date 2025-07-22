@@ -21,6 +21,7 @@ export const DamagedGoodsForm = () => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [sizes, setSizes] = useState<Size[]>([]);
   const [shops, setShops] = useState<Shop[]>([]);
+  const [userShop, setUserShop] = useState<Shop | null>(null);
   const [formData, setFormData] = useState({
     category_id: '',
     size_id: '',
@@ -31,6 +32,17 @@ export const DamagedGoodsForm = () => {
   useEffect(() => {
     fetchData();
   }, []);
+
+  useEffect(() => {
+    if (profile?.shop_id) {
+      setFormData(prev => ({ ...prev, shop_id: profile.shop_id || '' }));
+      // Find the user's shop for display
+      const shop = shops.find(s => s.id === profile.shop_id);
+      if (shop) {
+        setUserShop(shop);
+      }
+    }
+  }, [profile, shops]);
 
   const fetchData = async () => {
     try {
@@ -57,6 +69,12 @@ export const DamagedGoodsForm = () => {
     e.preventDefault();
     if (!profile) return;
 
+    // Validate all required fields
+    if (!formData.category_id || !formData.size_id || !formData.shop_id || !formData.notes.trim()) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -67,7 +85,8 @@ export const DamagedGoodsForm = () => {
           size_id: formData.size_id,
           shop_id: formData.shop_id,
           employee_id: profile.id,
-          notes: formData.notes,
+          employee_name: profile.name, // Store reporter name
+          notes: formData.notes.trim(),
         });
 
       if (error) throw error;
@@ -105,10 +124,11 @@ export const DamagedGoodsForm = () => {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="category">Category</Label>
+              <Label htmlFor="category">Category *</Label>
               <Select
                 value={formData.category_id}
                 onValueChange={(value) => handleInputChange('category_id', value)}
+                required
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select a category" />
@@ -124,10 +144,11 @@ export const DamagedGoodsForm = () => {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="size">Size</Label>
+              <Label htmlFor="size">Size *</Label>
               <Select
                 value={formData.size_id}
                 onValueChange={(value) => handleInputChange('size_id', value)}
+                required
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select a size" />
@@ -144,26 +165,19 @@ export const DamagedGoodsForm = () => {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="shop">Shop</Label>
-            <Select
-              value={formData.shop_id}
-              onValueChange={(value) => handleInputChange('shop_id', value)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select a shop" />
-              </SelectTrigger>
-              <SelectContent>
-                {shops.map((shop) => (
-                  <SelectItem key={shop.id} value={shop.id}>
-                    {shop.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label htmlFor="shop">Shop *</Label>
+            <Input
+              value={userShop?.name || 'Loading...'}
+              disabled
+              className="bg-gray-100 cursor-not-allowed"
+            />
+            <p className="text-sm text-muted-foreground">
+              Shop is automatically assigned based on your profile
+            </p>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="notes">Notes</Label>
+            <Label htmlFor="notes">Notes *</Label>
             <Textarea
               id="notes"
               placeholder="Describe the damage and any additional details..."

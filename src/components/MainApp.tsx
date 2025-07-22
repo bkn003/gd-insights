@@ -5,10 +5,11 @@ import { Layout } from '@/components/Layout';
 import { Dashboard } from '@/components/Dashboard';
 import { DamagedGoodsForm } from '@/components/DamagedGoodsForm';
 import { AdminPanel } from '@/components/AdminPanel';
+import { ReportsPanel } from '@/components/ReportsPanel';
 import { Button } from '@/components/ui/button';
-import { BarChart3, Plus, Settings } from 'lucide-react';
+import { BarChart3, Plus, Settings, FileText } from 'lucide-react';
 
-type ActiveTab = 'dashboard' | 'form' | 'admin';
+type ActiveTab = 'dashboard' | 'form' | 'admin' | 'reports';
 
 export const MainApp = () => {
   const { isAdmin } = useAuth();
@@ -22,6 +23,8 @@ export const MainApp = () => {
         return <DamagedGoodsForm />;
       case 'admin':
         return isAdmin ? <AdminPanel /> : <div>Access denied</div>;
+      case 'reports':
+        return <ReportsPanel />;
       default:
         return <Dashboard />;
     }
@@ -45,7 +48,15 @@ export const MainApp = () => {
             className="flex items-center gap-2"
           >
             <Plus className="h-4 w-4" />
-            Report Damage
+            GD
+          </Button>
+          <Button
+            variant={activeTab === 'reports' ? 'default' : 'ghost'}
+            onClick={() => setActiveTab('reports')}
+            className="flex items-center gap-2"
+          >
+            <FileText className="h-4 w-4" />
+            Reports
           </Button>
           {isAdmin && (
             <Button
