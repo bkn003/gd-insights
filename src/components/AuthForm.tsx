@@ -1,23 +1,51 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { Package } from 'lucide-react';
+import { Database } from '@/types/database';
+
+type Shop = Database['public']['Tables']['shops']['Row'];
 
 export const AuthForm = () => {
   const [isSignUp, setIsSignUp] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [shops, setShops] = useState<Shop[]>([]);
   const [formData, setFormData] = useState({
     email: '',
     password: '',
     name: '',
+    shopId: '',
   });
 
   const { signIn, signUp } = useAuth();
+
+  useEffect(() => {
+    if (isSignUp) {
+      fetchShops();
+    }
+  }, [isSignUp]);
+
+  const fetchShops = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('shops')
+        .select('*')
+        .order('name');
+      
+      if (error) throw error;
+      setShops(data);
+    } catch (error) {
+      console.error('Error fetching shops:', error);
+      toast.error('Failed to load shops');
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,8 +53,16 @@ export const AuthForm = () => {
 
     try {
       if (isSignUp) {
+        if (!formData.shopId) {
+          toast.error('Please select a shop');
+          return;
+        }
+        
         const { error } = await signUp(formData.email, formData.password, formData.name);
         if (error) throw error;
+        
+        // After successful signup, we need to update the user's shop_id
+        // This will be handled by a trigger or we can do it manually
         toast.success('Account created successfully! Please check your email to verify your account.');
       } else {
         const { error } = await signIn(formData.email, formData.password);
@@ -66,18 +102,39 @@ export const AuthForm = () => {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             {isSignUp && (
-              <div className="space-y-2">
-                <Label htmlFor="name">Full Name</Label>
-                <Input
-                  id="name"
-                  name="name"
-                  type="text"
-                  placeholder="John Doe"
-                  value={formData.name}
-                  onChange={handleInputChange}
-                  required
-                />
-              </div>
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="name">Full Name</Label>
+                  <Input
+                    id="name"
+                    name="name"
+                    type="text"
+                    placeholder="John Doe"
+                    value={formData.name}
+                    onChange={handleInputChange}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="shop">Shop</Label>
+                  <Select
+                    value={formData.shopId}
+                    onValueChange={(value) => setFormData({ ...formData, shopId: value })}
+                    required
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select your shop" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {shops.map((shop) => (
+                        <SelectItem key={shop.id} value={shop.id}>
+                          {shop.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
             )}
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>

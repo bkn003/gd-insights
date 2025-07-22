@@ -29,7 +29,7 @@ export const Layout = ({ children }: LayoutProps) => {
             <div className="flex items-center">
               <Package className="h-8 w-8 text-primary" />
               <span className="ml-2 text-xl font-bold text-foreground">
-                Damaged Goods Tracker
+                GD Tracker
               </span>
             </div>
             
