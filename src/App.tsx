@@ -1,5 +1,5 @@
 
-import React, { useState } from "react";
+import React from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -9,14 +9,14 @@ import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 
 const App = () => {
-  const [queryClient] = useState(() => new QueryClient({
+  const queryClient = React.useMemo(() => new QueryClient({
     defaultOptions: {
       queries: {
         staleTime: 1000 * 60 * 5, // 5 minutes
         retry: 1,
       },
     },
-  }));
+  }), []);
 
   return (
     <QueryClientProvider client={queryClient}>
