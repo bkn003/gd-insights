@@ -85,13 +85,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "goods_damaged_entries_shop_id_fkey"
-            columns: ["shop_id"]
-            isOneToOne: false
-            referencedRelation: "shops"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "goods_damaged_entries_size_id_fkey"
             columns: ["size_id"]
             isOneToOne: false
@@ -103,6 +96,7 @@ export type Database = {
       profiles: {
         Row: {
           created_at: string | null
+          email: string | null
           id: string
           name: string
           role: string
@@ -112,6 +106,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          email?: string | null
           id: string
           name: string
           role?: string
@@ -121,6 +116,7 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          email?: string | null
           id?: string
           name?: string
           role?: string
@@ -128,15 +124,7 @@ export type Database = {
           updated_at?: string | null
           user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "profiles_shop_id_fkey"
-            columns: ["shop_id"]
-            isOneToOne: false
-            referencedRelation: "shops"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       shops: {
         Row: {
