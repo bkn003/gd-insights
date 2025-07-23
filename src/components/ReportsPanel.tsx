@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -53,28 +52,62 @@ export const ReportsPanel = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
+      console.log('Starting to fetch data...');
       
-      const [entriesRes, shopsRes, categoriesRes, sizesRes] = await Promise.all([
-        supabase
-          .from('goods_damaged_entries')
-          .select(`
-            *,
-            categories(name),
-            sizes(size),
-            shops(name)
-          `)
-          .order('created_at', { ascending: false }),
+      // Fetch entries with manual joins to avoid foreign key relationship conflicts
+      const { data: entriesData, error: entriesError } = await supabase
+        .from('goods_damaged_entries')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (entriesError) {
+        console.error('Error fetching entries:', entriesError);
+        throw entriesError;
+      }
+
+      console.log('Fetched entries:', entriesData);
+
+      // Fetch related data separately
+      const [shopsRes, categoriesRes, sizesRes] = await Promise.all([
         supabase.from('shops').select('*').order('name'),
         supabase.from('categories').select('*').order('name'),
         supabase.from('sizes').select('*').order('size'),
       ]);
 
-      if (entriesRes.error) throw entriesRes.error;
-      if (shopsRes.error) throw shopsRes.error;
-      if (categoriesRes.error) throw categoriesRes.error;
-      if (sizesRes.error) throw sizesRes.error;
+      if (shopsRes.error) {
+        console.error('Error fetching shops:', shopsRes.error);
+        throw shopsRes.error;
+      }
+      if (categoriesRes.error) {
+        console.error('Error fetching categories:', categoriesRes.error);
+        throw categoriesRes.error;
+      }
+      if (sizesRes.error) {
+        console.error('Error fetching sizes:', sizesRes.error);
+        throw sizesRes.error;
+      }
 
-      setEntries(entriesRes.data as GoodsEntry[]);
+      console.log('Fetched shops:', shopsRes.data);
+      console.log('Fetched categories:', categoriesRes.data);
+      console.log('Fetched sizes:', sizesRes.data);
+
+      // Manually join the data
+      const enrichedEntries = entriesData.map(entry => {
+        const shop = shopsRes.data.find(s => s.id === entry.shop_id);
+        const category = categoriesRes.data.find(c => c.id === entry.category_id);
+        const size = sizesRes.data.find(s => s.id === entry.size_id);
+
+        return {
+          ...entry,
+          shops: { name: shop?.name || 'Unknown Shop' },
+          categories: { name: category?.name || 'Unknown Category' },
+          sizes: { size: size?.size || 'Unknown Size' }
+        };
+      });
+
+      console.log('Enriched entries:', enrichedEntries);
+
+      setEntries(enrichedEntries);
       setShops(shopsRes.data);
       setCategories(categoriesRes.data);
       setSizes(sizesRes.data);
