@@ -74,7 +74,7 @@ export const ReportsPanel = () => {
       if (categoriesRes.error) throw categoriesRes.error;
       if (sizesRes.error) throw sizesRes.error;
 
-      setEntries(entriesRes.data as GoodsEntry[]);
+      setEntries(entriesRes.data as unknown as GoodsEntry[]);
       setShops(shopsRes.data);
       setCategories(categoriesRes.data);
       setSizes(sizesRes.data);
