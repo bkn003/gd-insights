@@ -59,9 +59,9 @@ export const ReportsPanel = () => {
           .from('goods_damaged_entries')
           .select(`
             *,
-            categories!inner(name),
-            sizes!inner(size),
-            shops!inner(name)
+            categories(name),
+            sizes(size),
+            shops(name)
           `)
           .order('created_at', { ascending: false }),
         supabase.from('shops').select('*').order('name'),
@@ -74,7 +74,7 @@ export const ReportsPanel = () => {
       if (categoriesRes.error) throw categoriesRes.error;
       if (sizesRes.error) throw sizesRes.error;
 
-      setEntries(entriesRes.data as unknown as GoodsEntry[]);
+      setEntries(entriesRes.data as GoodsEntry[]);
       setShops(shopsRes.data);
       setCategories(categoriesRes.data);
       setSizes(sizesRes.data);

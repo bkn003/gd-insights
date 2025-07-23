@@ -71,6 +71,34 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "fk_goods_damaged_entries_category"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_goods_damaged_entries_profile"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_goods_damaged_entries_shop"
+            columns: ["shop_id"]
+            isOneToOne: false
+            referencedRelation: "shops"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_goods_damaged_entries_size"
+            columns: ["size_id"]
+            isOneToOne: false
+            referencedRelation: "sizes"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "goods_damaged_entries_category_id_fkey"
             columns: ["category_id"]
             isOneToOne: false
