@@ -52,7 +52,7 @@ export const UserManagement = ({ shops, profiles, onRefresh }: UserManagementPro
     try {
       const { error } = await supabase
         .from('profiles')
-        .delete()
+        .update({ deleted_at: new Date().toISOString() })
         .eq('id', userId);
 
       if (error) throw error;

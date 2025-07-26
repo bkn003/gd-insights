@@ -6,10 +6,11 @@ import { Dashboard } from '@/components/Dashboard';
 import { DamagedGoodsForm } from '@/components/DamagedGoodsForm';
 import { AdminPanel } from '@/components/AdminPanel';
 import { ReportsPanel } from '@/components/ReportsPanel';
+import { UserProfile } from '@/components/UserProfile';
 import { Button } from '@/components/ui/button';
-import { BarChart3, Plus, Settings, FileText } from 'lucide-react';
+import { BarChart3, Plus, Settings, FileText, User } from 'lucide-react';
 
-type ActiveTab = 'gd' | 'dashboard' | 'admin' | 'reports';
+type ActiveTab = 'gd' | 'dashboard' | 'admin' | 'reports' | 'profile';
 
 export const MainApp = () => {
   const { isAdmin, profile } = useAuth();
@@ -33,6 +34,8 @@ export const MainApp = () => {
         return isAdmin ? <AdminPanel /> : <div className="text-center text-muted-foreground">Access denied</div>;
       case 'reports':
         return isAdmin ? <ReportsPanel /> : <div className="text-center text-muted-foreground">Access denied</div>;
+      case 'profile':
+        return <UserProfile />;
       default:
         return <DamagedGoodsForm />;
     }
@@ -41,20 +44,28 @@ export const MainApp = () => {
   return (
     <Layout>
       <div className="space-y-6">
-        <div className="flex gap-2 border-b">
+        <div className="flex flex-wrap gap-2 border-b overflow-x-auto">
           <Button
             variant={activeTab === 'gd' ? 'default' : 'ghost'}
             onClick={() => setActiveTab('gd')}
-            className="flex items-center gap-2"
+            className="flex items-center gap-2 flex-shrink-0"
           >
             <Plus className="h-4 w-4" />
             GD
+          </Button>
+          <Button
+            variant={activeTab === 'profile' ? 'default' : 'ghost'}
+            onClick={() => setActiveTab('profile')}
+            className="flex items-center gap-2 flex-shrink-0"
+          >
+            <User className="h-4 w-4" />
+            Profile
           </Button>
           {isAdmin && (
             <Button
               variant={activeTab === 'dashboard' ? 'default' : 'ghost'}
               onClick={() => setActiveTab('dashboard')}
-              className="flex items-center gap-2"
+              className="flex items-center gap-2 flex-shrink-0"
             >
               <BarChart3 className="h-4 w-4" />
               Dashboard
@@ -64,7 +75,7 @@ export const MainApp = () => {
             <Button
               variant={activeTab === 'reports' ? 'default' : 'ghost'}
               onClick={() => setActiveTab('reports')}
-              className="flex items-center gap-2"
+              className="flex items-center gap-2 flex-shrink-0"
             >
               <FileText className="h-4 w-4" />
               Reports
@@ -74,7 +85,7 @@ export const MainApp = () => {
             <Button
               variant={activeTab === 'admin' ? 'default' : 'ghost'}
               onClick={() => setActiveTab('admin')}
-              className="flex items-center gap-2"
+              className="flex items-center gap-2 flex-shrink-0"
             >
               <Settings className="h-4 w-4" />
               Admin Panel

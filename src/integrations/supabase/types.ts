@@ -17,18 +17,21 @@ export type Database = {
       categories: {
         Row: {
           created_at: string | null
+          deleted_at: string | null
           id: string
           name: string
           updated_at: string | null
         }
         Insert: {
           created_at?: string | null
+          deleted_at?: string | null
           id?: string
           name: string
           updated_at?: string | null
         }
         Update: {
           created_at?: string | null
+          deleted_at?: string | null
           id?: string
           name?: string
           updated_at?: string | null
@@ -124,6 +127,9 @@ export type Database = {
       profiles: {
         Row: {
           created_at: string | null
+          default_category_id: string | null
+          default_size_id: string | null
+          deleted_at: string | null
           email: string | null
           id: string
           name: string
@@ -134,6 +140,9 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          default_category_id?: string | null
+          default_size_id?: string | null
+          deleted_at?: string | null
           email?: string | null
           id: string
           name: string
@@ -144,6 +153,9 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          default_category_id?: string | null
+          default_size_id?: string | null
+          deleted_at?: string | null
           email?: string | null
           id?: string
           name?: string
@@ -152,23 +164,41 @@ export type Database = {
           updated_at?: string | null
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_default_category_id_fkey"
+            columns: ["default_category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profiles_default_size_id_fkey"
+            columns: ["default_size_id"]
+            isOneToOne: false
+            referencedRelation: "sizes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       shops: {
         Row: {
           created_at: string | null
+          deleted_at: string | null
           id: string
           name: string
           updated_at: string | null
         }
         Insert: {
           created_at?: string | null
+          deleted_at?: string | null
           id?: string
           name: string
           updated_at?: string | null
         }
         Update: {
           created_at?: string | null
+          deleted_at?: string | null
           id?: string
           name?: string
           updated_at?: string | null
@@ -178,18 +208,21 @@ export type Database = {
       sizes: {
         Row: {
           created_at: string | null
+          deleted_at: string | null
           id: string
           size: string
           updated_at: string | null
         }
         Insert: {
           created_at?: string | null
+          deleted_at?: string | null
           id?: string
           size: string
           updated_at?: string | null
         }
         Update: {
           created_at?: string | null
+          deleted_at?: string | null
           id?: string
           size?: string
           updated_at?: string | null

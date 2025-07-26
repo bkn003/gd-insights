@@ -63,7 +63,7 @@ export const CategoryManagement = ({ categories, onRefresh }: CategoryManagement
     try {
       const { error } = await supabase
         .from('categories')
-        .delete()
+        .update({ deleted_at: new Date().toISOString() })
         .eq('id', id);
 
       if (error) throw error;

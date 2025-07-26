@@ -35,7 +35,13 @@ export const DamagedGoodsForm = () => {
 
   useEffect(() => {
     if (profile?.shop_id) {
-      setFormData(prev => ({ ...prev, shop_id: profile.shop_id || '' }));
+      setFormData(prev => ({ 
+        ...prev, 
+        shop_id: profile.shop_id || '',
+        // Pre-fill defaults from user profile
+        category_id: prev.category_id || (profile as any).default_category_id || '',
+        size_id: prev.size_id || (profile as any).default_size_id || ''
+      }));
       // Find the user's shop for display
       if (shops.length > 0) {
         const shop = shops.find(s => s.id === profile.shop_id);
@@ -95,8 +101,8 @@ export const DamagedGoodsForm = () => {
 
       toast.success('GD entry created successfully!');
       setFormData({
-        category_id: '',
-        size_id: '',
+        category_id: (profile as any)?.default_category_id || '',
+        size_id: (profile as any)?.default_size_id || '',
         shop_id: profile?.shop_id || '',
         notes: '',
       });

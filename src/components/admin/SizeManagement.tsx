@@ -63,7 +63,7 @@ export const SizeManagement = ({ sizes, onRefresh }: SizeManagementProps) => {
     try {
       const { error } = await supabase
         .from('sizes')
-        .delete()
+        .update({ deleted_at: new Date().toISOString() })
         .eq('id', id);
 
       if (error) throw error;
