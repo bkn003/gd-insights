@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -59,8 +60,8 @@ export const UserProfile = () => {
       const { error } = await supabase
         .from('profiles')
         .update({
-          default_category_id: formData.default_category_id || null,
-          default_size_id: formData.default_size_id || null,
+          default_category_id: formData.default_category_id === 'none' ? null : formData.default_category_id,
+          default_size_id: formData.default_size_id === 'none' ? null : formData.default_size_id,
         })
         .eq('id', profile.id);
 
@@ -94,14 +95,14 @@ export const UserProfile = () => {
           <div className="space-y-2">
             <Label htmlFor="default_category">Default Category</Label>
             <Select
-              value={formData.default_category_id}
+              value={formData.default_category_id || 'none'}
               onValueChange={(value) => handleInputChange('default_category_id', value)}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Select a default category" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">No default</SelectItem>
+                <SelectItem value="none">No default</SelectItem>
                 {categories.map((category) => (
                   <SelectItem key={category.id} value={category.id}>
                     {category.name}
@@ -114,14 +115,14 @@ export const UserProfile = () => {
           <div className="space-y-2">
             <Label htmlFor="default_size">Default Size</Label>
             <Select
-              value={formData.default_size_id}
+              value={formData.default_size_id || 'none'}
               onValueChange={(value) => handleInputChange('default_size_id', value)}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Select a default size" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">No default</SelectItem>
+                <SelectItem value="none">No default</SelectItem>
                 {sizes.map((size) => (
                   <SelectItem key={size.id} value={size.id}>
                     {size.size}
