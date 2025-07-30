@@ -13,7 +13,7 @@ import { BarChart3, Plus, Settings, FileText, User } from 'lucide-react';
 type ActiveTab = 'gd' | 'dashboard' | 'admin' | 'reports' | 'profile';
 
 export const MainApp = () => {
-  const { isAdmin, profile } = useAuth();
+  const { isAdmin, profile, user } = useAuth();
   // Set initial tab based on user role: regular users start with GD, admins start with Dashboard
   const [activeTab, setActiveTab] = useState<ActiveTab>(isAdmin ? 'dashboard' : 'gd');
 
@@ -40,6 +40,11 @@ export const MainApp = () => {
         return <DamagedGoodsForm />;
     }
   };
+
+  // Don't render navigation if user is not authenticated
+  if (!user) {
+    return null;
+  }
 
   return (
     <Layout>

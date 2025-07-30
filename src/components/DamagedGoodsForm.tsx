@@ -188,7 +188,7 @@ export const DamagedGoodsForm = () => {
             <Label htmlFor="notes">Notes *</Label>
             <Textarea
               id="notes"
-              placeholder="Describe the damage and any additional details..."
+              placeholder="Describe additional details"
               value={formData.notes}
               onChange={(e) => handleInputChange('notes', e.target.value)}
               required
