@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -103,6 +102,9 @@ export const UserManagement = ({ shops, profiles, onRefresh }: UserManagementPro
     });
   };
 
+  // Filter out soft-deleted users (those with deleted_at set)
+  const activeProfiles = profiles.filter(profile => !profile.deleted_at);
+
   return (
     <Card>
       <CardHeader>
@@ -114,9 +116,9 @@ export const UserManagement = ({ shops, profiles, onRefresh }: UserManagementPro
       </CardHeader>
       <CardContent>
         <div className="space-y-2">
-          <h4 className="font-medium">Current Users</h4>
+          <h4 className="font-medium">Current Users ({activeProfiles.length})</h4>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-            {profiles.map((profile) => (
+            {activeProfiles.map((profile) => (
               <div key={profile.id} className="p-3 border rounded space-y-2">
                 <div className="font-medium">{profile.name}</div>
                 <div className="text-sm text-muted-foreground">{profile.user_id}</div>

@@ -31,7 +31,7 @@ export const AdminPanel = () => {
         supabase.from('shops').select('*').order('name'),
         supabase.from('categories').select('*').order('name'),
         supabase.from('sizes').select('*').order('size'),
-        supabase.from('profiles').select('*').order('name'),
+        supabase.from('profiles').select('*').is('deleted_at', null).order('name'),
       ]);
 
       if (shopsRes.error) throw shopsRes.error;
