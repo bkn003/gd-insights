@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -33,11 +34,11 @@ export const ReportsPanel = () => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [sizes, setSizes] = useState<Size[]>([]);
   
-  // Filter states
+  // Filter states - changed default to "today"
   const [selectedShop, setSelectedShop] = useState<string>('all');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedSize, setSelectedSize] = useState<string>('all');
-  const [dateFilter, setDateFilter] = useState<string>('all');
+  const [dateFilter, setDateFilter] = useState<string>('today');
   const [customDateFrom, setCustomDateFrom] = useState<Date>();
   const [customDateTo, setCustomDateTo] = useState<Date>();
 
@@ -201,7 +202,7 @@ export const ReportsPanel = () => {
       return;
     }
 
-    // Create CSV content
+    // Create CSV content with proper UTF-8 BOM for Tamil text support
     const headers = ['Date', 'Shop', 'Category', 'Size', 'Reporter', 'Notes'];
     const csvContent = [
       headers.join(','),
@@ -215,8 +216,12 @@ export const ReportsPanel = () => {
       ].join(','))
     ].join('\n');
 
-    // Create and download file
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    // Add UTF-8 BOM for proper Tamil text encoding in Excel
+    const BOM = '\uFEFF';
+    const csvWithBOM = BOM + csvContent;
+
+    // Create and download file with proper encoding
+    const blob = new Blob([csvWithBOM], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     link.setAttribute('href', url);
@@ -233,7 +238,7 @@ export const ReportsPanel = () => {
     setSelectedShop('all');
     setSelectedCategory('all');
     setSelectedSize('all');
-    setDateFilter('all');
+    setDateFilter('today'); // Changed default back to "today"
     setCustomDateFrom(undefined);
     setCustomDateTo(undefined);
   };

@@ -1,4 +1,5 @@
 
+
 export interface Database {
   public: {
     Tables: {
@@ -69,6 +70,8 @@ export interface Database {
           user_id: string;
           role: 'admin' | 'user';
           shop_id: string | null;
+          default_category_id: string | null;
+          default_size_id: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -78,6 +81,8 @@ export interface Database {
           user_id: string;
           role?: 'admin' | 'user';
           shop_id?: string | null;
+          default_category_id?: string | null;
+          default_size_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -87,6 +92,8 @@ export interface Database {
           user_id?: string;
           role?: 'admin' | 'user';
           shop_id?: string | null;
+          default_category_id?: string | null;
+          default_size_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -129,3 +136,4 @@ export interface Database {
     };
   };
 }
+
