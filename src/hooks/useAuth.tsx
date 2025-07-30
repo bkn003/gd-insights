@@ -47,12 +47,43 @@ export const useAuth = () => {
         .single();
 
       if (error) throw error;
+      
+      // Check if profile is soft-deleted
+      if (data.deleted_at) {
+        console.log('User profile is soft-deleted, signing out...');
+        await signOut();
+        return;
+      }
+      
       // Cast the role to the expected type since we know it's valid
       setProfile(data as Profile);
     } catch (error) {
       console.error('Error fetching profile:', error);
+      // If profile doesn't exist or other error, sign out the user
+      await signOut();
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Function to check if current user is soft-deleted (can be called periodically)
+  const checkUserStatus = async () => {
+    if (!user) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('deleted_at')
+        .eq('id', user.id)
+        .single();
+
+      if (error || !data || data.deleted_at) {
+        console.log('User has been deleted, forcing logout...');
+        await signOut();
+      }
+    } catch (error) {
+      console.error('Error checking user status:', error);
+      await signOut();
     }
   };
 
@@ -89,6 +120,7 @@ export const useAuth = () => {
     signUp,
     signIn,
     signOut,
+    checkUserStatus,
     isAdmin: profile?.role === 'admin',
   };
 };

@@ -13,7 +13,7 @@ import { BarChart3, Plus, Settings, FileText, User } from 'lucide-react';
 type ActiveTab = 'gd' | 'dashboard' | 'admin' | 'reports' | 'profile';
 
 export const MainApp = () => {
-  const { isAdmin, profile, user } = useAuth();
+  const { isAdmin, profile, user, checkUserStatus } = useAuth();
   // Set initial tab based on user role: regular users start with GD, admins start with Dashboard
   const [activeTab, setActiveTab] = useState<ActiveTab>(isAdmin ? 'dashboard' : 'gd');
 
@@ -23,6 +23,17 @@ export const MainApp = () => {
       setActiveTab('gd');
     }
   }, [isAdmin, activeTab]);
+
+  // Periodically check if user is still active (not soft-deleted)
+  useEffect(() => {
+    if (!user) return;
+
+    const interval = setInterval(() => {
+      checkUserStatus();
+    }, 30000); // Check every 30 seconds
+
+    return () => clearInterval(interval);
+  }, [user, checkUserStatus]);
 
   const renderContent = () => {
     switch (activeTab) {
