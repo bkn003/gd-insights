@@ -1,6 +1,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
+import { useCachedData } from '@/hooks/useCachedData';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,19 +10,12 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { Database } from '@/types/database';
-
-type Category = Database['public']['Tables']['categories']['Row'];
-type Size = Database['public']['Tables']['sizes']['Row'];
-type Shop = Database['public']['Tables']['shops']['Row'];
 
 export const DamagedGoodsForm = () => {
   const { profile } = useAuth();
+  const { categories, sizes, shops, loading: dataLoading } = useCachedData();
   const [loading, setLoading] = useState(false);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [sizes, setSizes] = useState<Size[]>([]);
-  const [shops, setShops] = useState<Shop[]>([]);
-  const [userShop, setUserShop] = useState<Shop | null>(null);
+  const [userShop, setUserShop] = useState<any>(null);
   const [formData, setFormData] = useState({
     category_id: '',
     size_id: '',
@@ -30,19 +24,14 @@ export const DamagedGoodsForm = () => {
   });
 
   useEffect(() => {
-    fetchData();
-  }, []);
-
-  useEffect(() => {
     if (profile?.shop_id) {
       setFormData(prev => ({ 
         ...prev, 
         shop_id: profile.shop_id || '',
-        // Pre-fill defaults from user profile
         category_id: prev.category_id || (profile as any).default_category_id || '',
         size_id: prev.size_id || (profile as any).default_size_id || ''
       }));
-      // Find the user's shop for display
+      
       if (shops.length > 0) {
         const shop = shops.find(s => s.id === profile.shop_id);
         if (shop) {
@@ -52,32 +41,20 @@ export const DamagedGoodsForm = () => {
     }
   }, [profile, shops]);
 
-  const fetchData = async () => {
-    try {
-      const [categoriesRes, sizesRes, shopsRes] = await Promise.all([
-        supabase.from('categories').select('*').order('name'),
-        supabase.from('sizes').select('*').order('size'),
-        supabase.from('shops').select('*').order('name'),
-      ]);
-
-      if (categoriesRes.error) throw categoriesRes.error;
-      if (sizesRes.error) throw sizesRes.error;
-      if (shopsRes.error) throw shopsRes.error;
-
-      setCategories(categoriesRes.data);
-      setSizes(sizesRes.data);
-      setShops(shopsRes.data);
-    } catch (error) {
-      console.error('Error fetching data:', error);
-      toast.error('Failed to load form data');
+  // Auto-focus notes input when component mounts or updates
+  useEffect(() => {
+    const notesInput = document.querySelector('textarea#notes') as HTMLTextAreaElement;
+    if (notesInput && !dataLoading) {
+      setTimeout(() => {
+        notesInput.focus();
+      }, 100);
     }
-  };
+  }, [dataLoading]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!profile) return;
 
-    // Validate all required fields
     if (!formData.category_id || !formData.size_id || !formData.shop_id || !formData.notes.trim()) {
       toast.error('Please fill in all required fields');
       return;
@@ -106,6 +83,14 @@ export const DamagedGoodsForm = () => {
         shop_id: profile?.shop_id || '',
         notes: '',
       });
+
+      // Refocus notes input after successful submission
+      setTimeout(() => {
+        const notesInput = document.querySelector('textarea#notes') as HTMLTextAreaElement;
+        if (notesInput) {
+          notesInput.focus();
+        }
+      }, 100);
     } catch (error: any) {
       toast.error(error.message || 'Failed to create entry');
     } finally {
@@ -119,6 +104,10 @@ export const DamagedGoodsForm = () => {
       [field]: value,
     });
   };
+
+  if (dataLoading) {
+    return <div className="flex justify-center items-center h-64">Loading form data...</div>;
+  }
 
   return (
     <Card className="w-full max-w-2xl mx-auto">
@@ -193,6 +182,7 @@ export const DamagedGoodsForm = () => {
               onChange={(e) => handleInputChange('notes', e.target.value)}
               required
               rows={4}
+              autoFocus
             />
           </div>
 

@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { Layout } from '@/components/Layout';
 import { Dashboard } from '@/components/Dashboard';
@@ -7,6 +7,7 @@ import { DamagedGoodsForm } from '@/components/DamagedGoodsForm';
 import { AdminPanel } from '@/components/AdminPanel';
 import { ReportsPanel } from '@/components/ReportsPanel';
 import { UserProfile } from '@/components/UserProfile';
+import { MobileBottomNav } from '@/components/MobileBottomNav';
 import { Button } from '@/components/ui/button';
 import { BarChart3, Plus, Settings, FileText, User } from 'lucide-react';
 
@@ -14,8 +15,8 @@ type ActiveTab = 'gd' | 'dashboard' | 'admin' | 'reports' | 'profile';
 
 export const MainApp = () => {
   const { isAdmin, profile, user, checkUserStatus } = useAuth();
-  // Set initial tab based on user role: regular users start with GD, admins start with Dashboard
   const [activeTab, setActiveTab] = useState<ActiveTab>(isAdmin ? 'dashboard' : 'gd');
+  const notesInputRef = useRef<HTMLTextAreaElement>(null);
 
   // Update active tab when user role changes
   useEffect(() => {
@@ -24,16 +25,29 @@ export const MainApp = () => {
     }
   }, [isAdmin, activeTab]);
 
-  // Periodically check if user is still active (not soft-deleted)
+  // Check user status less frequently - every 5 minutes instead of 30 seconds
   useEffect(() => {
     if (!user) return;
 
     const interval = setInterval(() => {
       checkUserStatus();
-    }, 30000); // Check every 30 seconds
+    }, 5 * 60 * 1000); // 5 minutes
 
     return () => clearInterval(interval);
   }, [user, checkUserStatus]);
+
+  // Auto-focus notes input when switching to GD tab
+  useEffect(() => {
+    if (activeTab === 'gd') {
+      // Small delay to ensure the component is rendered
+      setTimeout(() => {
+        const notesInput = document.querySelector('textarea#notes') as HTMLTextAreaElement;
+        if (notesInput) {
+          notesInput.focus();
+        }
+      }, 100);
+    }
+  }, [activeTab]);
 
   const renderContent = () => {
     switch (activeTab) {
@@ -52,15 +66,15 @@ export const MainApp = () => {
     }
   };
 
-  // Don't render navigation if user is not authenticated
   if (!user) {
     return null;
   }
 
   return (
     <Layout>
-      <div className="space-y-6">
-        <div className="flex flex-wrap gap-2 border-b overflow-x-auto">
+      <div className="space-y-6 pb-20 md:pb-6">
+        {/* Desktop Navigation - hidden on mobile */}
+        <div className="hidden md:flex flex-wrap gap-2 border-b overflow-x-auto">
           <Button
             variant={activeTab === 'gd' ? 'default' : 'ghost'}
             onClick={() => setActiveTab('gd')}
@@ -111,6 +125,13 @@ export const MainApp = () => {
 
         {renderContent()}
       </div>
+
+      {/* Mobile Bottom Navigation */}
+      <MobileBottomNav 
+        activeTab={activeTab} 
+        setActiveTab={setActiveTab} 
+        isAdmin={isAdmin} 
+      />
     </Layout>
   );
 };

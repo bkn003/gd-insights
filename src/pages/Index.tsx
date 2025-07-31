@@ -14,6 +14,8 @@ const Index = () => {
     );
   }
 
+  // Only show MainApp (with navigation) when user is authenticated
+  // AuthForm handles its own layout and doesn't show navigation
   return user ? <MainApp /> : <AuthForm />;
 };
 

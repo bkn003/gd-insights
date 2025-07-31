@@ -1,5 +1,4 @@
 
-
 export interface Database {
   public: {
     Tables: {
@@ -74,6 +73,7 @@ export interface Database {
           default_size_id: string | null;
           created_at: string;
           updated_at: string;
+          deleted_at: string | null;
         };
         Insert: {
           id: string;
@@ -85,6 +85,7 @@ export interface Database {
           default_size_id?: string | null;
           created_at?: string;
           updated_at?: string;
+          deleted_at?: string | null;
         };
         Update: {
           id?: string;
@@ -96,6 +97,7 @@ export interface Database {
           default_size_id?: string | null;
           created_at?: string;
           updated_at?: string;
+          deleted_at?: string | null;
         };
       };
       goods_damaged_entries: {
@@ -136,4 +138,3 @@ export interface Database {
     };
   };
 }
-

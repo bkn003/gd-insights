@@ -6,6 +6,9 @@ import { Database } from '@/types/database';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 
+const PROFILE_CACHE_KEY = 'user_profile';
+const CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
+
 export const useAuth = () => {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -30,6 +33,7 @@ export const useAuth = () => {
           fetchProfile(session.user.id);
         } else {
           setProfile(null);
+          localStorage.removeItem(PROFILE_CACHE_KEY);
           setLoading(false);
         }
       }
@@ -40,6 +44,19 @@ export const useAuth = () => {
 
   const fetchProfile = async (userId: string) => {
     try {
+      // Check cache first
+      const cachedProfileStr = localStorage.getItem(PROFILE_CACHE_KEY);
+      const now = Date.now();
+      
+      if (cachedProfileStr) {
+        const cachedProfile = JSON.parse(cachedProfileStr);
+        if (now - cachedProfile.lastFetched < CACHE_DURATION && cachedProfile.id === userId) {
+          setProfile(cachedProfile.data);
+          setLoading(false);
+          return;
+        }
+      }
+
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
@@ -55,18 +72,23 @@ export const useAuth = () => {
         return;
       }
       
-      // Cast the role to the expected type since we know it's valid
+      // Cache the profile
+      localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({
+        data,
+        lastFetched: now,
+        id: userId
+      }));
+      
       setProfile(data as Profile);
     } catch (error) {
       console.error('Error fetching profile:', error);
-      // If profile doesn't exist or other error, sign out the user
       await signOut();
     } finally {
       setLoading(false);
     }
   };
 
-  // Function to check if current user is soft-deleted (can be called periodically)
+  // Check user status less frequently - only every 5 minutes
   const checkUserStatus = async () => {
     if (!user) return;
     
@@ -83,7 +105,10 @@ export const useAuth = () => {
       }
     } catch (error) {
       console.error('Error checking user status:', error);
-      await signOut();
+      // Only sign out if it's a critical error, not network issues
+      if (error.message?.includes('JWT') || error.message?.includes('unauthorized')) {
+        await signOut();
+      }
     }
   };
 
@@ -109,6 +134,8 @@ export const useAuth = () => {
   };
 
   const signOut = async () => {
+    localStorage.removeItem(PROFILE_CACHE_KEY);
+    localStorage.removeItem('gd_app_data');
     const { error } = await supabase.auth.signOut();
     return { error };
   };
