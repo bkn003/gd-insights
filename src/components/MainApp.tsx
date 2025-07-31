@@ -60,7 +60,7 @@ export const MainApp = () => {
       case 'reports':
         return isAdmin ? <ReportsPanel /> : <div className="text-center text-muted-foreground">Access denied</div>;
       case 'profile':
-        return <UserProfile />;
+        return isAdmin ? <UserProfile /> : <div className="text-center text-muted-foreground">Access denied</div>;
       default:
         return <DamagedGoodsForm />;
     }
@@ -83,14 +83,17 @@ export const MainApp = () => {
             <Plus className="h-4 w-4" />
             GD
           </Button>
-          <Button
-            variant={activeTab === 'profile' ? 'default' : 'ghost'}
-            onClick={() => setActiveTab('profile')}
-            className="flex items-center gap-2 flex-shrink-0"
-          >
-            <User className="h-4 w-4" />
-            Profile
-          </Button>
+          {/* Only show Profile button for admins */}
+          {isAdmin && (
+            <Button
+              variant={activeTab === 'profile' ? 'default' : 'ghost'}
+              onClick={() => setActiveTab('profile')}
+              className="flex items-center gap-2 flex-shrink-0"
+            >
+              <User className="h-4 w-4" />
+              Profile
+            </Button>
+          )}
           {isAdmin && (
             <Button
               variant={activeTab === 'dashboard' ? 'default' : 'ghost'}

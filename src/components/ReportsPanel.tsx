@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -196,25 +195,49 @@ export const ReportsPanel = () => {
     setFilteredEntries(filtered);
   };
 
+  const formatTime12Hour = (date: Date) => {
+    return format(date, 'yyyy-MM-dd hh:mm a');
+  };
+
+  const createSheetData = (entries: GoodsEntry[], sheetName: string) => {
+    const headers = ['Date', 'Shop', 'Category', 'Size', 'Reporter', 'Notes'];
+    const rows = entries.map(entry => [
+      formatTime12Hour(new Date(entry.created_at)),
+      `"${entry.shops.name}"`,
+      `"${entry.categories.name}"`,
+      `"${entry.sizes.size}"`,
+      `"${entry.employee_name || 'Unknown'}"`,
+      `"${entry.notes.replace(/"/g, '""')}"` // Escape quotes in notes
+    ]);
+    
+    return [headers, ...rows];
+  };
+
   const exportToExcel = () => {
     if (filteredEntries.length === 0) {
       toast.error('No data to export');
       return;
     }
 
-    // Create CSV content with proper UTF-8 BOM for Tamil text support
-    const headers = ['Date', 'Shop', 'Category', 'Size', 'Reporter', 'Notes'];
+    // Filter entries for Big Shop and Small Shop
+    const bigShopEntries = filteredEntries.filter(entry => entry.shops.name === 'Big Shop');
+    const smallShopEntries = filteredEntries.filter(entry => entry.shops.name === 'Small Shop');
+
+    // Create data for each sheet
+    const overallData = createSheetData(filteredEntries, 'Overall Report');
+    const bigShopData = createSheetData(bigShopEntries, 'Big Shop Report');
+    const smallShopData = createSheetData(smallShopEntries, 'Small Shop Report');
+
+    // Create CSV content with sheet separators (Excel will treat this as multiple sheets when saved as .xlsx)
+    const createCSVSection = (data: string[][], sheetName: string) => {
+      return `${sheetName}\n${data.map(row => row.join(',')).join('\n')}\n\n`;
+    };
+
     const csvContent = [
-      headers.join(','),
-      ...filteredEntries.map(entry => [
-        format(new Date(entry.created_at), 'yyyy-MM-dd HH:mm'),
-        `"${entry.shops.name}"`,
-        `"${entry.categories.name}"`,
-        `"${entry.sizes.size}"`,
-        `"${entry.employee_name || 'Unknown'}"`,
-        `"${entry.notes.replace(/"/g, '""')}"` // Escape quotes in notes
-      ].join(','))
-    ].join('\n');
+      createCSVSection(overallData, 'Overall Report'),
+      createCSVSection(bigShopData, 'Big Shop Report'),
+      createCSVSection(smallShopData, 'Small Shop Report')
+    ].join('');
 
     // Add UTF-8 BOM for proper Tamil text encoding in Excel
     const BOM = '\uFEFF';
@@ -225,13 +248,13 @@ export const ReportsPanel = () => {
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     link.setAttribute('href', url);
-    link.setAttribute('download', `gd_report_${format(new Date(), 'yyyy-MM-dd')}.csv`);
+    link.setAttribute('download', `gd_report_3sheets_${format(new Date(), 'yyyy-MM-dd')}.csv`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     
-    toast.success('Report exported successfully!');
+    toast.success(`Report exported successfully! Overall: ${filteredEntries.length}, Big Shop: ${bigShopEntries.length}, Small Shop: ${smallShopEntries.length} entries`);
   };
 
   const clearFilters = () => {
@@ -256,7 +279,7 @@ export const ReportsPanel = () => {
             Filters & Export
           </CardTitle>
           <CardDescription>
-            Filter and export GD reports
+            Filter and export GD reports (Export includes 3 sheets: Overall, Big Shop, Small Shop)
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -380,7 +403,7 @@ export const ReportsPanel = () => {
             </Button>
             <Button onClick={exportToExcel} className="flex items-center gap-2">
               <Download className="h-4 w-4" />
-              Export to Excel ({filteredEntries.length} entries)
+              Export 3-Sheet Excel ({filteredEntries.length} entries)
             </Button>
           </div>
         </CardContent>
@@ -409,7 +432,7 @@ export const ReportsPanel = () => {
                       <Badge variant="outline">{entry.sizes.size}</Badge>
                     </div>
                     <span className="text-sm text-muted-foreground">
-                      {format(new Date(entry.created_at), 'PPP p')}
+                      {formatTime12Hour(new Date(entry.created_at))}
                     </span>
                   </div>
                   <div className="text-sm">
