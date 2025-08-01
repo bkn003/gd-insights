@@ -22,24 +22,24 @@ export const Layout = ({ children }: LayoutProps) => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <nav className="border-b bg-card">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center">
-              <Package className="h-8 w-8 text-primary" />
-              <span className="ml-2 text-xl font-bold text-foreground">
+    <div className="min-h-screen bg-background w-full overflow-x-hidden">
+      <nav className="border-b bg-card w-full">
+        <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8">
+          <div className="flex justify-between items-center h-14 sm:h-16 min-w-0">
+            <div className="flex items-center min-w-0 flex-shrink-0">
+              <Package className="h-6 w-6 sm:h-8 sm:w-8 text-primary flex-shrink-0" />
+              <span className="ml-2 text-lg sm:text-xl font-bold text-foreground truncate">
                 GD Tracker
               </span>
             </div>
             
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2">
-                <span className="text-sm text-muted-foreground">
+            <div className="flex items-center space-x-2 sm:space-x-4 min-w-0 flex-shrink-0">
+              <div className="flex items-center space-x-1 sm:space-x-2 min-w-0">
+                <span className="text-xs sm:text-sm text-muted-foreground truncate max-w-20 sm:max-w-none">
                   {profile?.name}
                 </span>
                 {isAdmin && (
-                  <span className="px-2 py-1 bg-primary text-primary-foreground text-xs rounded">
+                  <span className="px-1.5 py-0.5 sm:px-2 sm:py-1 bg-primary text-primary-foreground text-xs rounded flex-shrink-0">
                     Admin
                   </span>
                 )}
@@ -48,17 +48,17 @@ export const Layout = ({ children }: LayoutProps) => {
                 variant="outline"
                 size="sm"
                 onClick={handleSignOut}
-                className="flex items-center gap-2"
+                className="flex items-center gap-1 sm:gap-2 flex-shrink-0"
               >
-                <LogOut className="h-4 w-4" />
-                Sign Out
+                <LogOut className="h-3 w-3 sm:h-4 sm:w-4" />
+                <span className="hidden sm:inline">Sign Out</span>
               </Button>
             </div>
           </div>
         </div>
       </nav>
       
-      <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+      <main className="max-w-7xl mx-auto py-4 sm:py-6 px-3 sm:px-4 lg:px-8 w-full min-w-0">
         {children}
       </main>
     </div>

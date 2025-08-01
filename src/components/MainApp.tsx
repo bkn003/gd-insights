@@ -72,9 +72,9 @@ export const MainApp = () => {
 
   return (
     <Layout>
-      <div className="space-y-6 pb-20 md:pb-6">
+      <div className="space-y-4 sm:space-y-6 pb-20 md:pb-6 w-full min-w-0">
         {/* Desktop Navigation - hidden on mobile */}
-        <div className="hidden md:flex flex-wrap gap-2 border-b overflow-x-auto">
+        <div className="hidden md:flex flex-wrap gap-2 border-b overflow-x-auto pb-2">
           <Button
             variant={activeTab === 'gd' ? 'default' : 'ghost'}
             onClick={() => setActiveTab('gd')}
@@ -126,7 +126,9 @@ export const MainApp = () => {
           )}
         </div>
 
-        {renderContent()}
+        <div className="w-full min-w-0">
+          {renderContent()}
+        </div>
       </div>
 
       {/* Mobile Bottom Navigation */}

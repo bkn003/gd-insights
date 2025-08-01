@@ -24,15 +24,18 @@ export const MobileBottomNav = ({ activeTab, setActiveTab, isAdmin }: MobileBott
           <span className="text-xs">GD</span>
         </Button>
         
-        <Button
-          variant={activeTab === 'profile' ? 'default' : 'ghost'}
-          onClick={() => setActiveTab('profile')}
-          className="flex flex-col items-center gap-1 h-auto py-2 px-3"
-          size="sm"
-        >
-          <User className="h-4 w-4" />
-          <span className="text-xs">Profile</span>
-        </Button>
+        {/* Only show Profile button for admins */}
+        {isAdmin && (
+          <Button
+            variant={activeTab === 'profile' ? 'default' : 'ghost'}
+            onClick={() => setActiveTab('profile')}
+            className="flex flex-col items-center gap-1 h-auto py-2 px-3"
+            size="sm"
+          >
+            <User className="h-4 w-4" />
+            <span className="text-xs">Profile</span>
+          </Button>
+        )}
 
         {isAdmin && (
           <Button

@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { Download, Filter, Calendar as CalendarIcon } from 'lucide-react';
 import { format } from 'date-fns';
 import { Database } from '@/types/database';
+import * as XLSX from 'xlsx';
 
 type GoodsEntry = Database['public']['Tables']['goods_damaged_entries']['Row'] & {
   categories: { name: string };
@@ -199,15 +200,15 @@ export const ReportsPanel = () => {
     return format(date, 'yyyy-MM-dd hh:mm a');
   };
 
-  const createSheetData = (entries: GoodsEntry[], sheetName: string) => {
+  const createWorksheetData = (entries: GoodsEntry[]) => {
     const headers = ['Date', 'Shop', 'Category', 'Size', 'Reporter', 'Notes'];
     const rows = entries.map(entry => [
       formatTime12Hour(new Date(entry.created_at)),
-      `"${entry.shops.name}"`,
-      `"${entry.categories.name}"`,
-      `"${entry.sizes.size}"`,
-      `"${entry.employee_name || 'Unknown'}"`,
-      `"${entry.notes.replace(/"/g, '""')}"` // Escape quotes in notes
+      entry.shops.name,
+      entry.categories.name,
+      entry.sizes.size,
+      entry.employee_name || 'Unknown',
+      entry.notes
     ]);
     
     return [headers, ...rows];
@@ -223,38 +224,38 @@ export const ReportsPanel = () => {
     const bigShopEntries = filteredEntries.filter(entry => entry.shops.name === 'Big Shop');
     const smallShopEntries = filteredEntries.filter(entry => entry.shops.name === 'Small Shop');
 
-    // Create data for each sheet
-    const overallData = createSheetData(filteredEntries, 'Overall Report');
-    const bigShopData = createSheetData(bigShopEntries, 'Big Shop Report');
-    const smallShopData = createSheetData(smallShopEntries, 'Small Shop Report');
+    // Create workbook
+    const workbook = XLSX.utils.book_new();
 
-    // Create CSV content with sheet separators (Excel will treat this as multiple sheets when saved as .xlsx)
-    const createCSVSection = (data: string[][], sheetName: string) => {
-      return `${sheetName}\n${data.map(row => row.join(',')).join('\n')}\n\n`;
-    };
+    // Create worksheets
+    const overallWS = XLSX.utils.aoa_to_sheet(createWorksheetData(filteredEntries));
+    const bigShopWS = XLSX.utils.aoa_to_sheet(createWorksheetData(bigShopEntries));
+    const smallShopWS = XLSX.utils.aoa_to_sheet(createWorksheetData(smallShopEntries));
 
-    const csvContent = [
-      createCSVSection(overallData, 'Overall Report'),
-      createCSVSection(bigShopData, 'Big Shop Report'),
-      createCSVSection(smallShopData, 'Small Shop Report')
-    ].join('');
+    // Add worksheets to workbook
+    XLSX.utils.book_append_sheet(workbook, overallWS, 'Overall Report');
+    XLSX.utils.book_append_sheet(workbook, bigShopWS, 'Big Shop Report');
+    XLSX.utils.book_append_sheet(workbook, smallShopWS, 'Small Shop Report');
 
-    // Add UTF-8 BOM for proper Tamil text encoding in Excel
-    const BOM = '\uFEFF';
-    const csvWithBOM = BOM + csvContent;
-
-    // Create and download file with proper encoding
-    const blob = new Blob([csvWithBOM], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', `gd_report_3sheets_${format(new Date(), 'yyyy-MM-dd')}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    // Set column widths for all sheets
+    const colWidths = [
+      { wch: 20 }, // Date
+      { wch: 15 }, // Shop
+      { wch: 15 }, // Category
+      { wch: 10 }, // Size
+      { wch: 15 }, // Reporter
+      { wch: 30 }  // Notes
+    ];
     
-    toast.success(`Report exported successfully! Overall: ${filteredEntries.length}, Big Shop: ${bigShopEntries.length}, Small Shop: ${smallShopEntries.length} entries`);
+    overallWS['!cols'] = colWidths;
+    bigShopWS['!cols'] = colWidths;
+    smallShopWS['!cols'] = colWidths;
+
+    // Generate filename and download
+    const fileName = `gd_report_3sheets_${format(new Date(), 'yyyy-MM-dd')}.xlsx`;
+    XLSX.writeFile(workbook, fileName);
+    
+    toast.success(`Excel report exported successfully! Overall: ${filteredEntries.length}, Big Shop: ${bigShopEntries.length}, Small Shop: ${smallShopEntries.length} entries`);
   };
 
   const clearFilters = () => {
@@ -271,23 +272,24 @@ export const ReportsPanel = () => {
   }
 
   return (
-    <div className="space-y-6">
-      <Card>
+    <div className="space-y-6 w-full min-w-0">
+      <Card className="w-full">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Filter className="h-5 w-5" />
+          <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
+            <Filter className="h-4 w-4 sm:h-5 sm:w-5" />
             Filters & Export
           </CardTitle>
-          <CardDescription>
-            Filter and export GD reports (Export includes 3 sheets: Overall, Big Shop, Small Shop)
+          <CardDescription className="text-sm">
+            Filter and export GD reports (Export includes 3 separate sheets: Overall, Big Shop, Small Shop)
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-            <div className="space-y-2">
-              <Label>Shop</Label>
+        <CardContent className="space-y-4">
+          {/* Mobile-friendly grid layout */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+            <div className="space-y-2 min-w-0">
+              <Label className="text-sm font-medium">Shop</Label>
               <Select value={selectedShop} onValueChange={setSelectedShop}>
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -301,10 +303,10 @@ export const ReportsPanel = () => {
               </Select>
             </div>
 
-            <div className="space-y-2">
-              <Label>Category</Label>
+            <div className="space-y-2 min-w-0">
+              <Label className="text-sm font-medium">Category</Label>
               <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -318,10 +320,10 @@ export const ReportsPanel = () => {
               </Select>
             </div>
 
-            <div className="space-y-2">
-              <Label>Size</Label>
+            <div className="space-y-2 min-w-0">
+              <Label className="text-sm font-medium">Size</Label>
               <Select value={selectedSize} onValueChange={setSelectedSize}>
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -335,10 +337,10 @@ export const ReportsPanel = () => {
               </Select>
             </div>
 
-            <div className="space-y-2">
-              <Label>Date Range</Label>
+            <div className="space-y-2 min-w-0">
+              <Label className="text-sm font-medium">Date Range</Label>
               <Select value={dateFilter} onValueChange={setDateFilter}>
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -355,14 +357,16 @@ export const ReportsPanel = () => {
           </div>
 
           {dateFilter === 'custom' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-              <div className="space-y-2">
-                <Label>From Date</Label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+              <div className="space-y-2 min-w-0">
+                <Label className="text-sm font-medium">From Date</Label>
                 <Popover>
                   <PopoverTrigger asChild>
-                    <Button variant="outline" className="w-full justify-start">
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {customDateFrom ? format(customDateFrom, 'PPP') : 'Pick a date'}
+                    <Button variant="outline" className="w-full justify-start text-left">
+                      <CalendarIcon className="mr-2 h-4 w-4 flex-shrink-0" />
+                      <span className="truncate">
+                        {customDateFrom ? format(customDateFrom, 'PPP') : 'Pick a date'}
+                      </span>
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0">
@@ -375,13 +379,15 @@ export const ReportsPanel = () => {
                   </PopoverContent>
                 </Popover>
               </div>
-              <div className="space-y-2">
-                <Label>To Date</Label>
+              <div className="space-y-2 min-w-0">
+                <Label className="text-sm font-medium">To Date</Label>
                 <Popover>
                   <PopoverTrigger asChild>
-                    <Button variant="outline" className="w-full justify-start">
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {customDateTo ? format(customDateTo, 'PPP') : 'Pick a date'}
+                    <Button variant="outline" className="w-full justify-start text-left">
+                      <CalendarIcon className="mr-2 h-4 w-4 flex-shrink-0" />
+                      <span className="truncate">
+                        {customDateTo ? format(customDateTo, 'PPP') : 'Pick a date'}
+                      </span>
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0">
@@ -397,26 +403,26 @@ export const ReportsPanel = () => {
             </div>
           )}
 
-          <div className="flex gap-2">
-            <Button onClick={clearFilters} variant="outline">
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+            <Button onClick={clearFilters} variant="outline" className="w-full sm:w-auto">
               Clear Filters
             </Button>
-            <Button onClick={exportToExcel} className="flex items-center gap-2">
-              <Download className="h-4 w-4" />
-              Export 3-Sheet Excel ({filteredEntries.length} entries)
+            <Button onClick={exportToExcel} className="flex items-center justify-center gap-2 w-full sm:w-auto">
+              <Download className="h-4 w-4 flex-shrink-0" />
+              <span className="truncate">Export 3-Sheet Excel ({filteredEntries.length})</span>
             </Button>
           </div>
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="w-full">
         <CardHeader>
-          <CardTitle>GD Reports</CardTitle>
-          <CardDescription>
+          <CardTitle className="text-lg sm:text-xl">GD Reports</CardTitle>
+          <CardDescription className="text-sm">
             Showing {filteredEntries.length} of {entries.length} entries
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="min-w-0">
           <div className="space-y-4">
             {filteredEntries.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
@@ -424,22 +430,24 @@ export const ReportsPanel = () => {
               </div>
             ) : (
               filteredEntries.map((entry) => (
-                <div key={entry.id} className="border rounded-lg p-4 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline">{entry.shops.name}</Badge>
-                      <Badge variant="secondary">{entry.categories.name}</Badge>
-                      <Badge variant="outline">{entry.sizes.size}</Badge>
+                <div key={entry.id} className="border rounded-lg p-3 sm:p-4 space-y-2 min-w-0">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-1 sm:gap-2 min-w-0">
+                      <Badge variant="outline" className="text-xs">{entry.shops.name}</Badge>
+                      <Badge variant="secondary" className="text-xs">{entry.categories.name}</Badge>
+                      <Badge variant="outline" className="text-xs">{entry.sizes.size}</Badge>
                     </div>
-                    <span className="text-sm text-muted-foreground">
+                    <span className="text-xs sm:text-sm text-muted-foreground flex-shrink-0">
                       {formatTime12Hour(new Date(entry.created_at))}
                     </span>
                   </div>
-                  <div className="text-sm">
-                    <span className="font-medium">Reporter:</span> {entry.employee_name || 'Unknown'}
+                  <div className="text-sm min-w-0">
+                    <span className="font-medium">Reporter:</span>{' '}
+                    <span className="break-words">{entry.employee_name || 'Unknown'}</span>
                   </div>
-                  <div className="text-sm">
-                    <span className="font-medium">Notes:</span> {entry.notes}
+                  <div className="text-sm min-w-0">
+                    <span className="font-medium">Notes:</span>{' '}
+                    <span className="break-words">{entry.notes}</span>
                   </div>
                 </div>
               ))
