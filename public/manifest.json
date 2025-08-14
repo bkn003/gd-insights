@@ -1,0 +1,28 @@
+
+{
+  "name": "GD Tracker",
+  "short_name": "GD Tracker",
+  "description": "Damaged Goods Tracking Application",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#000000",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/lovable-uploads/4fa6131c-84d7-4f84-b2d1-1c32430cdb62.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "/lovable-uploads/4fa6131c-84d7-4f84-b2d1-1c32430cdb62.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable any"
+    }
+  ],
+  "categories": ["business", "productivity"],
+  "lang": "en",
+  "dir": "ltr"
+}
