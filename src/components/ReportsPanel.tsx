@@ -255,7 +255,28 @@ export const ReportsPanel = () => {
 
     // Generate filename and download
     const fileName = `gd_report_3sheets_${format(new Date(), 'yyyy-MM-dd')}.xlsx`;
-    XLSX.writeFile(workbook, fileName);
+    
+    // Create blob and download with auto-open
+    const wbout = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+    const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    
+    // Create download link and trigger download
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    
+    // Open file automatically after download
+    setTimeout(() => {
+      const openLink = document.createElement('a');
+      openLink.href = url;
+      openLink.target = '_blank';
+      openLink.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }, 100);
     
     toast.success(`Excel report exported successfully! Overall: ${filteredEntries.length}, Big Shop: ${bigShopEntries.length}, Small Shop: ${smallShopEntries.length} entries`);
   };
@@ -267,6 +288,9 @@ export const ReportsPanel = () => {
     }
 
     const doc = new jsPDF();
+    
+    // Add Tamil font support - use 'helvetica' which supports Unicode better
+    doc.setFont('helvetica');
     
     // Add title
     doc.setFontSize(16);
@@ -291,23 +315,33 @@ export const ReportsPanel = () => {
     
     doc.text(filterText, 14, 32);
     
-    // Prepare table data
+    // Prepare table data with proper encoding
     const tableData = filteredEntries.map(entry => [
       formatTime12Hour(new Date(entry.created_at)),
       entry.shops.name,
       entry.categories.name,
       entry.sizes.size,
       entry.employee_name || 'Unknown',
-      entry.notes
+      entry.notes || ''
     ]);
 
-    // Add table
+    // Add table with Unicode support
     autoTable(doc, {
       head: [['Date', 'Shop', 'Category', 'Size', 'Reporter', 'Notes']],
       body: tableData,
       startY: 40,
-      styles: { fontSize: 8 },
-      headStyles: { fillColor: [41, 128, 185] },
+      styles: { 
+        fontSize: 8,
+        font: 'helvetica',
+        cellPadding: 2,
+        overflow: 'linebreak',
+        cellWidth: 'wrap'
+      },
+      headStyles: { 
+        fillColor: [41, 128, 185],
+        font: 'helvetica',
+        fontStyle: 'bold'
+      },
       columnStyles: {
         0: { cellWidth: 30 },
         1: { cellWidth: 25 },
@@ -315,12 +349,33 @@ export const ReportsPanel = () => {
         3: { cellWidth: 15 },
         4: { cellWidth: 25 },
         5: { cellWidth: 60 }
+      },
+      didParseCell: function(data) {
+        // Ensure proper text encoding for Tamil characters
+        if (data.cell.text && Array.isArray(data.cell.text)) {
+          data.cell.text = data.cell.text.map(text => 
+            typeof text === 'string' ? text : String(text)
+          );
+        }
       }
     });
 
-    // Generate filename and save
+    // Generate filename and save with auto-open
     const fileName = `gd_report_${format(new Date(), 'yyyy-MM-dd')}.pdf`;
+    
+    // Save and open automatically
     doc.save(fileName);
+    
+    // Open PDF automatically after download
+    setTimeout(() => {
+      const pdfBlob = doc.output('blob');
+      const url = URL.createObjectURL(pdfBlob);
+      const openLink = document.createElement('a');
+      openLink.href = url;
+      openLink.target = '_blank';
+      openLink.click();
+      setTimeout(() => URL.revokeObjectURL(url), 100);
+    }, 100);
     
     toast.success(`PDF report exported successfully! ${filteredEntries.length} entries`);
   };
