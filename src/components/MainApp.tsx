@@ -8,6 +8,7 @@ import { AdminPanel } from '@/components/AdminPanel';
 import { ReportsPanel } from '@/components/ReportsPanel';
 import { UserProfile } from '@/components/UserProfile';
 import { MobileBottomNav } from '@/components/MobileBottomNav';
+import { PWAInstallPrompt } from '@/components/PWAInstallPrompt';
 import { Button } from '@/components/ui/button';
 import { BarChart3, Plus, Settings, FileText, User } from 'lucide-react';
 
@@ -71,72 +72,75 @@ export const MainApp = () => {
   }
 
   return (
-    <Layout>
-      <div className="space-y-4 sm:space-y-6 pb-20 md:pb-6 w-full min-w-0">
-        {/* Desktop Navigation - hidden on mobile */}
-        <div className="hidden md:flex flex-wrap gap-2 border-b overflow-x-auto pb-2">
-          <Button
-            variant={activeTab === 'gd' ? 'default' : 'ghost'}
-            onClick={() => setActiveTab('gd')}
-            className="flex items-center gap-2 flex-shrink-0"
-          >
-            <Plus className="h-4 w-4" />
-            GD
-          </Button>
-          {/* Only show Profile button for admins */}
-          {isAdmin && (
+    <>
+      <PWAInstallPrompt />
+      <Layout>
+        <div className="space-y-4 sm:space-y-6 pb-20 md:pb-6 w-full min-w-0">
+          {/* Desktop Navigation - hidden on mobile */}
+          <div className="hidden md:flex flex-wrap gap-2 border-b overflow-x-auto pb-2">
             <Button
-              variant={activeTab === 'profile' ? 'default' : 'ghost'}
-              onClick={() => setActiveTab('profile')}
+              variant={activeTab === 'gd' ? 'default' : 'ghost'}
+              onClick={() => setActiveTab('gd')}
               className="flex items-center gap-2 flex-shrink-0"
             >
-              <User className="h-4 w-4" />
-              Profile
+              <Plus className="h-4 w-4" />
+              GD
             </Button>
-          )}
-          {isAdmin && (
-            <Button
-              variant={activeTab === 'dashboard' ? 'default' : 'ghost'}
-              onClick={() => setActiveTab('dashboard')}
-              className="flex items-center gap-2 flex-shrink-0"
-            >
-              <BarChart3 className="h-4 w-4" />
-              Dashboard
-            </Button>
-          )}
-          {isAdmin && (
-            <Button
-              variant={activeTab === 'reports' ? 'default' : 'ghost'}
-              onClick={() => setActiveTab('reports')}
-              className="flex items-center gap-2 flex-shrink-0"
-            >
-              <FileText className="h-4 w-4" />
-              Reports
-            </Button>
-          )}
-          {isAdmin && (
-            <Button
-              variant={activeTab === 'admin' ? 'default' : 'ghost'}
-              onClick={() => setActiveTab('admin')}
-              className="flex items-center gap-2 flex-shrink-0"
-            >
-              <Settings className="h-4 w-4" />
-              Admin Panel
-            </Button>
-          )}
+            {/* Only show Profile button for admins */}
+            {isAdmin && (
+              <Button
+                variant={activeTab === 'profile' ? 'default' : 'ghost'}
+                onClick={() => setActiveTab('profile')}
+                className="flex items-center gap-2 flex-shrink-0"
+              >
+                <User className="h-4 w-4" />
+                Profile
+              </Button>
+            )}
+            {isAdmin && (
+              <Button
+                variant={activeTab === 'dashboard' ? 'default' : 'ghost'}
+                onClick={() => setActiveTab('dashboard')}
+                className="flex items-center gap-2 flex-shrink-0"
+              >
+                <BarChart3 className="h-4 w-4" />
+                Dashboard
+              </Button>
+            )}
+            {isAdmin && (
+              <Button
+                variant={activeTab === 'reports' ? 'default' : 'ghost'}
+                onClick={() => setActiveTab('reports')}
+                className="flex items-center gap-2 flex-shrink-0"
+              >
+                <FileText className="h-4 w-4" />
+                Reports
+              </Button>
+            )}
+            {isAdmin && (
+              <Button
+                variant={activeTab === 'admin' ? 'default' : 'ghost'}
+                onClick={() => setActiveTab('admin')}
+                className="flex items-center gap-2 flex-shrink-0"
+              >
+                <Settings className="h-4 w-4" />
+                Admin Panel
+              </Button>
+            )}
+          </div>
+
+          <div className="w-full min-w-0">
+            {renderContent()}
+          </div>
         </div>
 
-        <div className="w-full min-w-0">
-          {renderContent()}
-        </div>
-      </div>
-
-      {/* Mobile Bottom Navigation */}
-      <MobileBottomNav 
-        activeTab={activeTab} 
-        setActiveTab={setActiveTab} 
-        isAdmin={isAdmin} 
-      />
-    </Layout>
+        {/* Mobile Bottom Navigation */}
+        <MobileBottomNav 
+          activeTab={activeTab} 
+          setActiveTab={setActiveTab} 
+          isAdmin={isAdmin} 
+        />
+      </Layout>
+    </>
   );
 };

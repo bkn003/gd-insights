@@ -1,0 +1,28 @@
+
+{
+  "name": "Damaged Goods Insight",
+  "short_name": "DGI",
+  "description": "Damaged Goods Management System",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#000000",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/lovable-uploads/d9731f6e-4026-4be4-aaf0-1a401d8ba7be.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "/lovable-uploads/d9731f6e-4026-4be4-aaf0-1a401d8ba7be.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable any"
+    }
+  ],
+  "categories": ["business", "productivity"],
+  "lang": "en",
+  "dir": "ltr"
+}
