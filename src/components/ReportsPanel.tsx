@@ -10,10 +10,12 @@ import { Label } from '@/components/ui/label';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { toast } from 'sonner';
-import { Download, Filter, Calendar as CalendarIcon } from 'lucide-react';
+import { Download, Filter, Calendar as CalendarIcon, FileText } from 'lucide-react';
 import { format } from 'date-fns';
 import { Database } from '@/types/database';
 import * as XLSX from 'xlsx';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 type GoodsEntry = Database['public']['Tables']['goods_damaged_entries']['Row'] & {
   categories: { name: string };
@@ -258,6 +260,71 @@ export const ReportsPanel = () => {
     toast.success(`Excel report exported successfully! Overall: ${filteredEntries.length}, Big Shop: ${bigShopEntries.length}, Small Shop: ${smallShopEntries.length} entries`);
   };
 
+  const exportToPDF = () => {
+    if (filteredEntries.length === 0) {
+      toast.error('No data to export');
+      return;
+    }
+
+    const doc = new jsPDF();
+    
+    // Add title
+    doc.setFontSize(16);
+    doc.text('GD Report', 14, 22);
+    
+    // Add filter info
+    doc.setFontSize(10);
+    let filterText = 'Filters: ';
+    if (selectedShop !== 'all') {
+      const shop = shops.find(s => s.id === selectedShop);
+      filterText += `Shop: ${shop?.name || 'Unknown'} | `;
+    }
+    if (selectedCategory !== 'all') {
+      const category = categories.find(c => c.id === selectedCategory);
+      filterText += `Category: ${category?.name || 'Unknown'} | `;
+    }
+    if (selectedSize !== 'all') {
+      const size = sizes.find(s => s.id === selectedSize);
+      filterText += `Size: ${size?.size || 'Unknown'} | `;
+    }
+    filterText += `Date: ${dateFilter}`;
+    
+    doc.text(filterText, 14, 32);
+    
+    // Prepare table data
+    const tableData = filteredEntries.map(entry => [
+      formatTime12Hour(new Date(entry.created_at)),
+      entry.shops.name,
+      entry.categories.name,
+      entry.sizes.size,
+      entry.employee_name || 'Unknown',
+      entry.notes
+    ]);
+
+    // Add table
+    autoTable(doc, {
+      head: [['Date', 'Shop', 'Category', 'Size', 'Reporter', 'Notes']],
+      body: tableData,
+      startY: 40,
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [41, 128, 185] },
+      columnStyles: {
+        0: { cellWidth: 30 },
+        1: { cellWidth: 25 },
+        2: { cellWidth: 25 },
+        3: { cellWidth: 15 },
+        4: { cellWidth: 25 },
+        5: { cellWidth: 60 }
+      }
+    });
+
+    // Generate filename and save
+    const fileName = `gd_report_${format(new Date(), 'yyyy-MM-dd')}.pdf`;
+    doc.save(fileName);
+    
+    toast.success(`PDF report exported successfully! ${filteredEntries.length} entries`);
+  };
+
   const clearFilters = () => {
     setSelectedShop('all');
     setSelectedCategory('all');
@@ -410,6 +477,10 @@ export const ReportsPanel = () => {
             <Button onClick={exportToExcel} className="flex items-center justify-center gap-2 w-full sm:w-auto">
               <Download className="h-4 w-4 flex-shrink-0" />
               <span className="truncate">Export 3-Sheet Excel ({filteredEntries.length})</span>
+            </Button>
+            <Button onClick={exportToPDF} variant="outline" className="flex items-center justify-center gap-2 w-full sm:w-auto">
+              <FileText className="h-4 w-4 flex-shrink-0" />
+              <span className="truncate">Export PDF ({filteredEntries.length})</span>
             </Button>
           </div>
         </CardContent>

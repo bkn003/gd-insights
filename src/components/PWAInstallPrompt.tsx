@@ -43,7 +43,7 @@ export const PWAInstallPrompt = () => {
       <div className="flex items-center justify-between p-3 max-w-screen-xl mx-auto">
         <div className="flex items-center gap-3">
           <Download className="h-5 w-5" />
-          <span className="text-sm font-medium">Install DGI App</span>
+          <span className="text-sm font-medium">Install GD App</span>
         </div>
         <div className="flex items-center gap-2">
           <Button
