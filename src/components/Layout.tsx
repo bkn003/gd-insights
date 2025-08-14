@@ -29,7 +29,8 @@ export const Layout = ({ children }: LayoutProps) => {
             <div className="flex items-center min-w-0 flex-shrink-0">
               <Package className="h-6 w-6 sm:h-8 sm:w-8 text-primary flex-shrink-0" />
               <span className="ml-2 text-lg sm:text-xl font-bold text-foreground truncate">
-                GD Tracker
+                <span className="sm:hidden">GD</span>
+                <span className="hidden sm:inline">GD Tracker</span>
               </span>
             </div>
             

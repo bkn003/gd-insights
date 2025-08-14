@@ -1,7 +1,7 @@
 
 {
-  "name": "Damaged Goods Insight",
-  "short_name": "DGI",
+  "name": "GD Insights",
+  "short_name": "GD",
   "description": "Damaged Goods Management System",
   "start_url": "/",
   "display": "standalone",
