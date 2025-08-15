@@ -27,6 +27,25 @@ type Shop = Database['public']['Tables']['shops']['Row'];
 type Category = Database['public']['Tables']['categories']['Row'];
 type Size = Database['public']['Tables']['sizes']['Row'];
 
+// Function to load TTF font file from Google Fonts as Base64
+async function loadTamilFont() {
+  try {
+    // Use Google Fonts API to get the font
+    const response = await fetch('https://fonts.gstatic.com/s/notosanstamil/v27/ieVq2YdDI2sbJBiLBLhGakPOdREzXqVTrDVHKvQZrRo.woff2');
+    const arrayBuffer = await response.arrayBuffer();
+    let binary = '';
+    const bytes = new Uint8Array(arrayBuffer);
+    const chunkSize = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+    }
+    return btoa(binary);
+  } catch (error) {
+    console.error('Failed to load Tamil font:', error);
+    return null;
+  }
+}
+
 export const ReportsPanel = () => {
   const { isAdmin } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -281,100 +300,116 @@ export const ReportsPanel = () => {
     toast.success(`Excel report exported successfully! Overall: ${filteredEntries.length}, Big Shop: ${bigShopEntries.length}, Small Shop: ${smallShopEntries.length} entries`);
   };
 
-  const exportToPDF = () => {
+  const exportToPDF = async () => {
     if (filteredEntries.length === 0) {
       toast.error('No data to export');
       return;
     }
 
-    const doc = new jsPDF();
-    
-    // Add title
-    doc.setFontSize(16);
-    doc.text('GD Report', 14, 22);
-    
-    // Add filter info
-    doc.setFontSize(10);
-    let filterText = 'Filters: ';
-    if (selectedShop !== 'all') {
-      const shop = shops.find(s => s.id === selectedShop);
-      filterText += `Shop: ${shop?.name || 'Unknown'} | `;
-    }
-    if (selectedCategory !== 'all') {
-      const category = categories.find(c => c.id === selectedCategory);
-      filterText += `Category: ${category?.name || 'Unknown'} | `;
-    }
-    if (selectedSize !== 'all') {
-      const size = sizes.find(s => s.id === selectedSize);
-      filterText += `Size: ${size?.size || 'Unknown'} | `;
-    }
-    filterText += `Date: ${dateFilter}`;
-    
-    doc.text(filterText, 14, 32);
-    
-    // Prepare table data - preserve Tamil text
-    const tableData = filteredEntries.map(entry => [
-      formatTime12Hour(new Date(entry.created_at)),
-      entry.shops.name || '',
-      entry.categories.name || '',
-      entry.sizes.size || '',
-      entry.employee_name || 'Unknown',
-      entry.notes || ''
-    ]);
-
-    // Add table with Tamil font support
-    autoTable(doc, {
-      head: [['Date', 'Shop', 'Category', 'Size', 'Reporter', 'Notes']],
-      body: tableData,
-      startY: 40,
-      styles: { 
-        fontSize: 8,
-        font: 'helvetica',
-        cellPadding: 3,
-        overflow: 'linebreak',
-        cellWidth: 'wrap',
-        textColor: [0, 0, 0],
-        fontStyle: 'normal'
-      },
-      headStyles: { 
-        fillColor: [41, 128, 185],
-        font: 'helvetica',
-        fontStyle: 'bold',
-        textColor: [255, 255, 255]
-      },
-      columnStyles: {
-        0: { cellWidth: 30 },
-        1: { cellWidth: 25 },
-        2: { cellWidth: 25 },
-        3: { cellWidth: 15 },
-        4: { cellWidth: 25 },
-        5: { 
-          cellWidth: 60,
-          overflow: 'linebreak',
-          cellPadding: 3,
-          fontStyle: 'normal'
-        }
+    try {
+      const doc = new jsPDF();
+      
+      // Load Tamil font
+      const tamilFontBase64 = await loadTamilFont();
+      
+      if (tamilFontBase64) {
+        // Add Tamil font to PDF
+        doc.addFileToVFS("NotoSansTamil-Regular.ttf", tamilFontBase64);
+        doc.addFont("NotoSansTamil-Regular.ttf", "NotoSansTamil", "normal");
       }
-    });
+      
+      // Add title with default font
+      doc.setFont("helvetica");
+      doc.setFontSize(16);
+      doc.text('GD Report', 14, 22);
+      
+      // Add filter info
+      doc.setFontSize(10);
+      let filterText = 'Filters: ';
+      if (selectedShop !== 'all') {
+        const shop = shops.find(s => s.id === selectedShop);
+        filterText += `Shop: ${shop?.name || 'Unknown'} | `;
+      }
+      if (selectedCategory !== 'all') {
+        const category = categories.find(c => c.id === selectedCategory);
+        filterText += `Category: ${category?.name || 'Unknown'} | `;
+      }
+      if (selectedSize !== 'all') {
+        const size = sizes.find(s => s.id === selectedSize);
+        filterText += `Size: ${size?.size || 'Unknown'} | `;
+      }
+      filterText += `Date: ${dateFilter}`;
+      
+      doc.text(filterText, 14, 32);
+      
+      // Prepare table data
+      const tableData = filteredEntries.map(entry => [
+        formatTime12Hour(new Date(entry.created_at)),
+        entry.shops.name || '',
+        entry.categories.name || '',
+        entry.sizes.size || '',
+        entry.employee_name || 'Unknown',
+        entry.notes || ''
+      ]);
 
-    // Generate filename and save with auto-open
-    const fileName = `gd_report_${format(new Date(), 'yyyy-MM-dd')}.pdf`;
-    
-    // Save and open automatically
-    doc.save(fileName);
-    
-    // Open PDF automatically after download
-    setTimeout(() => {
-      const pdfBlob = doc.output('blob');
-      const url = URL.createObjectURL(pdfBlob);
-      const openLink = document.createElement('a');
-      openLink.href = url;
-      openLink.target = '_blank';
-      openLink.click();
-      setTimeout(() => URL.revokeObjectURL(url), 100);
-    }, 100);
-    
-    toast.success(`PDF report exported successfully! ${filteredEntries.length} entries`);
+      // Add table with Tamil font support
+      autoTable(doc, {
+        head: [['Date', 'Shop', 'Category', 'Size', 'Reporter', 'Notes']],
+        body: tableData,
+        startY: 40,
+        styles: { 
+          fontSize: 8,
+          font: tamilFontBase64 ? 'NotoSansTamil' : 'helvetica',
+          cellPadding: 3,
+          overflow: 'linebreak',
+          cellWidth: 'wrap',
+          textColor: [0, 0, 0],
+          fontStyle: 'normal'
+        },
+        headStyles: { 
+          fillColor: [41, 128, 185],
+          font: 'helvetica',
+          fontStyle: 'bold',
+          textColor: [255, 255, 255]
+        },
+        columnStyles: {
+          0: { cellWidth: 30 },
+          1: { cellWidth: 25 },
+          2: { cellWidth: 25 },
+          3: { cellWidth: 15 },
+          4: { cellWidth: 25 },
+          5: { 
+            cellWidth: 60,
+            overflow: 'linebreak',
+            cellPadding: 3,
+            fontStyle: 'normal',
+            font: tamilFontBase64 ? 'NotoSansTamil' : 'helvetica'
+          }
+        }
+      });
+
+      // Generate filename and save with auto-open
+      const fileName = `gd_report_${format(new Date(), 'yyyy-MM-dd')}.pdf`;
+      
+      // Save and open automatically
+      doc.save(fileName);
+      
+      // Open PDF automatically after download
+      setTimeout(() => {
+        const pdfBlob = doc.output('blob');
+        const url = URL.createObjectURL(pdfBlob);
+        const openLink = document.createElement('a');
+        openLink.href = url;
+        openLink.target = '_blank';
+        openLink.click();
+        setTimeout(() => URL.revokeObjectURL(url), 100);
+      }, 100);
+      
+      toast.success(`PDF report exported successfully! ${filteredEntries.length} entries`);
+    } catch (error) {
+      console.error('Error exporting PDF:', error);
+      toast.error('Failed to export PDF');
+    }
   };
 
   const clearFilters = () => {
