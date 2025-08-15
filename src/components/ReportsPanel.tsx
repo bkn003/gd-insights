@@ -315,20 +315,17 @@ export const ReportsPanel = () => {
     
     doc.text(filterText, 14, 32);
     
-    // Prepare table data with proper Tamil text handling
+    // Prepare table data - keep Tamil text as-is
     const tableData = filteredEntries.map(entry => [
       formatTime12Hour(new Date(entry.created_at)),
       entry.shops.name || '',
       entry.categories.name || '',
       entry.sizes.size || '',
       entry.employee_name || 'Unknown',
-      // Ensure Tamil text is properly encoded
-      entry.notes ? String(entry.notes).replace(/[^\u0000-\u007F]/g, function(char) {
-        return '\\u' + ('0000' + char.charCodeAt(0).toString(16)).substr(-4);
-      }).replace(/\\u/g, '') : ''
+      entry.notes || ''
     ]);
 
-    // Add table with enhanced Tamil support
+    // Add table
     autoTable(doc, {
       head: [['Date', 'Shop', 'Category', 'Size', 'Reporter', 'Notes']],
       body: tableData,
@@ -358,27 +355,6 @@ export const ReportsPanel = () => {
           cellWidth: 60,
           overflow: 'linebreak',
           cellPadding: 3
-        }
-      },
-      didParseCell: function(data) {
-        // Handle Tamil text properly for PDF export
-        if (data.cell && data.cell.text !== undefined && data.cell.text !== null) {
-          // Convert text to string and handle Tamil characters
-          const originalText = Array.isArray(data.cell.text) ? data.cell.text.join(' ') : String(data.cell.text);
-          
-          // For Tamil text readability in PDF
-          if (data.column.index === 5) { // Notes column
-            // Preserve Tamil characters as-is for better rendering
-            (data.cell as any).text = originalText;
-          } else {
-            (data.cell as any).text = originalText;
-          }
-        }
-      },
-      willDrawCell: function(data) {
-        // Ensure proper font for Tamil characters
-        if (data.column.index === 5) { // Notes column
-          doc.setFont('helvetica', 'normal');
         }
       }
     });
