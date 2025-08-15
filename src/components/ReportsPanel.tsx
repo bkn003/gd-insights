@@ -289,9 +289,6 @@ export const ReportsPanel = () => {
 
     const doc = new jsPDF();
     
-    // Set font to support Unicode characters including Tamil
-    doc.setFont('helvetica', 'normal');
-    
     // Add title
     doc.setFontSize(16);
     doc.text('GD Report', 14, 22);
@@ -315,7 +312,7 @@ export const ReportsPanel = () => {
     
     doc.text(filterText, 14, 32);
     
-    // Prepare table data - keep Tamil text as-is
+    // Prepare table data - preserve Tamil text
     const tableData = filteredEntries.map(entry => [
       formatTime12Hour(new Date(entry.created_at)),
       entry.shops.name || '',
@@ -325,7 +322,7 @@ export const ReportsPanel = () => {
       entry.notes || ''
     ]);
 
-    // Add table
+    // Add table with Tamil font support
     autoTable(doc, {
       head: [['Date', 'Shop', 'Category', 'Size', 'Reporter', 'Notes']],
       body: tableData,
@@ -354,7 +351,15 @@ export const ReportsPanel = () => {
         5: { 
           cellWidth: 60,
           overflow: 'linebreak',
-          cellPadding: 3
+          cellPadding: 3,
+          fontStyle: 'normal'
+        }
+      },
+      didParseCell: function(data) {
+        // Handle Tamil text in Notes column (index 5)
+        if (data.column.index === 5 && data.cell.text) {
+          // Set font family to support Tamil characters
+          data.cell.styles.fontFamily = 'Noto Sans Tamil, Arial, sans-serif';
         }
       }
     });
