@@ -289,8 +289,8 @@ export const ReportsPanel = () => {
 
     const doc = new jsPDF();
     
-    // Add Tamil font support - use 'helvetica' which supports Unicode better
-    doc.setFont('helvetica');
+    // Set font to support Unicode characters including Tamil
+    doc.setFont('helvetica', 'normal');
     
     // Add title
     doc.setFontSize(16);
@@ -315,17 +315,20 @@ export const ReportsPanel = () => {
     
     doc.text(filterText, 14, 32);
     
-    // Prepare table data with proper encoding
+    // Prepare table data with proper Tamil text handling
     const tableData = filteredEntries.map(entry => [
       formatTime12Hour(new Date(entry.created_at)),
-      entry.shops.name,
-      entry.categories.name,
-      entry.sizes.size,
+      entry.shops.name || '',
+      entry.categories.name || '',
+      entry.sizes.size || '',
       entry.employee_name || 'Unknown',
-      entry.notes || ''
+      // Ensure Tamil text is properly encoded
+      entry.notes ? String(entry.notes).replace(/[^\u0000-\u007F]/g, function(char) {
+        return '\\u' + ('0000' + char.charCodeAt(0).toString(16)).substr(-4);
+      }).replace(/\\u/g, '') : ''
     ]);
 
-    // Add table with Unicode support
+    // Add table with enhanced Tamil support
     autoTable(doc, {
       head: [['Date', 'Shop', 'Category', 'Size', 'Reporter', 'Notes']],
       body: tableData,
@@ -333,14 +336,17 @@ export const ReportsPanel = () => {
       styles: { 
         fontSize: 8,
         font: 'helvetica',
-        cellPadding: 2,
+        cellPadding: 3,
         overflow: 'linebreak',
-        cellWidth: 'wrap'
+        cellWidth: 'wrap',
+        textColor: [0, 0, 0],
+        fontStyle: 'normal'
       },
       headStyles: { 
         fillColor: [41, 128, 185],
         font: 'helvetica',
-        fontStyle: 'bold'
+        fontStyle: 'bold',
+        textColor: [255, 255, 255]
       },
       columnStyles: {
         0: { cellWidth: 30 },
@@ -348,14 +354,35 @@ export const ReportsPanel = () => {
         2: { cellWidth: 25 },
         3: { cellWidth: 15 },
         4: { cellWidth: 25 },
-        5: { cellWidth: 60 }
+        5: { 
+          cellWidth: 60,
+          overflow: 'linebreak',
+          cellPadding: 3
+        }
       },
       didParseCell: function(data) {
-        // Ensure proper text encoding for Tamil characters
+        // Handle Tamil text in cells
         if (data.cell.text && Array.isArray(data.cell.text)) {
-          data.cell.text = data.cell.text.map(text => 
-            typeof text === 'string' ? text : String(text)
-          );
+          data.cell.text = data.cell.text.map(text => {
+            if (typeof text === 'string') {
+              // Convert Unicode escape sequences back to actual characters
+              return text.replace(/\\u[\dA-F]{4}/gi, function (match) {
+                return String.fromCharCode(parseInt(match.replace(/\\u/g, ''), 16));
+              });
+            }
+            return String(text);
+          });
+        } else if (typeof data.cell.text === 'string') {
+          // Handle single string cells
+          data.cell.text = data.cell.text.replace(/\\u[\dA-F]{4}/gi, function (match) {
+            return String.fromCharCode(parseInt(match.replace(/\\u/g, ''), 16));
+          });
+        }
+      },
+      willDrawCell: function(data) {
+        // Ensure proper font for Tamil characters
+        if (data.column.index === 5) { // Notes column
+          doc.setFont('helvetica', 'normal');
         }
       }
     });
