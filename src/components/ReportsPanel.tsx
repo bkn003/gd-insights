@@ -361,23 +361,17 @@ export const ReportsPanel = () => {
         }
       },
       didParseCell: function(data) {
-        // Handle Tamil text in cells with proper type checking
-        if (data.cell.text) {
-          if (Array.isArray(data.cell.text)) {
-            data.cell.text = data.cell.text.map(text => {
-              if (typeof text === 'string') {
-                // Convert Unicode escape sequences back to actual characters
-                return text.replace(/\\u[\dA-F]{4}/gi, function (match) {
-                  return String.fromCharCode(parseInt(match.replace(/\\u/g, ''), 16));
-                });
-              }
-              return String(text);
-            });
-          } else if (typeof data.cell.text === 'string') {
-            // Handle single string cells
-            data.cell.text = data.cell.text.replace(/\\u[\dA-F]{4}/gi, function (match) {
-              return String.fromCharCode(parseInt(match.replace(/\\u/g, ''), 16));
-            });
+        // Handle Tamil text properly for PDF export
+        if (data.cell && data.cell.text !== undefined && data.cell.text !== null) {
+          // Convert text to string and handle Tamil characters
+          const originalText = Array.isArray(data.cell.text) ? data.cell.text.join(' ') : String(data.cell.text);
+          
+          // For Tamil text readability in PDF
+          if (data.column.index === 5) { // Notes column
+            // Preserve Tamil characters as-is for better rendering
+            (data.cell as any).text = originalText;
+          } else {
+            (data.cell as any).text = originalText;
           }
         }
       },
