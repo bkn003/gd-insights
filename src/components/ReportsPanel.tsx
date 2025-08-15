@@ -354,13 +354,6 @@ export const ReportsPanel = () => {
           cellPadding: 3,
           fontStyle: 'normal'
         }
-      },
-      didParseCell: function(data) {
-        // Handle Tamil text in Notes column (index 5)
-        if (data.column.index === 5 && data.cell.text) {
-          // Set font family to support Tamil characters
-          data.cell.styles.fontFamily = 'Noto Sans Tamil, Arial, sans-serif';
-        }
       }
     });
 
