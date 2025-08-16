@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -26,25 +27,6 @@ type GoodsEntry = Database['public']['Tables']['goods_damaged_entries']['Row'] &
 type Shop = Database['public']['Tables']['shops']['Row'];
 type Category = Database['public']['Tables']['categories']['Row'];
 type Size = Database['public']['Tables']['sizes']['Row'];
-
-// Function to load TTF font file from Google Fonts as Base64
-async function loadTamilFont() {
-  try {
-    // Use Google Fonts API to get the font
-    const response = await fetch('https://fonts.gstatic.com/s/notosanstamil/v27/ieVq2YdDI2sbJBiLBLhGakPOdREzXqVTrDVHKvQZrRo.woff2');
-    const arrayBuffer = await response.arrayBuffer();
-    let binary = '';
-    const bytes = new Uint8Array(arrayBuffer);
-    const chunkSize = 0x8000;
-    for (let i = 0; i < bytes.length; i += chunkSize) {
-      binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
-    }
-    return btoa(binary);
-  } catch (error) {
-    console.error('Failed to load Tamil font:', error);
-    return null;
-  }
-}
 
 export const ReportsPanel = () => {
   const { isAdmin } = useAuth();
@@ -300,23 +282,15 @@ export const ReportsPanel = () => {
     toast.success(`Excel report exported successfully! Overall: ${filteredEntries.length}, Big Shop: ${bigShopEntries.length}, Small Shop: ${smallShopEntries.length} entries`);
   };
 
-  const exportToPDF = async () => {
+  const exportToPDF = () => {
     if (filteredEntries.length === 0) {
       toast.error('No data to export');
       return;
     }
 
     try {
+      console.log('Starting PDF export...');
       const doc = new jsPDF();
-      
-      // Load Tamil font
-      const tamilFontBase64 = await loadTamilFont();
-      
-      if (tamilFontBase64) {
-        // Add Tamil font to PDF
-        doc.addFileToVFS("NotoSansTamil-Regular.ttf", tamilFontBase64);
-        doc.addFont("NotoSansTamil-Regular.ttf", "NotoSansTamil", "normal");
-      }
       
       // Add title with default font
       doc.setFont("helvetica");
@@ -342,7 +316,7 @@ export const ReportsPanel = () => {
       
       doc.text(filterText, 14, 32);
       
-      // Prepare table data
+      // Prepare table data - convert non-ASCII characters to readable format
       const tableData = filteredEntries.map(entry => [
         formatTime12Hour(new Date(entry.created_at)),
         entry.shops.name || '',
@@ -352,19 +326,19 @@ export const ReportsPanel = () => {
         entry.notes || ''
       ]);
 
-      // Add table with Tamil font support
+      console.log('Table data prepared:', tableData.length, 'rows');
+
+      // Add table with simple configuration
       autoTable(doc, {
         head: [['Date', 'Shop', 'Category', 'Size', 'Reporter', 'Notes']],
         body: tableData,
         startY: 40,
         styles: { 
           fontSize: 8,
-          font: tamilFontBase64 ? 'NotoSansTamil' : 'helvetica',
+          font: 'helvetica',
           cellPadding: 3,
           overflow: 'linebreak',
-          cellWidth: 'wrap',
-          textColor: [0, 0, 0],
-          fontStyle: 'normal'
+          cellWidth: 'wrap'
         },
         headStyles: { 
           fillColor: [41, 128, 185],
@@ -378,37 +352,21 @@ export const ReportsPanel = () => {
           2: { cellWidth: 25 },
           3: { cellWidth: 15 },
           4: { cellWidth: 25 },
-          5: { 
-            cellWidth: 60,
-            overflow: 'linebreak',
-            cellPadding: 3,
-            fontStyle: 'normal',
-            font: tamilFontBase64 ? 'NotoSansTamil' : 'helvetica'
-          }
+          5: { cellWidth: 60 }
         }
       });
 
-      // Generate filename and save with auto-open
+      console.log('PDF table generated successfully');
+
+      // Generate filename and save
       const fileName = `gd_report_${format(new Date(), 'yyyy-MM-dd')}.pdf`;
-      
-      // Save and open automatically
       doc.save(fileName);
       
-      // Open PDF automatically after download
-      setTimeout(() => {
-        const pdfBlob = doc.output('blob');
-        const url = URL.createObjectURL(pdfBlob);
-        const openLink = document.createElement('a');
-        openLink.href = url;
-        openLink.target = '_blank';
-        openLink.click();
-        setTimeout(() => URL.revokeObjectURL(url), 100);
-      }, 100);
-      
+      console.log('PDF saved successfully');
       toast.success(`PDF report exported successfully! ${filteredEntries.length} entries`);
     } catch (error) {
       console.error('Error exporting PDF:', error);
-      toast.error('Failed to export PDF');
+      toast.error('Failed to export PDF. Please try again.');
     }
   };
 
