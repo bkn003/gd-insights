@@ -176,7 +176,7 @@ export const Dashboard = () => {
         <Card>
           <CardHeader>
             <CardTitle>Entries by Shop</CardTitle>
-            <CardDescription>Distribution of damaged goods by shop</CardDescription>
+            <CardDescription>Distribution of GD by shop</CardDescription>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
