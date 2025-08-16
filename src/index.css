@@ -3,6 +3,8 @@
 @tailwind components;
 @tailwind utilities;
 
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Tamil:wght@400;700&display=swap');
+
 /* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
 All colors MUST be HSL.
 */
@@ -54,6 +56,8 @@ All colors MUST be HSL.
     --sidebar-border: 220 13% 91%;
 
     --sidebar-ring: 217.2 91.2% 59.8%;
+
+    --tamil-font: 'Noto Sans Tamil', 'Latha', 'Tamil Sangam MN', 'Arial Unicode MS', sans-serif;
   }
 
   .dark {
@@ -100,30 +104,32 @@ All colors MUST be HSL.
     @apply border-border;
   }
 
+  html, body, * {
+    font-family: var(--tamil-font) !important;
+  }
+
   body {
     @apply bg-background text-foreground;
-    font-family: 'Noto Sans Tamil', 'Latha', 'Tamil Sangam MN', sans-serif;
     unicode-bidi: embed;
     direction: ltr;
   }
 }
 
 /* Tamil content specific styles */
-.tamil-content {
-  font-family: 'Noto Sans Tamil', 'Latha', 'Tamil Sangam MN', sans-serif !important;
+.tamil-content, .tamil {
+  font-family: var(--tamil-font) !important;
   -webkit-font-smoothing: antialiased;
   font-feature-settings: "liga" 1;
+  -webkit-font-feature-settings: "liga" 1;
+  unicode-bidi: embed;
+  direction: ltr;
 }
 
 /* Print styles for PDF export */
 @media print {
-  body, * {
-    font-family: 'Noto Sans Tamil', 'Latha', 'Tamil Sangam MN', sans-serif !important;
+  body, *, .tamil-content, .tamil {
+    font-family: var(--tamil-font) !important;
     -webkit-print-color-adjust: exact;
     color-adjust: exact;
-  }
-  
-  .tamil-content {
-    font-family: 'Noto Sans Tamil', sans-serif !important;
   }
 }

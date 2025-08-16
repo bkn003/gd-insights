@@ -202,53 +202,84 @@ export const ReportsPanel = () => {
     return format(date, 'yyyy-MM-dd hh:mm a');
   };
 
-  const createWorksheetData = (entries: GoodsEntry[]) => {
-    const headers = ['Date', 'Shop', 'Category', 'Size', 'Reporter', 'Notes'];
-    const rows = entries.map(entry => [
-      formatTime12Hour(new Date(entry.created_at)),
-      entry.shops.name,
-      entry.categories.name,
-      entry.sizes.size,
-      entry.employee_name || 'Unknown',
-      entry.notes
-    ]);
-    
-    return [headers, ...rows];
+  // Helper function for auto-sizing columns
+  const autoWidth = (ws: XLSX.WorkSheet, rows: any[]) => {
+    const colWidths: number[] = [];
+    rows.forEach(row => {
+      Object.values(row).forEach((value, i) => {
+        const v = value == null ? '' : String(value);
+        colWidths[i] = Math.max(colWidths[i] || 0, v.length);
+      });
+    });
+    ws['!cols'] = colWidths.map(width => ({ wch: Math.min(Math.max(width + 2, 12), 40) }));
   };
 
-  const exportToExcel = () => {
+  // Helper function to create a worksheet
+  const createWorksheet = (name: string, data: any[]) => {
+    const ws = XLSX.utils.json_to_sheet(data, { skipHeader: false });
+    autoWidth(ws, data);
+    // Freeze header row
+    ws['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: 'A2', activePane: 'bottomLeft', state: 'frozen' };
+    return ws;
+  };
+
+  // Multi-sheet Excel export
+  const exportExcelMulti = async () => {
     if (filteredEntries.length === 0) {
       toast.error('No data to export');
       return;
     }
 
-    // Create single workbook with all data
-    const workbook = XLSX.utils.book_new();
-    const worksheet = XLSX.utils.aoa_to_sheet(createWorksheetData(filteredEntries));
+    try {
+      // Wait for fonts to be ready
+      await (document as any).fonts?.ready;
 
-    // Set column widths
-    const colWidths = [
-      { wch: 20 }, // Date
-      { wch: 15 }, // Shop
-      { wch: 15 }, // Category
-      { wch: 10 }, // Size
-      { wch: 15 }, // Reporter
-      { wch: 30 }  // Notes
-    ];
-    
-    worksheet['!cols'] = colWidths;
+      const wb = XLSX.utils.book_new();
 
-    // Add worksheet to workbook
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'GD Report');
+      // Prepare data for export
+      const exportData = filteredEntries.map(entry => ({
+        Date: formatTime12Hour(new Date(entry.created_at)),
+        Shop: entry.shops.name,
+        Category: entry.categories.name,
+        Size: entry.sizes.size,
+        Reporter: entry.employee_name || 'Unknown',
+        Notes: entry.notes || ''
+      }));
 
-    // Generate filename and download
-    const fileName = `gd_report_${format(new Date(), 'yyyy-MM-dd')}.xlsx`;
-    XLSX.writeFile(workbook, fileName);
-    
-    toast.success(`Excel report exported successfully! ${filteredEntries.length} entries`);
+      // Overall Report
+      const overallWs = createWorksheet('Overall Report', exportData);
+      XLSX.utils.book_append_sheet(wb, overallWs, 'Overall Report');
+
+      // Shop-wise sheets
+      const uniqueShops = [...new Set(exportData.map(d => d.Shop).filter(Boolean))].sort();
+      for (const shop of uniqueShops) {
+        const shopData = exportData.filter(d => d.Shop === shop);
+        const sheetName = `Shop - ${shop}`.slice(0, 31);
+        const ws = createWorksheet(sheetName, shopData);
+        XLSX.utils.book_append_sheet(wb, ws, sheetName);
+      }
+
+      // Category-wise sheets
+      const uniqueCategories = [...new Set(exportData.map(d => d.Category).filter(Boolean))].sort();
+      for (const category of uniqueCategories) {
+        const categoryData = exportData.filter(d => d.Category === category);
+        const sheetName = `Category - ${category}`.slice(0, 31);
+        const ws = createWorksheet(sheetName, categoryData);
+        XLSX.utils.book_append_sheet(wb, ws, sheetName);
+      }
+
+      // Generate filename and download
+      const fileName = `gd_report_${format(new Date(), 'yyyyMMdd_HHmm')}.xlsx`;
+      XLSX.writeFile(wb, fileName, { compression: true });
+      
+      toast.success(`Excel report exported successfully! ${filteredEntries.length} entries across multiple sheets`);
+    } catch (error) {
+      console.error('Error exporting Excel:', error);
+      toast.error('Failed to export Excel. Please try again.');
+    }
   };
 
-  const exportToPDF = () => {
+  const exportToPDF = async () => {
     if (filteredEntries.length === 0) {
       toast.error('No data to export');
       return;
@@ -256,6 +287,10 @@ export const ReportsPanel = () => {
 
     try {
       console.log('Starting PDF export with Tamil support...');
+      
+      // Wait for fonts to be ready
+      await (document as any).fonts?.ready;
+
       const doc = new jsPDF({
         orientation: 'landscape',
         unit: 'mm',
@@ -300,7 +335,6 @@ export const ReportsPanel = () => {
         entry.categories.name || '',
         entry.sizes.size || '',
         entry.employee_name || 'Unknown',
-        // Ensure proper UTF-8 encoding for notes (Tamil text)
         entry.notes || ''
       ]);
 
@@ -499,7 +533,7 @@ export const ReportsPanel = () => {
             <Button onClick={clearFilters} variant="outline" className="w-full sm:w-auto">
               Clear Filters
             </Button>
-            <Button onClick={exportToExcel} className="flex items-center justify-center gap-2 w-full sm:w-auto">
+            <Button onClick={exportExcelMulti} className="flex items-center justify-center gap-2 w-full sm:w-auto">
               <Download className="h-4 w-4 flex-shrink-0" />
               <span className="truncate">Export Excel ({filteredEntries.length})</span>
             </Button>
@@ -543,7 +577,7 @@ export const ReportsPanel = () => {
                   </div>
                   <div className="text-sm min-w-0 tamil-content">
                     <span className="font-medium">Notes:</span>{' '}
-                    <span className="break-words" style={{ fontFamily: "'Noto Sans Tamil', 'Latha', 'Tamil Sangam MN', sans-serif" }}>
+                    <span className="break-words tamil">
                       {entry.notes}
                     </span>
                   </div>
