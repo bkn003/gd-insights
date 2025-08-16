@@ -279,18 +279,55 @@ export const ReportsPanel = () => {
     }
   };
 
-  const exportToPDF = async () => {
+  // New multi-sheet PDF export function
+  const exportReportPDF = async () => {
     if (filteredEntries.length === 0) {
       toast.error('No data to export');
       return;
     }
 
     try {
-      console.log('Starting PDF export with Tamil support...');
+      console.log('Starting multi-sheet PDF export...');
       
       // Wait for fonts to be ready
       await (document as any).fonts?.ready;
 
+      // Step 1: Create Excel workbook in memory (same as Excel export)
+      const wb = XLSX.utils.book_new();
+
+      // Prepare data for export
+      const exportData = filteredEntries.map(entry => ({
+        Date: formatTime12Hour(new Date(entry.created_at)),
+        Shop: entry.shops.name,
+        Category: entry.categories.name,
+        Size: entry.sizes.size,
+        Reporter: entry.employee_name || 'Unknown',
+        Notes: entry.notes || ''
+      }));
+
+      // Overall Report
+      const overallWs = createWorksheet('Overall Report', exportData);
+      XLSX.utils.book_append_sheet(wb, overallWs, 'Overall Report');
+
+      // Shop-wise sheets
+      const uniqueShops = [...new Set(exportData.map(d => d.Shop).filter(Boolean))].sort();
+      for (const shop of uniqueShops) {
+        const shopData = exportData.filter(d => d.Shop === shop);
+        const sheetName = `Shop - ${shop}`.slice(0, 31);
+        const ws = createWorksheet(sheetName, shopData);
+        XLSX.utils.book_append_sheet(wb, ws, sheetName);
+      }
+
+      // Category-wise sheets
+      const uniqueCategories = [...new Set(exportData.map(d => d.Category).filter(Boolean))].sort();
+      for (const category of uniqueCategories) {
+        const categoryData = exportData.filter(d => d.Category === category);
+        const sheetName = `Category - ${category}`.slice(0, 31);
+        const ws = createWorksheet(sheetName, categoryData);
+        XLSX.utils.book_append_sheet(wb, ws, sheetName);
+      }
+
+      // Step 2: Convert each sheet into PDF
       const doc = new jsPDF({
         orientation: 'landscape',
         unit: 'mm',
@@ -298,88 +335,62 @@ export const ReportsPanel = () => {
         putOnlyUsedFonts: true,
         compress: true
       });
-      
+
       // Set document properties for UTF-8 support
       doc.setProperties({
-        title: 'GD Report',
+        title: 'GD Multi-Sheet Report',
         creator: 'GD App'
       });
-      
-      // Add title
-      doc.setFontSize(16);
-      doc.text('GD Report', 14, 22);
-      
-      // Add filter info
-      doc.setFontSize(10);
-      let filterText = 'Filters: ';
-      if (selectedShop !== 'all') {
-        const shop = shops.find(s => s.id === selectedShop);
-        filterText += `Shop: ${shop?.name || 'Unknown'} | `;
-      }
-      if (selectedCategory !== 'all') {
-        const category = categories.find(c => c.id === selectedCategory);
-        filterText += `Category: ${category?.name || 'Unknown'} | `;
-      }
-      if (selectedSize !== 'all') {
-        const size = sizes.find(s => s.id === selectedSize);
-        filterText += `Size: ${size?.size || 'Unknown'} | `;
-      }
-      filterText += `Date: ${dateFilter}`;
-      
-      doc.text(filterText, 14, 32);
-      
-      // Prepare table data with proper Unicode handling
-      const tableData = filteredEntries.map(entry => [
-        formatTime12Hour(new Date(entry.created_at)),
-        entry.shops.name || '',
-        entry.categories.name || '',
-        entry.sizes.size || '',
-        entry.employee_name || 'Unknown',
-        entry.notes || ''
-      ]);
 
-      console.log('Table data prepared with UTF-8 encoding:', tableData.length, 'rows');
+      wb.SheetNames.forEach((sheetName, idx) => {
+        const ws = wb.Sheets[sheetName];
+        const sheetData = XLSX.utils.sheet_to_json(ws, { header: 1 });
 
-      // Add table with Tamil-friendly configuration
-      autoTable(doc, {
-        head: [['Date', 'Shop', 'Category', 'Size', 'Reporter', 'Notes']],
-        body: tableData,
-        startY: 40,
-        styles: { 
-          fontSize: 9,
-          cellPadding: 3,
-          overflow: 'linebreak',
-          cellWidth: 'wrap',
-          halign: 'left',
-          valign: 'top',
-          fontStyle: 'normal'
-        },
-        headStyles: { 
-          fillColor: [41, 128, 185],
-          fontStyle: 'bold',
-          textColor: [255, 255, 255],
-          halign: 'center'
-        },
-        columnStyles: {
-          0: { cellWidth: 35 },
-          1: { cellWidth: 25 },
-          2: { cellWidth: 25 },
-          3: { cellWidth: 20 },
-          4: { cellWidth: 30 },
-          5: { cellWidth: 70, fontSize: 8 }
-        }
+        if (idx > 0) doc.addPage(); // new page for each sheet
+
+        // Add sheet title
+        doc.setFontSize(16);
+        doc.text(`${sheetName} Report`, 14, 22);
+
+        // Add table for this sheet
+        autoTable(doc, {
+          head: [sheetData[0] as string[]],
+          body: sheetData.slice(1) as string[][],
+          startY: 35,
+          styles: { 
+            fontSize: 9,
+            cellPadding: 3,
+            overflow: 'linebreak',
+            cellWidth: 'wrap',
+            halign: 'left',
+            valign: 'top',
+            fontStyle: 'normal'
+          },
+          headStyles: { 
+            fillColor: [41, 128, 185],
+            fontStyle: 'bold',
+            textColor: [255, 255, 255],
+            halign: 'center'
+          },
+          columnStyles: {
+            0: { cellWidth: 35 },
+            1: { cellWidth: 25 },
+            2: { cellWidth: 25 },
+            3: { cellWidth: 20 },
+            4: { cellWidth: 30 },
+            5: { cellWidth: 70, fontSize: 8 }
+          }
+        });
       });
 
-      console.log('PDF table generated with Tamil support');
-
-      // Generate filename and save
-      const fileName = `gd_report_${format(new Date(), 'yyyy-MM-dd')}.pdf`;
+      // Step 3: Save final PDF
+      const fileName = `gd_report_multisheet_${format(new Date(), 'yyyy-MM-dd')}.pdf`;
       doc.save(fileName);
       
-      console.log('PDF saved successfully');
-      toast.success(`PDF report exported successfully! ${filteredEntries.length} entries`);
+      console.log('Multi-sheet PDF saved successfully');
+      toast.success(`PDF report exported successfully! ${filteredEntries.length} entries across ${wb.SheetNames.length} sheets`);
     } catch (error) {
-      console.error('Error exporting PDF:', error);
+      console.error('Error exporting multi-sheet PDF:', error);
       toast.error('Failed to export PDF. Please try again.');
     }
   };
@@ -540,6 +551,10 @@ export const ReportsPanel = () => {
             <Button onClick={exportToPDF} variant="outline" className="flex items-center justify-center gap-2 w-full sm:w-auto">
               <FileText className="h-4 w-4 flex-shrink-0" />
               <span className="truncate">Export PDF ({filteredEntries.length})</span>
+            </Button>
+            <Button onClick={exportReportPDF} variant="outline" className="flex items-center justify-center gap-2 w-full sm:w-auto">
+              <FileText className="h-4 w-4 flex-shrink-0" />
+              <span className="truncate">Export PDF (Multi-Sheet) ({filteredEntries.length})</span>
             </Button>
           </div>
         </CardContent>
