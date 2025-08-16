@@ -1,3 +1,4 @@
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -101,5 +102,28 @@ All colors MUST be HSL.
 
   body {
     @apply bg-background text-foreground;
+    font-family: 'Noto Sans Tamil', 'Latha', 'Tamil Sangam MN', sans-serif;
+    unicode-bidi: embed;
+    direction: ltr;
+  }
+}
+
+/* Tamil content specific styles */
+.tamil-content {
+  font-family: 'Noto Sans Tamil', 'Latha', 'Tamil Sangam MN', sans-serif !important;
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "liga" 1;
+}
+
+/* Print styles for PDF export */
+@media print {
+  body, * {
+    font-family: 'Noto Sans Tamil', 'Latha', 'Tamil Sangam MN', sans-serif !important;
+    -webkit-print-color-adjust: exact;
+    color-adjust: exact;
+  }
+  
+  .tamil-content {
+    font-family: 'Noto Sans Tamil', sans-serif !important;
   }
 }

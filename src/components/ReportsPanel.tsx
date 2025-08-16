@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -223,24 +222,11 @@ export const ReportsPanel = () => {
       return;
     }
 
-    // Filter entries for Big Shop and Small Shop
-    const bigShopEntries = filteredEntries.filter(entry => entry.shops.name === 'Big Shop');
-    const smallShopEntries = filteredEntries.filter(entry => entry.shops.name === 'Small Shop');
-
-    // Create workbook
+    // Create single workbook with all data
     const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.aoa_to_sheet(createWorksheetData(filteredEntries));
 
-    // Create worksheets
-    const overallWS = XLSX.utils.aoa_to_sheet(createWorksheetData(filteredEntries));
-    const bigShopWS = XLSX.utils.aoa_to_sheet(createWorksheetData(bigShopEntries));
-    const smallShopWS = XLSX.utils.aoa_to_sheet(createWorksheetData(smallShopEntries));
-
-    // Add worksheets to workbook
-    XLSX.utils.book_append_sheet(workbook, overallWS, 'Overall Report');
-    XLSX.utils.book_append_sheet(workbook, bigShopWS, 'Big Shop Report');
-    XLSX.utils.book_append_sheet(workbook, smallShopWS, 'Small Shop Report');
-
-    // Set column widths for all sheets
+    // Set column widths
     const colWidths = [
       { wch: 20 }, // Date
       { wch: 15 }, // Shop
@@ -250,36 +236,16 @@ export const ReportsPanel = () => {
       { wch: 30 }  // Notes
     ];
     
-    overallWS['!cols'] = colWidths;
-    bigShopWS['!cols'] = colWidths;
-    smallShopWS['!cols'] = colWidths;
+    worksheet['!cols'] = colWidths;
+
+    // Add worksheet to workbook
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'GD Report');
 
     // Generate filename and download
-    const fileName = `gd_report_3sheets_${format(new Date(), 'yyyy-MM-dd')}.xlsx`;
+    const fileName = `gd_report_${format(new Date(), 'yyyy-MM-dd')}.xlsx`;
+    XLSX.writeFile(workbook, fileName);
     
-    // Create blob and download with auto-open
-    const wbout = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
-    const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    const url = URL.createObjectURL(blob);
-    
-    // Create download link and trigger download
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = fileName;
-    document.body.appendChild(link);
-    link.click();
-    
-    // Open file automatically after download
-    setTimeout(() => {
-      const openLink = document.createElement('a');
-      openLink.href = url;
-      openLink.target = '_blank';
-      openLink.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-    }, 100);
-    
-    toast.success(`Excel report exported successfully! Overall: ${filteredEntries.length}, Big Shop: ${bigShopEntries.length}, Small Shop: ${smallShopEntries.length} entries`);
+    toast.success(`Excel report exported successfully! ${filteredEntries.length} entries`);
   };
 
   const exportToPDF = () => {
@@ -289,11 +255,23 @@ export const ReportsPanel = () => {
     }
 
     try {
-      console.log('Starting PDF export...');
-      const doc = new jsPDF();
+      console.log('Starting PDF export with Tamil support...');
+      const doc = new jsPDF({
+        orientation: 'landscape',
+        unit: 'mm',
+        format: 'a4',
+        putOnlyUsedFonts: true,
+        compress: true
+      });
       
-      // Add title with default font
-      doc.setFont("helvetica");
+      // Set document properties for UTF-8 support
+      doc.setProperties({
+        title: 'GD Report',
+        creator: 'GD App',
+        producer: 'GD App'
+      });
+      
+      // Add title
       doc.setFontSize(16);
       doc.text('GD Report', 14, 22);
       
@@ -316,47 +294,57 @@ export const ReportsPanel = () => {
       
       doc.text(filterText, 14, 32);
       
-      // Prepare table data - convert non-ASCII characters to readable format
+      // Prepare table data with proper Unicode handling
       const tableData = filteredEntries.map(entry => [
         formatTime12Hour(new Date(entry.created_at)),
         entry.shops.name || '',
         entry.categories.name || '',
         entry.sizes.size || '',
         entry.employee_name || 'Unknown',
-        entry.notes || ''
+        // Ensure proper UTF-8 encoding for notes (Tamil text)
+        entry.notes ? decodeURIComponent(encodeURIComponent(entry.notes)) : ''
       ]);
 
-      console.log('Table data prepared:', tableData.length, 'rows');
+      console.log('Table data prepared with UTF-8 encoding:', tableData.length, 'rows');
 
-      // Add table with simple configuration
+      // Add table with Tamil-friendly configuration
       autoTable(doc, {
         head: [['Date', 'Shop', 'Category', 'Size', 'Reporter', 'Notes']],
         body: tableData,
         startY: 40,
         styles: { 
-          fontSize: 8,
-          font: 'helvetica',
+          fontSize: 9,
           cellPadding: 3,
           overflow: 'linebreak',
-          cellWidth: 'wrap'
+          cellWidth: 'wrap',
+          halign: 'left',
+          valign: 'top'
         },
         headStyles: { 
           fillColor: [41, 128, 185],
-          font: 'helvetica',
           fontStyle: 'bold',
-          textColor: [255, 255, 255]
+          textColor: [255, 255, 255],
+          halign: 'center'
         },
         columnStyles: {
-          0: { cellWidth: 30 },
+          0: { cellWidth: 35 },
           1: { cellWidth: 25 },
           2: { cellWidth: 25 },
-          3: { cellWidth: 15 },
-          4: { cellWidth: 25 },
-          5: { cellWidth: 60 }
+          3: { cellWidth: 20 },
+          4: { cellWidth: 30 },
+          5: { cellWidth: 70, fontSize: 8 }
+        },
+        // Handle Unicode characters properly
+        didParseCell: function (data) {
+          if (data.cell.text && Array.isArray(data.cell.text)) {
+            data.cell.text = data.cell.text.map(text => 
+              typeof text === 'string' ? text : String(text)
+            );
+          }
         }
       });
 
-      console.log('PDF table generated successfully');
+      console.log('PDF table generated with Tamil support');
 
       // Generate filename and save
       const fileName = `gd_report_${format(new Date(), 'yyyy-MM-dd')}.pdf`;
@@ -374,7 +362,7 @@ export const ReportsPanel = () => {
     setSelectedShop('all');
     setSelectedCategory('all');
     setSelectedSize('all');
-    setDateFilter('today'); // Changed default back to "today"
+    setDateFilter('today');
     setCustomDateFrom(undefined);
     setCustomDateTo(undefined);
   };
@@ -392,7 +380,7 @@ export const ReportsPanel = () => {
             Filters & Export
           </CardTitle>
           <CardDescription className="text-sm">
-            Filter and export GD reports (Export includes 3 separate sheets: Overall, Big Shop, Small Shop)
+            Filter and export GD reports
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -521,7 +509,7 @@ export const ReportsPanel = () => {
             </Button>
             <Button onClick={exportToExcel} className="flex items-center justify-center gap-2 w-full sm:w-auto">
               <Download className="h-4 w-4 flex-shrink-0" />
-              <span className="truncate">Export 3-Sheet Excel ({filteredEntries.length})</span>
+              <span className="truncate">Export Excel ({filteredEntries.length})</span>
             </Button>
             <Button onClick={exportToPDF} variant="outline" className="flex items-center justify-center gap-2 w-full sm:w-auto">
               <FileText className="h-4 w-4 flex-shrink-0" />
@@ -561,9 +549,11 @@ export const ReportsPanel = () => {
                     <span className="font-medium">Reporter:</span>{' '}
                     <span className="break-words">{entry.employee_name || 'Unknown'}</span>
                   </div>
-                  <div className="text-sm min-w-0">
+                  <div className="text-sm min-w-0 tamil-content">
                     <span className="font-medium">Notes:</span>{' '}
-                    <span className="break-words">{entry.notes}</span>
+                    <span className="break-words" style={{ fontFamily: "'Noto Sans Tamil', 'Latha', 'Tamil Sangam MN', sans-serif" }}>
+                      {entry.notes}
+                    </span>
                   </div>
                 </div>
               ))
