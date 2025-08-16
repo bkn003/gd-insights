@@ -548,10 +548,6 @@ export const ReportsPanel = () => {
               <Download className="h-4 w-4 flex-shrink-0" />
               <span className="truncate">Export Excel ({filteredEntries.length})</span>
             </Button>
-            <Button onClick={exportToPDF} variant="outline" className="flex items-center justify-center gap-2 w-full sm:w-auto">
-              <FileText className="h-4 w-4 flex-shrink-0" />
-              <span className="truncate">Export PDF ({filteredEntries.length})</span>
-            </Button>
             <Button onClick={exportReportPDF} variant="outline" className="flex items-center justify-center gap-2 w-full sm:w-auto">
               <FileText className="h-4 w-4 flex-shrink-0" />
               <span className="truncate">Export PDF (Multi-Sheet) ({filteredEntries.length})</span>
