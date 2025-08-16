@@ -267,8 +267,7 @@ export const ReportsPanel = () => {
       // Set document properties for UTF-8 support
       doc.setProperties({
         title: 'GD Report',
-        creator: 'GD App',
-        producer: 'GD App'
+        creator: 'GD App'
       });
       
       // Add title
@@ -302,7 +301,7 @@ export const ReportsPanel = () => {
         entry.sizes.size || '',
         entry.employee_name || 'Unknown',
         // Ensure proper UTF-8 encoding for notes (Tamil text)
-        entry.notes ? decodeURIComponent(encodeURIComponent(entry.notes)) : ''
+        entry.notes || ''
       ]);
 
       console.log('Table data prepared with UTF-8 encoding:', tableData.length, 'rows');
@@ -318,7 +317,8 @@ export const ReportsPanel = () => {
           overflow: 'linebreak',
           cellWidth: 'wrap',
           halign: 'left',
-          valign: 'top'
+          valign: 'top',
+          fontStyle: 'normal'
         },
         headStyles: { 
           fillColor: [41, 128, 185],
@@ -333,14 +333,6 @@ export const ReportsPanel = () => {
           3: { cellWidth: 20 },
           4: { cellWidth: 30 },
           5: { cellWidth: 70, fontSize: 8 }
-        },
-        // Handle Unicode characters properly
-        didParseCell: function (data) {
-          if (data.cell.text && Array.isArray(data.cell.text)) {
-            data.cell.text = data.cell.text.map(text => 
-              typeof text === 'string' ? text : String(text)
-            );
-          }
         }
       });
 
