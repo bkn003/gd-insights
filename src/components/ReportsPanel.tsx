@@ -25,10 +25,27 @@ import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 
-interface GDEntry extends Database['public']['Tables']['goods_damaged_entries']['Row'] {
-  shops?: Database['public']['Tables']['shops']['Row'] | null;
-  categories?: Database['public']['Tables']['categories']['Row'] | null;
-  sizes?: Database['public']['Tables']['sizes']['Row'] | null;
+// Extend jsPDF type to include autoTable
+declare module 'jspdf' {
+  interface jsPDF {
+    autoTable: (options: any) => jsPDF;
+  }
+}
+
+interface GDEntry {
+  id: string;
+  category_id: string;
+  size_id: string;
+  employee_id: string;
+  employee_name: string | null;
+  shop_id: string;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+  image_url: string | null;
+  shops?: { name: string } | null;
+  categories?: { name: string } | null;
+  sizes?: { size: string } | null;
 }
 
 interface FilterState {
