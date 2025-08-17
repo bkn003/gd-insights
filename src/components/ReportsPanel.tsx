@@ -127,8 +127,8 @@ export const ReportsPanel = () => {
       const processedEntries: GDEntry[] = (entriesData || []).map(entry => ({
         ...entry,
         shops: entry.shops && typeof entry.shops === 'object' && 'name' in entry.shops ? entry.shops : null,
-        categories: entry.categories && typeof entry.categories === 'object' && 'name' in entry.categories ? entry.categories : null,
-        sizes: entry.sizes && typeof entry.sizes === 'object' && 'size' in entry.sizes ? entry.sizes : null,
+        categories: entry.categories && entry.categories !== null && typeof entry.categories === 'object' && 'name' in entry.categories ? entry.categories : null,
+        sizes: entry.sizes && entry.sizes !== null && typeof entry.sizes === 'object' && 'size' in entry.sizes ? entry.sizes : null,
       }));
 
       setEntries(processedEntries);
