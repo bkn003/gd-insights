@@ -1,550 +1,477 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/hooks/useAuth';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Calendar } from '@/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { toast } from 'sonner';
-import { Download, Filter, Calendar as CalendarIcon, FileText } from 'lucide-react';
-import { format } from 'date-fns';
 import { Database } from '@/types/database';
+import {
+  Card,
+  CardContent,
+} from "@/components/ui/card"
+import { Button } from '@/components/ui/button';
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Calendar } from "@/components/ui/calendar"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import { cn } from "@/lib/utils"
+import { format } from "date-fns"
+import { CalendarIcon } from "lucide-react"
+import { useToast } from "@/components/ui/use-toast"
+
+import { FileText, Download, Filter, Calendar as CalendarIcon2, Search, Building2, Tag, User, Eye } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import 'jspdf-autotable';
 
-type GoodsEntry = Database['public']['Tables']['goods_damaged_entries']['Row'] & {
-  categories: { name: string };
-  sizes: { size: string };
-  shops: { name: string };
+interface GDEntry extends Database['public']['Tables']['goods_damaged_entries']['Row'] {
+  shops?: Database['public']['Tables']['shops']['Row'] | null;
+  categories?: Database['public']['Tables']['categories']['Row'] | null;
+  sizes?: Database['public']['Tables']['sizes']['Row'] | null;
+}
+
+interface FilterState {
+  shopId: string | null;
+  categoryId: string | null;
+  sizeId: string | null;
+  dateFrom: Date | null;
+  dateTo: Date | null;
+  searchTerm: string;
+}
+
+const formatDate = (dateStr: string | null): string => {
+  if (!dateStr) return 'Unknown';
+  try {
+    const date = new Date(dateStr);
+    return format(date, 'yyyy-MM-dd HH:mm');
+  } catch (error) {
+    console.error('Error formatting date:', error);
+    return 'Invalid Date';
+  }
 };
 
-type Shop = Database['public']['Tables']['shops']['Row'];
-type Category = Database['public']['Tables']['categories']['Row'];
-type Size = Database['public']['Tables']['sizes']['Row'];
+const getImageDataURL = async (imageUrl: string): Promise<string | null> => {
+  try {
+    const response = await fetch(imageUrl);
+    const blob = await response.blob();
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch (error) {
+    console.error('Error converting image to base64:', error);
+    return null;
+  }
+};
 
 export const ReportsPanel = () => {
-  const { isAdmin } = useAuth();
+  const [entries, setEntries] = useState<GDEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [entries, setEntries] = useState<GoodsEntry[]>([]);
-  const [filteredEntries, setFilteredEntries] = useState<GoodsEntry[]>([]);
-  const [shops, setShops] = useState<Shop[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [sizes, setSizes] = useState<Size[]>([]);
-  
-  // Filter states - changed default to "today"
-  const [selectedShop, setSelectedShop] = useState<string>('all');
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [selectedSize, setSelectedSize] = useState<string>('all');
-  const [dateFilter, setDateFilter] = useState<string>('today');
-  const [customDateFrom, setCustomDateFrom] = useState<Date>();
-  const [customDateTo, setCustomDateTo] = useState<Date>();
+  const [shops, setShops] = useState<Database['public']['Tables']['shops']['Row'][]>([]);
+  const [categories, setCategories] = useState<Database['public']['Tables']['categories']['Row'][]>([]);
+  const [sizes, setSizes] = useState<Database['public']['Tables']['sizes']['Row'][]>([]);
+  const [filter, setFilter] = useState<FilterState>({
+    shopId: null,
+    categoryId: null,
+    sizeId: null,
+    dateFrom: null,
+    dateTo: null,
+    searchTerm: '',
+  });
+  const [filteredEntries, setFilteredEntries] = useState<GDEntry[]>([]);
+  const { toast } = useToast();
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  useEffect(() => {
-    applyFilters();
-  }, [entries, selectedShop, selectedCategory, selectedSize, dateFilter, customDateFrom, customDateTo]);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      console.log('Starting to fetch data...');
-      
-      // Fetch entries with manual joins to avoid foreign key relationship conflicts
-      const { data: entriesData, error: entriesError } = await supabase
-        .from('goods_damaged_entries')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (entriesError) {
-        console.error('Error fetching entries:', entriesError);
-        throw entriesError;
-      }
-
-      console.log('Fetched entries:', entriesData);
-
-      // Fetch related data separately
-      const [shopsRes, categoriesRes, sizesRes] = await Promise.all([
+      const [
+        { data: entriesData, error: entriesError },
+        { data: shopsData, error: shopsError },
+        { data: categoriesData, error: categoriesError },
+        { data: sizesData, error: sizesError },
+      ] = await Promise.all([
+        supabase
+          .from('goods_damaged_entries')
+          .select('*, shops(name), categories(name), sizes(size)'),
         supabase.from('shops').select('*').order('name'),
         supabase.from('categories').select('*').order('name'),
         supabase.from('sizes').select('*').order('size'),
       ]);
 
-      if (shopsRes.error) {
-        console.error('Error fetching shops:', shopsRes.error);
-        throw shopsRes.error;
-      }
-      if (categoriesRes.error) {
-        console.error('Error fetching categories:', categoriesRes.error);
-        throw categoriesRes.error;
-      }
-      if (sizesRes.error) {
-        console.error('Error fetching sizes:', sizesRes.error);
-        throw sizesRes.error;
-      }
+      if (entriesError) throw entriesError;
+      if (shopsError) throw shopsError;
+      if (categoriesError) throw categoriesError;
+      if (sizesError) throw sizesError;
 
-      console.log('Fetched shops:', shopsRes.data);
-      console.log('Fetched categories:', categoriesRes.data);
-      console.log('Fetched sizes:', sizesRes.data);
-
-      // Manually join the data
-      const enrichedEntries = entriesData.map(entry => {
-        const shop = shopsRes.data.find(s => s.id === entry.shop_id);
-        const category = categoriesRes.data.find(c => c.id === entry.category_id);
-        const size = sizesRes.data.find(s => s.id === entry.size_id);
-
-        return {
-          ...entry,
-          shops: { name: shop?.name || 'Unknown Shop' },
-          categories: { name: category?.name || 'Unknown Category' },
-          sizes: { size: size?.size || 'Unknown Size' }
-        };
-      });
-
-      console.log('Enriched entries:', enrichedEntries);
-
-      setEntries(enrichedEntries);
-      setShops(shopsRes.data);
-      setCategories(categoriesRes.data);
-      setSizes(sizesRes.data);
-    } catch (error) {
+      setEntries(entriesData as GDEntry[]);
+      setShops(shopsData || []);
+      setCategories(categoriesData || []);
+      setSizes(sizesData || []);
+    } catch (error: any) {
       console.error('Error fetching data:', error);
-      toast.error('Failed to load reports data');
+      toast({
+        title: "Error",
+        description: error.message || "Failed to fetch data",
+        variant: "destructive",
+      })
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  useEffect(() => {
+    applyFilters();
+  }, [entries, filter]);
 
   const applyFilters = () => {
-    let filtered = [...entries];
+    let results = [...entries];
 
-    // Shop filter
-    if (selectedShop !== 'all') {
-      filtered = filtered.filter(entry => entry.shop_id === selectedShop);
+    if (filter.shopId) {
+      results = results.filter(entry => entry.shop_id === filter.shopId);
+    }
+    if (filter.categoryId) {
+      results = results.filter(entry => entry.category_id === filter.categoryId);
+    }
+    if (filter.sizeId) {
+      results = results.filter(entry => entry.size_id === filter.sizeId);
+    }
+    if (filter.dateFrom) {
+      results = results.filter(entry => entry.created_at && new Date(entry.created_at) >= filter.dateFrom);
+    }
+    if (filter.dateTo) {
+      results = results.filter(entry => entry.created_at && new Date(entry.created_at) <= filter.dateTo);
+    }
+    if (filter.searchTerm) {
+      const term = filter.searchTerm.toLowerCase();
+      results = results.filter(entry =>
+        (entry.notes && entry.notes.toLowerCase().includes(term)) ||
+        (entry.employee_name && entry.employee_name.toLowerCase().includes(term)) ||
+        (entry.shops?.name && entry.shops.name.toLowerCase().includes(term)) ||
+        (entry.categories?.name && entry.categories.name.toLowerCase().includes(term)) ||
+        (entry.sizes?.size && entry.sizes.size.toLowerCase().includes(term))
+      );
     }
 
-    // Category filter
-    if (selectedCategory !== 'all') {
-      filtered = filtered.filter(entry => entry.category_id === selectedCategory);
-    }
+    setFilteredEntries(results);
+  };
 
-    // Size filter
-    if (selectedSize !== 'all') {
-      filtered = filtered.filter(entry => entry.size_id === selectedSize);
-    }
+  const handleShopFilterChange = (shopId: string) => {
+    setFilter(prev => ({ ...prev, shopId: shopId === 'all' ? null : shopId }));
+  };
 
-    // Date filter
-    if (dateFilter !== 'all') {
-      const now = new Date();
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      
-      switch (dateFilter) {
-        case 'today':
-          filtered = filtered.filter(entry => {
-            const entryDate = new Date(entry.created_at);
-            return entryDate >= today;
-          });
-          break;
-        case 'yesterday':
-          const yesterday = new Date(today);
-          yesterday.setDate(yesterday.getDate() - 1);
-          filtered = filtered.filter(entry => {
-            const entryDate = new Date(entry.created_at);
-            return entryDate >= yesterday && entryDate < today;
-          });
-          break;
-        case 'week':
-          const weekAgo = new Date(today);
-          weekAgo.setDate(weekAgo.getDate() - 7);
-          filtered = filtered.filter(entry => {
-            const entryDate = new Date(entry.created_at);
-            return entryDate >= weekAgo;
-          });
-          break;
-        case 'month':
-          const monthAgo = new Date(today);
-          monthAgo.setMonth(monthAgo.getMonth() - 1);
-          filtered = filtered.filter(entry => {
-            const entryDate = new Date(entry.created_at);
-            return entryDate >= monthAgo;
-          });
-          break;
-        case 'year':
-          const yearAgo = new Date(today);
-          yearAgo.setFullYear(yearAgo.getFullYear() - 1);
-          filtered = filtered.filter(entry => {
-            const entryDate = new Date(entry.created_at);
-            return entryDate >= yearAgo;
-          });
-          break;
-        case 'custom':
-          if (customDateFrom && customDateTo) {
-            filtered = filtered.filter(entry => {
-              const entryDate = new Date(entry.created_at);
-              return entryDate >= customDateFrom && entryDate <= customDateTo;
-            });
-          }
-          break;
+  const handleCategoryFilterChange = (categoryId: string) => {
+    setFilter(prev => ({ ...prev, categoryId: categoryId === 'all' ? null : categoryId }));
+  };
+
+  const handleSizeFilterChange = (sizeId: string) => {
+    setFilter(prev => ({ ...prev, sizeId: sizeId === 'all' ? null : sizeId }));
+  };
+
+  const handleDateFromChange = (date: Date | undefined) => {
+    setFilter(prev => ({ ...prev, dateFrom: date ? date : null }));
+  };
+
+  const handleDateToChange = (date: Date | undefined) => {
+    setFilter(prev => ({ ...prev, dateTo: date ? date : null }));
+  };
+
+  const handleSearchTermChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFilter(prev => ({ ...prev, searchTerm: e.target.value }));
+  };
+
+  const exportToExcel = async () => {
+    const processedData = await Promise.all(
+      filteredEntries.map(async (entry) => {
+        const imageData = entry.image_url ? await getImageDataURL(entry.image_url) : null;
+        
+        return {
+          'Entry ID': entry.id,
+          'Date': formatDate(entry.created_at),
+          'Shop': entry.shops?.name || 'Unknown',
+          'Category': entry.categories?.name || 'Unknown',
+          'Size': entry.sizes?.size || 'Unknown',
+          'Employee': entry.employee_name || 'Unknown',
+          'Notes': entry.notes,
+          'Image': imageData ? 'IMAGE_DATA:' + imageData : 'No Image'
+        };
+      })
+    );
+
+    const wb = XLSX.utils.book_new();
+    
+    // Overall Sheet
+    const overallWs = XLSX.utils.json_to_sheet(processedData);
+    XLSX.utils.book_append_sheet(wb, overallWs, 'Overall Report');
+    
+    // Shop-wise sheets
+    const shops = [...new Set(filteredEntries.map(entry => entry.shops?.name).filter(Boolean))];
+    shops.forEach(shop => {
+      const shopData = processedData.filter(entry => entry.Shop === shop);
+      if (shopData.length > 0) {
+        const shopWs = XLSX.utils.json_to_sheet(shopData);
+        XLSX.utils.book_append_sheet(wb, shopWs, `${shop}`.substring(0, 31));
       }
-    }
-
-    setFilteredEntries(filtered);
-  };
-
-  const formatTime12Hour = (date: Date) => {
-    return format(date, 'yyyy-MM-dd hh:mm a');
-  };
-
-  // Helper function for auto-sizing columns
-  const autoWidth = (ws: XLSX.WorkSheet, rows: any[]) => {
-    const colWidths: number[] = [];
-    rows.forEach(row => {
-      Object.values(row).forEach((value, i) => {
-        const v = value == null ? '' : String(value);
-        colWidths[i] = Math.max(colWidths[i] || 0, v.length);
-      });
     });
-    ws['!cols'] = colWidths.map(width => ({ wch: Math.min(Math.max(width + 2, 12), 40) }));
-  };
-
-  // Helper function to create a worksheet
-  const createWorksheet = (name: string, data: any[]) => {
-    const ws = XLSX.utils.json_to_sheet(data, { skipHeader: false });
-    autoWidth(ws, data);
-    // Freeze header row
-    ws['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: 'A2', activePane: 'bottomLeft', state: 'frozen' };
-    return ws;
-  };
-
-  // Multi-sheet Excel export
-  const exportExcelMulti = async () => {
-    if (filteredEntries.length === 0) {
-      toast.error('No data to export');
-      return;
-    }
-
-    try {
-      // Wait for fonts to be ready
-      await (document as any).fonts?.ready;
-
-      const wb = XLSX.utils.book_new();
-
-      // Prepare data for export
-      const exportData = filteredEntries.map(entry => ({
-        Date: formatTime12Hour(new Date(entry.created_at)),
-        Shop: entry.shops.name,
-        Category: entry.categories.name,
-        Size: entry.sizes.size,
-        Reporter: entry.employee_name || 'Unknown',
-        Notes: entry.notes || ''
-      }));
-
-      // Overall Report
-      const overallWs = createWorksheet('Overall Report', exportData);
-      XLSX.utils.book_append_sheet(wb, overallWs, 'Overall Report');
-
-      // Shop-wise sheets
-      const uniqueShops = [...new Set(exportData.map(d => d.Shop).filter(Boolean))].sort();
-      for (const shop of uniqueShops) {
-        const shopData = exportData.filter(d => d.Shop === shop);
-        const sheetName = `Shop - ${shop}`.slice(0, 31);
-        const ws = createWorksheet(sheetName, shopData);
-        XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    
+    // Category-wise sheets
+    const categories = [...new Set(filteredEntries.map(entry => entry.categories?.name).filter(Boolean))];
+    categories.forEach(category => {
+      const categoryData = processedData.filter(entry => entry.Category === category);
+      if (categoryData.length > 0) {
+        const categoryWs = XLSX.utils.json_to_sheet(categoryData);
+        XLSX.utils.book_append_sheet(wb, categoryWs, `${category}`.substring(0, 31));
       }
+    });
 
-      // Category-wise sheets
-      const uniqueCategories = [...new Set(exportData.map(d => d.Category).filter(Boolean))].sort();
-      for (const category of uniqueCategories) {
-        const categoryData = exportData.filter(d => d.Category === category);
-        const sheetName = `Category - ${category}`.slice(0, 31);
-        const ws = createWorksheet(sheetName, categoryData);
-        XLSX.utils.book_append_sheet(wb, ws, sheetName);
-      }
-
-      // Generate filename and download
-      const fileName = `gd_report_${format(new Date(), 'yyyyMMdd_HHmm')}.xlsx`;
-      XLSX.writeFile(wb, fileName, { compression: true });
-      
-      toast.success(`Excel report exported successfully! ${filteredEntries.length} entries across multiple sheets`);
-    } catch (error) {
-      console.error('Error exporting Excel:', error);
-      toast.error('Failed to export Excel. Please try again.');
-    }
+    const fileName = `GD_Report_${new Date().toISOString().split('T')[0]}.xlsx`;
+    XLSX.writeFile(wb, fileName);
   };
 
-  // New multi-sheet PDF export function
   const exportReportPDF = async () => {
-    if (filteredEntries.length === 0) {
-      toast.error('No data to export');
-      return;
-    }
+    const processedData = await Promise.all(
+      filteredEntries.map(async (entry) => ({
+        'Entry ID': entry.id.substring(0, 8),
+        'Date': formatDate(entry.created_at),
+        'Shop': entry.shops?.name || 'Unknown',
+        'Category': entry.categories?.name || 'Unknown',
+        'Size': entry.sizes?.size || 'Unknown',
+        'Employee': entry.employee_name || 'Unknown',
+        'Notes': entry.notes.substring(0, 50) + (entry.notes.length > 50 ? '...' : ''),
+        'Image': entry.image_url ? 'Yes' : 'No'
+      }))
+    );
 
-    try {
-      console.log('Starting multi-sheet PDF export...');
-      
-      // Wait for fonts to be ready
-      await (document as any).fonts?.ready;
-
-      // Step 1: Create Excel workbook in memory (same as Excel export)
-      const wb = XLSX.utils.book_new();
-
-      // Prepare data for export
-      const exportData = filteredEntries.map(entry => ({
-        Date: formatTime12Hour(new Date(entry.created_at)),
-        Shop: entry.shops.name,
-        Category: entry.categories.name,
-        Size: entry.sizes.size,
-        Reporter: entry.employee_name || 'Unknown',
-        Notes: entry.notes || ''
-      }));
-
-      // Overall Report
-      const overallWs = createWorksheet('Overall Report', exportData);
-      XLSX.utils.book_append_sheet(wb, overallWs, 'Overall Report');
-
-      // Shop-wise sheets
-      const uniqueShops = [...new Set(exportData.map(d => d.Shop).filter(Boolean))].sort();
-      for (const shop of uniqueShops) {
-        const shopData = exportData.filter(d => d.Shop === shop);
-        const sheetName = `Shop - ${shop}`.slice(0, 31);
-        const ws = createWorksheet(sheetName, shopData);
-        XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    const doc = new jsPDF();
+    
+    // Overall Report
+    doc.setFontSize(16);
+    doc.text('Overall GD Report', 14, 20);
+    
+    doc.autoTable({
+      head: [Object.keys(processedData[0] || {})],
+      body: processedData.map(row => Object.values(row)),
+      startY: 30,
+      styles: { fontSize: 8 },
+      columnStyles: {
+        6: { cellWidth: 30 } // Notes column
       }
+    });
 
-      // Category-wise sheets
-      const uniqueCategories = [...new Set(exportData.map(d => d.Category).filter(Boolean))].sort();
-      for (const category of uniqueCategories) {
-        const categoryData = exportData.filter(d => d.Category === category);
-        const sheetName = `Category - ${category}`.slice(0, 31);
-        const ws = createWorksheet(sheetName, categoryData);
-        XLSX.utils.book_append_sheet(wb, ws, sheetName);
-      }
-
-      // Step 2: Convert each sheet into PDF
-      const doc = new jsPDF({
-        orientation: 'landscape',
-        unit: 'mm',
-        format: 'a4',
-        putOnlyUsedFonts: true,
-        compress: true
-      });
-
-      // Set document properties for UTF-8 support
-      doc.setProperties({
-        title: 'GD Multi-Sheet Report',
-        creator: 'GD App'
-      });
-
-      wb.SheetNames.forEach((sheetName, idx) => {
-        const ws = wb.Sheets[sheetName];
-        const sheetData = XLSX.utils.sheet_to_json(ws, { header: 1 });
-
-        if (idx > 0) doc.addPage(); // new page for each sheet
-
-        // Add sheet title
+    // Shop-wise reports
+    const shops = [...new Set(filteredEntries.map(entry => entry.shops?.name).filter(Boolean))];
+    shops.forEach(shop => {
+      const shopData = processedData.filter(entry => entry.Shop === shop);
+      if (shopData.length > 0) {
+        doc.addPage();
         doc.setFontSize(16);
-        doc.text(`${sheetName} Report`, 14, 22);
-
-        // Add table for this sheet
-        autoTable(doc, {
-          head: [sheetData[0] as string[]],
-          body: sheetData.slice(1) as string[][],
-          startY: 35,
-          styles: { 
-            fontSize: 9,
-            cellPadding: 3,
-            overflow: 'linebreak',
-            cellWidth: 'wrap',
-            halign: 'left',
-            valign: 'top',
-            fontStyle: 'normal'
-          },
-          headStyles: { 
-            fillColor: [41, 128, 185],
-            fontStyle: 'bold',
-            textColor: [255, 255, 255],
-            halign: 'center'
-          },
+        doc.text(`${shop} - GD Report`, 14, 20);
+        
+        doc.autoTable({
+          head: [Object.keys(shopData[0])],
+          body: shopData.map(row => Object.values(row)),
+          startY: 30,
+          styles: { fontSize: 8 },
           columnStyles: {
-            0: { cellWidth: 35 },
-            1: { cellWidth: 25 },
-            2: { cellWidth: 25 },
-            3: { cellWidth: 20 },
-            4: { cellWidth: 30 },
-            5: { cellWidth: 70, fontSize: 8 }
+            6: { cellWidth: 30 }
           }
         });
-      });
+      }
+    });
 
-      // Step 3: Save final PDF
-      const fileName = `gd_report_multisheet_${format(new Date(), 'yyyy-MM-dd')}.pdf`;
-      doc.save(fileName);
-      
-      console.log('Multi-sheet PDF saved successfully');
-      toast.success(`PDF report exported successfully! ${filteredEntries.length} entries across ${wb.SheetNames.length} sheets`);
-    } catch (error) {
-      console.error('Error exporting multi-sheet PDF:', error);
-      toast.error('Failed to export PDF. Please try again.');
-    }
+    // Category-wise reports
+    const categories = [...new Set(filteredEntries.map(entry => entry.categories?.name).filter(Boolean))];
+    categories.forEach(category => {
+      const categoryData = processedData.filter(entry => entry.Category === category);
+      if (categoryData.length > 0) {
+        doc.addPage();
+        doc.setFontSize(16);
+        doc.text(`${category} - GD Report`, 14, 20);
+        
+        doc.autoTable({
+          head: [Object.keys(categoryData[0])],
+          body: categoryData.map(row => Object.values(row)),
+          startY: 30,
+          styles: { fontSize: 8 },
+          columnStyles: {
+            6: { cellWidth: 30 }
+          }
+        });
+      }
+    });
+
+    const fileName = `GD_Report_${new Date().toISOString().split('T')[0]}.pdf`;
+    doc.save(fileName);
   };
-
-  const clearFilters = () => {
-    setSelectedShop('all');
-    setSelectedCategory('all');
-    setSelectedSize('all');
-    setDateFilter('today');
-    setCustomDateFrom(undefined);
-    setCustomDateTo(undefined);
-  };
-
-  if (loading) {
-    return <div className="flex justify-center items-center h-64">Loading reports...</div>;
-  }
 
   return (
-    <div className="space-y-6 w-full min-w-0">
-      <Card className="w-full">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
-            <Filter className="h-4 w-4 sm:h-5 sm:w-5" />
-            Filters & Export
-          </CardTitle>
-          <CardDescription className="text-sm">
-            Filter and export GD reports
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Mobile-friendly grid layout */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-            <div className="space-y-2 min-w-0">
-              <Label className="text-sm font-medium">Shop</Label>
-              <Select value={selectedShop} onValueChange={setSelectedShop}>
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Shops</SelectItem>
-                  {shops.map(shop => (
-                    <SelectItem key={shop.id} value={shop.id}>
-                      {shop.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2 min-w-0">
-              <Label className="text-sm font-medium">Category</Label>
-              <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Categories</SelectItem>
-                  {categories.map(category => (
-                    <SelectItem key={category.id} value={category.id}>
-                      {category.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2 min-w-0">
-              <Label className="text-sm font-medium">Size</Label>
-              <Select value={selectedSize} onValueChange={setSelectedSize}>
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Sizes</SelectItem>
-                  {sizes.map(size => (
-                    <SelectItem key={size.id} value={size.id}>
-                      {size.size}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2 min-w-0">
-              <Label className="text-sm font-medium">Date Range</Label>
-              <Select value={dateFilter} onValueChange={setDateFilter}>
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Time</SelectItem>
-                  <SelectItem value="today">Today</SelectItem>
-                  <SelectItem value="yesterday">Yesterday</SelectItem>
-                  <SelectItem value="week">This Week</SelectItem>
-                  <SelectItem value="month">This Month</SelectItem>
-                  <SelectItem value="year">This Year</SelectItem>
-                  <SelectItem value="custom">Custom Range</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+    <div className="space-y-6">
+      <div className="bg-muted p-4 rounded-md">
+        <h3 className="text-lg font-semibold mb-2">Filters</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <Label htmlFor="shop">Shop</Label>
+            <Select value={filter.shopId || 'all'} onValueChange={handleShopFilterChange}>
+              <SelectTrigger>
+                <SelectValue placeholder="All Shops" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Shops</SelectItem>
+                {shops.map((shop) => (
+                  <SelectItem key={shop.id} value={shop.id}>
+                    {shop.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
-          {dateFilter === 'custom' && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-              <div className="space-y-2 min-w-0">
-                <Label className="text-sm font-medium">From Date</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className="w-full justify-start text-left">
-                      <CalendarIcon className="mr-2 h-4 w-4 flex-shrink-0" />
-                      <span className="truncate">
-                        {customDateFrom ? format(customDateFrom, 'PPP') : 'Pick a date'}
-                      </span>
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
-                    <Calendar
-                      mode="single"
-                      selected={customDateFrom}
-                      onSelect={setCustomDateFrom}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-              <div className="space-y-2 min-w-0">
-                <Label className="text-sm font-medium">To Date</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className="w-full justify-start text-left">
-                      <CalendarIcon className="mr-2 h-4 w-4 flex-shrink-0" />
-                      <span className="truncate">
-                        {customDateTo ? format(customDateTo, 'PPP') : 'Pick a date'}
-                      </span>
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
-                    <Calendar
-                      mode="single"
-                      selected={customDateTo}
-                      onSelect={setCustomDateTo}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-            </div>
-          )}
+          <div>
+            <Label htmlFor="category">Category</Label>
+            <Select value={filter.categoryId || 'all'} onValueChange={handleCategoryFilterChange}>
+              <SelectTrigger>
+                <SelectValue placeholder="All Categories" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Categories</SelectItem>
+                {categories.map((category) => (
+                  <SelectItem key={category.id} value={category.id}>
+                    {category.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
-          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
-            <Button onClick={clearFilters} variant="outline" className="w-full sm:w-auto">
-              Clear Filters
-            </Button>
-            <Button onClick={exportExcelMulti} className="flex items-center justify-center gap-2 w-full sm:w-auto">
+          <div>
+            <Label htmlFor="size">Size</Label>
+            <Select value={filter.sizeId || 'all'} onValueChange={handleSizeFilterChange}>
+              <SelectTrigger>
+                <SelectValue placeholder="All Sizes" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Sizes</SelectItem>
+                {sizes.map((size) => (
+                  <SelectItem key={size.id} value={size.id}>
+                    {size.size}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+          <div>
+            <Label>Date From</Label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant={"outline"}
+                  className={cn(
+                    "w-full justify-start text-left font-normal",
+                    !filter.dateFrom && "text-muted-foreground"
+                  )}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {filter.dateFrom ? (
+                    format(filter.dateFrom, "PPP")
+                  ) : (
+                    <span>Pick a date</span>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={filter.dateFrom}
+                  onSelect={handleDateFromChange}
+                  disabled={(date) =>
+                    date > new Date()
+                  }
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
+
+          <div>
+            <Label>Date To</Label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant={"outline"}
+                  className={cn(
+                    "w-full justify-start text-left font-normal",
+                    !filter.dateTo && "text-muted-foreground"
+                  )}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {filter.dateTo ? (
+                    format(filter.dateTo, "PPP")
+                  ) : (
+                    <span>Pick a date</span>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={filter.dateTo}
+                  onSelect={handleDateToChange}
+                  disabled={(date) =>
+                    date > new Date()
+                  }
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
+        </div>
+
+        <div className="mt-4">
+          <Label htmlFor="search">Search</Label>
+          <div className="relative">
+            <Input
+              type="search"
+              id="search"
+              placeholder="Search notes, employee..."
+              value={filter.searchTerm}
+              onChange={handleSearchTermChange}
+              className="pr-10"
+            />
+            {filter.searchTerm && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => handleSearchTermChange({ target: { value: '' } } as any)}
+                className="absolute right-1 top-1/2 -translate-y-1/2 rounded-full h-8 w-8"
+              >
+                <Eye  className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <h2 className="text-2xl font-bold">GD Reports</h2>
+            <p className="text-muted-foreground">
+              {loading ? 'Loading...' : `Total entries: ${filteredEntries.length}`}
+            </p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+            <Button onClick={exportToExcel} variant="outline" className="flex items-center justify-center gap-2 w-full sm:w-auto">
               <Download className="h-4 w-4 flex-shrink-0" />
               <span className="truncate">Export Excel ({filteredEntries.length})</span>
             </Button>
@@ -553,51 +480,82 @@ export const ReportsPanel = () => {
               <span className="truncate">Export PDF (Multi-Sheet) ({filteredEntries.length})</span>
             </Button>
           </div>
-        </CardContent>
-      </Card>
+        </div>
 
-      <Card className="w-full">
-        <CardHeader>
-          <CardTitle className="text-lg sm:text-xl">GD Reports</CardTitle>
-          <CardDescription className="text-sm">
-            Showing {filteredEntries.length} of {entries.length} entries
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="min-w-0">
-          <div className="space-y-4">
-            {filteredEntries.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                No entries found matching the selected filters.
-              </div>
-            ) : (
-              filteredEntries.map((entry) => (
-                <div key={entry.id} className="border rounded-lg p-3 sm:p-4 space-y-2 min-w-0">
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                    <div className="flex flex-wrap items-center gap-1 sm:gap-2 min-w-0">
-                      <Badge variant="outline" className="text-xs">{entry.shops.name}</Badge>
-                      <Badge variant="secondary" className="text-xs">{entry.categories.name}</Badge>
-                      <Badge variant="outline" className="text-xs">{entry.sizes.size}</Badge>
-                    </div>
-                    <span className="text-xs sm:text-sm text-muted-foreground flex-shrink-0">
-                      {formatTime12Hour(new Date(entry.created_at))}
-                    </span>
-                  </div>
-                  <div className="text-sm min-w-0">
-                    <span className="font-medium">Reporter:</span>{' '}
-                    <span className="break-words">{entry.employee_name || 'Unknown'}</span>
-                  </div>
-                  <div className="text-sm min-w-0 tamil-content">
-                    <span className="font-medium">Notes:</span>{' '}
-                    <span className="break-words tamil">
-                      {entry.notes}
-                    </span>
-                  </div>
-                </div>
-              ))
-            )}
+        {loading ? (
+          <div className="flex justify-center items-center h-64">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+              <p>Loading reports...</p>
+            </div>
           </div>
-        </CardContent>
-      </Card>
+        ) : filteredEntries.length === 0 ? (
+          <Card>
+            <CardContent className="p-8 text-center">
+              <p className="text-muted-foreground">No entries found matching your criteria.</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid gap-4">
+            {filteredEntries.map((entry) => (
+              <Card key={entry.id}>
+                <CardContent className="p-6">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <CalendarIcon2 className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm text-muted-foreground">
+                          {formatDate(entry.created_at)}
+                        </span>
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        <Building2 className="h-4 w-4 text-muted-foreground" />
+                        <span className="font-medium">{entry.shops?.name || 'Unknown'}</span>
+                      </div>
+                      
+                      <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-2">
+                          <Tag className="h-4 w-4 text-muted-foreground" />
+                          <span>{entry.categories?.name || 'Unknown'}</span>
+                        </div>
+                        <div className="text-sm px-2 py-1 bg-secondary rounded">
+                          {entry.sizes?.size || 'Unknown'}
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        <User className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm">{entry.employee_name || 'Unknown'}</span>
+                      </div>
+                      
+                      <div className="mt-3">
+                        <p className="text-sm font-medium mb-1">Notes:</p>
+                        <p className="text-sm text-muted-foreground bg-muted p-2 rounded">
+                          {entry.notes}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    {entry.image_url && (
+                      <div className="flex justify-center lg:justify-end">
+                        <div className="max-w-xs">
+                          <img
+                            src={entry.image_url}
+                            alt="GD Evidence"
+                            className="w-full h-auto max-h-48 object-cover rounded-lg border"
+                            loading="lazy"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 };

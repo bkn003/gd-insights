@@ -1,5 +1,4 @@
-
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useCachedData } from '@/hooks/useCachedData';
 import { supabase } from '@/integrations/supabase/client';
@@ -10,12 +9,17 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
+import { Camera, Upload, X } from 'lucide-react';
+import { uploadImageToSupabase } from '@/utils/imageUtils';
 
 export const DamagedGoodsForm = () => {
   const { profile } = useAuth();
   const { categories, sizes, shops, loading: dataLoading } = useCachedData();
   const [loading, setLoading] = useState(false);
   const [userShop, setUserShop] = useState<any>(null);
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState({
     category_id: '',
     size_id: '',
@@ -51,6 +55,26 @@ export const DamagedGoodsForm = () => {
     }
   }, [dataLoading]);
 
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedImage(file);
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setImagePreview(e.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const removeImage = () => {
+    setSelectedImage(null);
+    setImagePreview(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!profile) return;
@@ -63,15 +87,31 @@ export const DamagedGoodsForm = () => {
     setLoading(true);
 
     try {
+      // Create entry first to get ID
+      const entryId = crypto.randomUUID();
+      let imageUrl = null;
+
+      // Upload image if selected
+      if (selectedImage) {
+        try {
+          imageUrl = await uploadImageToSupabase(selectedImage, profile.id, entryId);
+        } catch (imageError) {
+          console.error('Image upload failed:', imageError);
+          toast.error('Image upload failed, but entry will be saved without image');
+        }
+      }
+
       const { error } = await supabase
         .from('goods_damaged_entries')
         .insert({
+          id: entryId,
           category_id: formData.category_id,
           size_id: formData.size_id,
           shop_id: formData.shop_id,
           employee_id: profile.id,
           employee_name: profile.name,
           notes: formData.notes.trim(),
+          image_url: imageUrl,
         });
 
       if (error) throw error;
@@ -83,6 +123,9 @@ export const DamagedGoodsForm = () => {
         shop_id: profile?.shop_id || '',
         notes: '',
       });
+      
+      // Clear image selection
+      removeImage();
 
       // Refocus notes input after successful submission
       setTimeout(() => {
@@ -184,6 +227,62 @@ export const DamagedGoodsForm = () => {
               rows={4}
               autoFocus
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Image (Optional)</Label>
+            <div className="flex items-center gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={handleImageSelect}
+                className="hidden"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => fileInputRef.current?.click()}
+                className="flex items-center gap-2"
+              >
+                <Camera className="h-4 w-4" />
+                Take Photo
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  if (fileInputRef.current) {
+                    fileInputRef.current.removeAttribute('capture');
+                    fileInputRef.current.click();
+                  }
+                }}
+                className="flex items-center gap-2"
+              >
+                <Upload className="h-4 w-4" />
+                Upload
+              </Button>
+            </div>
+            
+            {imagePreview && (
+              <div className="relative inline-block">
+                <img
+                  src={imagePreview}
+                  alt="Preview"
+                  className="max-w-xs max-h-48 object-cover rounded-md border"
+                />
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  onClick={removeImage}
+                  className="absolute -top-2 -right-2 h-6 w-6 rounded-full p-0"
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              </div>
+            )}
           </div>
 
           <Button type="submit" className="w-full" disabled={loading}>
