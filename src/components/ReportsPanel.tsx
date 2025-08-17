@@ -43,9 +43,9 @@ interface GDEntry {
   created_at: string;
   updated_at: string;
   image_url: string | null;
-  shops?: { name: string } | null;
-  categories?: { name: string } | null;
-  sizes?: { size: string } | null;
+  shops: { name: string } | null;
+  categories: { name: string } | null;
+  sizes: { size: string } | null;
 }
 
 interface FilterState {
@@ -124,12 +124,29 @@ export const ReportsPanel = () => {
       if (sizesError) throw sizesError;
 
       // Type assertion and filtering to ensure proper data structure
-      const processedEntries: GDEntry[] = (entriesData || []).map(entry => ({
-        ...entry,
-        shops: entry.shops && typeof entry.shops === 'object' && 'name' in entry.shops ? entry.shops : null,
-        categories: entry.categories && entry.categories !== null && typeof entry.categories === 'object' && 'name' in entry.categories ? entry.categories : null,
-        sizes: entry.sizes && entry.sizes !== null && typeof entry.sizes === 'object' && 'size' in entry.sizes ? entry.sizes : null,
-      }));
+      const processedEntries: GDEntry[] = (entriesData || []).map(entry => {
+        // Handle shops relationship
+        const shops = entry.shops && typeof entry.shops === 'object' && 'name' in entry.shops ? entry.shops : null;
+        
+        // Handle categories relationship with explicit checks
+        let categories: { name: string } | null = null;
+        if (entry.categories && typeof entry.categories === 'object' && 'name' in entry.categories) {
+          categories = entry.categories as { name: string };
+        }
+        
+        // Handle sizes relationship with explicit checks
+        let sizes: { size: string } | null = null;
+        if (entry.sizes && typeof entry.sizes === 'object' && 'size' in entry.sizes) {
+          sizes = entry.sizes as { size: string };
+        }
+        
+        return {
+          ...entry,
+          shops,
+          categories,
+          sizes,
+        };
+      });
 
       setEntries(processedEntries);
       setShops(shopsData || []);
