@@ -123,7 +123,15 @@ export const ReportsPanel = () => {
       if (categoriesError) throw categoriesError;
       if (sizesError) throw sizesError;
 
-      setEntries(entriesData as GDEntry[]);
+      // Type assertion and filtering to ensure proper data structure
+      const processedEntries: GDEntry[] = (entriesData || []).map(entry => ({
+        ...entry,
+        shops: entry.shops && typeof entry.shops === 'object' && 'name' in entry.shops ? entry.shops : null,
+        categories: entry.categories && typeof entry.categories === 'object' && 'name' in entry.categories ? entry.categories : null,
+        sizes: entry.sizes && typeof entry.sizes === 'object' && 'size' in entry.sizes ? entry.sizes : null,
+      }));
+
+      setEntries(processedEntries);
       setShops(shopsData || []);
       setCategories(categoriesData || []);
       setSizes(sizesData || []);
