@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Database } from '@/types/database';
@@ -131,16 +130,14 @@ export const ReportsPanel = () => {
         
         // Handle categories relationship with explicit type checking
         let categories: { name: string } | null = null;
-        if (entry.categories && entry.categories !== null && typeof entry.categories === 'object' && 'name' in entry.categories) {
-          const categoryData = entry.categories;
-          categories = { name: categoryData.name };
+        if (entry.categories && typeof entry.categories === 'object' && 'name' in entry.categories) {
+          categories = { name: (entry.categories as { name: string }).name };
         }
         
         // Handle sizes relationship with explicit type checking
         let sizes: { size: string } | null = null;
-        if (entry.sizes && entry.sizes !== null && typeof entry.sizes === 'object' && 'size' in entry.sizes) {
-          const sizeData = entry.sizes;
-          sizes = { size: sizeData.size };
+        if (entry.sizes && typeof entry.sizes === 'object' && 'size' in entry.sizes) {
+          sizes = { size: (entry.sizes as { size: string }).size };
         }
         
         return {
