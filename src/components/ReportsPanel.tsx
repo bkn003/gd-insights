@@ -130,13 +130,13 @@ export const ReportsPanel = () => {
         
         // Handle categories relationship with explicit checks
         let categories: { name: string } | null = null;
-        if (entry.categories && typeof entry.categories === 'object' && 'name' in entry.categories) {
+        if (entry.categories && entry.categories !== null && typeof entry.categories === 'object' && 'name' in entry.categories) {
           categories = entry.categories as { name: string };
         }
         
         // Handle sizes relationship with explicit checks
         let sizes: { size: string } | null = null;
-        if (entry.sizes && typeof entry.sizes === 'object' && 'size' in entry.sizes) {
+        if (entry.sizes && entry.sizes !== null && typeof entry.sizes === 'object' && 'size' in entry.sizes) {
           sizes = entry.sizes as { size: string };
         }
         
