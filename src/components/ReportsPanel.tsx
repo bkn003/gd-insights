@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Database } from '@/types/database';
@@ -9,18 +10,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Calendar } from "@/components/ui/calendar"
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover"
-import { cn } from "@/lib/utils"
-import { format } from "date-fns"
-import { CalendarIcon } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
+import { DateRangeFilter, DateRangePreset } from '@/components/DateRangeFilter';
 
-import { FileText, Download, Filter, Calendar as CalendarIcon2, Search, Building2, Tag, User, Eye } from 'lucide-react';
+import { FileText, Download, Search, Building2, Tag, User, Eye, Calendar as CalendarIcon2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
@@ -52,6 +45,7 @@ interface FilterState {
   shopId: string | null;
   categoryId: string | null;
   sizeId: string | null;
+  datePreset: DateRangePreset;
   dateFrom: Date | null;
   dateTo: Date | null;
   searchTerm: string;
@@ -61,7 +55,14 @@ const formatDate = (dateStr: string | null): string => {
   if (!dateStr) return 'Unknown';
   try {
     const date = new Date(dateStr);
-    return format(date, 'yyyy-MM-dd HH:mm');
+    return new Intl.DateTimeFormat('en-US', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    }).format(date);
   } catch (error) {
     console.error('Error formatting date:', error);
     return 'Invalid Date';
@@ -84,18 +85,31 @@ const getImageDataURL = async (imageUrl: string): Promise<string | null> => {
   }
 };
 
+// Set today as default date range
+const getDefaultDateRange = () => {
+  const now = new Date();
+  return {
+    datePreset: 'today' as DateRangePreset,
+    dateFrom: new Date(now.getFullYear(), now.getMonth(), now.getDate()),
+    dateTo: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59),
+  };
+};
+
 export const ReportsPanel = () => {
   const [entries, setEntries] = useState<GDEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [shops, setShops] = useState<Database['public']['Tables']['shops']['Row'][]>([]);
   const [categories, setCategories] = useState<Database['public']['Tables']['categories']['Row'][]>([]);
   const [sizes, setSizes] = useState<Database['public']['Tables']['sizes']['Row'][]>([]);
+  
+  const defaultDateRange = getDefaultDateRange();
   const [filter, setFilter] = useState<FilterState>({
     shopId: null,
     categoryId: null,
     sizeId: null,
-    dateFrom: null,
-    dateTo: null,
+    datePreset: defaultDateRange.datePreset,
+    dateFrom: defaultDateRange.dateFrom,
+    dateTo: defaultDateRange.dateTo,
     searchTerm: '',
   });
   const [filteredEntries, setFilteredEntries] = useState<GDEntry[]>([]);
@@ -187,10 +201,10 @@ export const ReportsPanel = () => {
       results = results.filter(entry => entry.size_id === filter.sizeId);
     }
     if (filter.dateFrom) {
-      results = results.filter(entry => entry.created_at && new Date(entry.created_at) >= filter.dateFrom);
+      results = results.filter(entry => entry.created_at && new Date(entry.created_at) >= filter.dateFrom!);
     }
     if (filter.dateTo) {
-      results = results.filter(entry => entry.created_at && new Date(entry.created_at) <= filter.dateTo);
+      results = results.filter(entry => entry.created_at && new Date(entry.created_at) <= filter.dateTo!);
     }
     if (filter.searchTerm) {
       const term = filter.searchTerm.toLowerCase();
@@ -218,16 +232,24 @@ export const ReportsPanel = () => {
     setFilter(prev => ({ ...prev, sizeId: sizeId === 'all' ? null : sizeId }));
   };
 
+  const handlePresetChange = (preset: DateRangePreset) => {
+    setFilter(prev => ({ ...prev, datePreset: preset }));
+  };
+
   const handleDateFromChange = (date: Date | undefined) => {
-    setFilter(prev => ({ ...prev, dateFrom: date ? date : null }));
+    setFilter(prev => ({ ...prev, dateFrom: date || null }));
   };
 
   const handleDateToChange = (date: Date | undefined) => {
-    setFilter(prev => ({ ...prev, dateTo: date ? date : null }));
+    setFilter(prev => ({ ...prev, dateTo: date || null }));
   };
 
   const handleSearchTermChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFilter(prev => ({ ...prev, searchTerm: e.target.value }));
+  };
+
+  const clearSearch = () => {
+    setFilter(prev => ({ ...prev, searchTerm: '' }));
   };
 
   const exportToExcel = async () => {
@@ -255,8 +277,8 @@ export const ReportsPanel = () => {
     XLSX.utils.book_append_sheet(wb, overallWs, 'Overall Report');
     
     // Shop-wise sheets
-    const shops = [...new Set(filteredEntries.map(entry => entry.shops?.name).filter(Boolean))];
-    shops.forEach(shop => {
+    const uniqueShops = [...new Set(filteredEntries.map(entry => entry.shops?.name).filter(Boolean))];
+    uniqueShops.forEach(shop => {
       const shopData = processedData.filter(entry => entry.Shop === shop);
       if (shopData.length > 0) {
         const shopWs = XLSX.utils.json_to_sheet(shopData);
@@ -265,8 +287,8 @@ export const ReportsPanel = () => {
     });
     
     // Category-wise sheets
-    const categories = [...new Set(filteredEntries.map(entry => entry.categories?.name).filter(Boolean))];
-    categories.forEach(category => {
+    const uniqueCategories = [...new Set(filteredEntries.map(entry => entry.categories?.name).filter(Boolean))];
+    uniqueCategories.forEach(category => {
       const categoryData = processedData.filter(entry => entry.Category === category);
       if (categoryData.length > 0) {
         const categoryWs = XLSX.utils.json_to_sheet(categoryData);
@@ -309,8 +331,8 @@ export const ReportsPanel = () => {
     });
 
     // Shop-wise reports
-    const shops = [...new Set(filteredEntries.map(entry => entry.shops?.name).filter(Boolean))];
-    shops.forEach(shop => {
+    const uniqueShops = [...new Set(filteredEntries.map(entry => entry.shops?.name).filter(Boolean))];
+    uniqueShops.forEach(shop => {
       const shopData = processedData.filter(entry => entry.Shop === shop);
       if (shopData.length > 0) {
         doc.addPage();
@@ -330,8 +352,8 @@ export const ReportsPanel = () => {
     });
 
     // Category-wise reports
-    const categories = [...new Set(filteredEntries.map(entry => entry.categories?.name).filter(Boolean))];
-    categories.forEach(category => {
+    const uniqueCategories = [...new Set(filteredEntries.map(entry => entry.categories?.name).filter(Boolean))];
+    uniqueCategories.forEach(category => {
       const categoryData = processedData.filter(entry => entry.Category === category);
       if (categoryData.length > 0) {
         doc.addPage();
@@ -357,8 +379,9 @@ export const ReportsPanel = () => {
   return (
     <div className="space-y-6">
       <div className="bg-muted p-4 rounded-md">
-        <h3 className="text-lg font-semibold mb-2">Filters</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <h3 className="text-lg font-semibold mb-4">Filters</h3>
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
           <div>
             <Label htmlFor="shop">Shop</Label>
             <Select value={filter.shopId || 'all'} onValueChange={handleShopFilterChange}>
@@ -411,96 +434,43 @@ export const ReportsPanel = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-          <div>
-            <Label>Date From</Label>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant={"outline"}
-                  className={cn(
-                    "w-full justify-start text-left font-normal",
-                    !filter.dateFrom && "text-muted-foreground"
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {filter.dateFrom ? (
-                    format(filter.dateFrom, "PPP")
-                  ) : (
-                    <span>Pick a date</span>
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={filter.dateFrom}
-                  onSelect={handleDateFromChange}
-                  disabled={(date) =>
-                    date > new Date()
-                  }
-                  initialFocus
-                />
-              </PopoverContent>
-            </Popover>
-          </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+          <DateRangeFilter
+            selectedPreset={filter.datePreset}
+            dateFrom={filter.dateFrom}
+            dateTo={filter.dateTo}
+            onPresetChange={handlePresetChange}
+            onDateFromChange={handleDateFromChange}
+            onDateToChange={handleDateToChange}
+          />
 
           <div>
-            <Label>Date To</Label>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant={"outline"}
-                  className={cn(
-                    "w-full justify-start text-left font-normal",
-                    !filter.dateTo && "text-muted-foreground"
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {filter.dateTo ? (
-                    format(filter.dateTo, "PPP")
-                  ) : (
-                    <span>Pick a date</span>
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={filter.dateTo}
-                  onSelect={handleDateToChange}
-                  disabled={(date) =>
-                    date > new Date()
-                  }
-                  initialFocus
-                />
-              </PopoverContent>
-            </Popover>
-          </div>
-        </div>
-
-        <div className="mt-4">
-          <Label htmlFor="search">Search</Label>
-          <div className="relative">
-            <Input
-              type="search"
-              id="search"
-              placeholder="Search notes, employee..."
-              value={filter.searchTerm}
-              onChange={handleSearchTermChange}
-              className="pr-10"
-            />
-            {filter.searchTerm && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => handleSearchTermChange({ target: { value: '' } } as any)}
-                className="absolute right-1 top-1/2 -translate-y-1/2 rounded-full h-8 w-8"
-              >
-                <Eye  className="h-4 w-4" />
-              </Button>
-            )}
+            <Label htmlFor="search">Search</Label>
+            <div className="relative">
+              <Input
+                type="search"
+                id="search"
+                placeholder="Search notes, employee, shop..."
+                value={filter.searchTerm}
+                onChange={handleSearchTermChange}
+                className="pr-10"
+              />
+              <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                {filter.searchTerm ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={clearSearch}
+                    className="h-6 w-6 p-0"
+                  >
+                    <Eye className="h-4 w-4" />
+                  </Button>
+                ) : (
+                  <Search className="h-4 w-4 text-muted-foreground" />
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -521,7 +491,7 @@ export const ReportsPanel = () => {
             </Button>
             <Button onClick={exportReportPDF} variant="outline" className="flex items-center justify-center gap-2 w-full sm:w-auto">
               <FileText className="h-4 w-4 flex-shrink-0" />
-              <span className="truncate">Export PDF (Multi-Sheet) ({filteredEntries.length})</span>
+              <span className="truncate">Export PDF ({filteredEntries.length})</span>
             </Button>
           </div>
         </div>

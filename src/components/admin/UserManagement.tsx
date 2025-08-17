@@ -102,6 +102,16 @@ export const UserManagement = ({ shops, profiles, onRefresh }: UserManagementPro
     });
   };
 
+  const handleCancelEdit = () => {
+    setEditingUser(null);
+    setEditFormData({
+      role: 'user',
+      shopId: '',
+      defaultCategoryId: '',
+      defaultSizeId: '',
+    });
+  };
+
   // Filter out soft-deleted users (those with deleted_at set)
   const activeProfiles = profiles.filter(profile => !profile.deleted_at);
 
@@ -133,7 +143,7 @@ export const UserManagement = ({ shops, profiles, onRefresh }: UserManagementPro
                   )}
                 </div>
                 <div className="flex gap-1 pt-2">
-                  <Dialog>
+                  <Dialog open={editingUser?.id === profile.id} onOpenChange={(open) => !open && handleCancelEdit()}>
                     <DialogTrigger asChild>
                       <Button
                         variant="outline"
@@ -224,7 +234,7 @@ export const UserManagement = ({ shops, profiles, onRefresh }: UserManagementPro
                           </Select>
                         </div>
                         <div className="flex gap-2 justify-end">
-                          <Button variant="outline" onClick={() => setEditingUser(null)}>
+                          <Button variant="outline" onClick={handleCancelEdit}>
                             Cancel
                           </Button>
                           <Button onClick={handleEditUser}>
