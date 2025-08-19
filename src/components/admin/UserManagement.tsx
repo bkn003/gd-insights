@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -8,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
 import { UserPlus, Edit, Trash2 } from 'lucide-react';
 import { Database } from '@/types/database';
@@ -37,8 +37,34 @@ export const UserManagement = ({ shops: propShops, profiles: propProfiles, onRef
   useEffect(() => {
     if (!propProfiles || !propShops) {
       fetchData();
+    } else {
+      // Still need to fetch categories and sizes even if profiles and shops are provided
+      fetchCategoriesAndSizes();
     }
   }, [propProfiles, propShops]);
+
+  const fetchCategoriesAndSizes = async () => {
+    try {
+      const [categoriesRes, sizesRes] = await Promise.all([
+        supabase.from('categories').select('*').order('name'),
+        supabase.from('sizes').select('*').order('size'),
+      ]);
+
+      if (categoriesRes.error) {
+        console.error('Error fetching categories:', categoriesRes.error);
+        throw categoriesRes.error;
+      }
+      if (sizesRes.error) {
+        console.error('Error fetching sizes:', sizesRes.error);
+        throw sizesRes.error;
+      }
+
+      setCategories(categoriesRes.data);
+      setSizes(sizesRes.data);
+    } catch (error) {
+      console.error('Error fetching categories and sizes:', error);
+    }
+  };
 
   const fetchData = async () => {
     try {
@@ -73,7 +99,6 @@ export const UserManagement = ({ shops: propShops, profiles: propProfiles, onRef
         throw sizesRes.error;
       }
 
-      // Type assertion to handle the role field properly
       const typedProfiles = profilesData.map(profile => ({
         ...profile,
         role: profile.role as 'admin' | 'user'
@@ -152,81 +177,94 @@ export const UserManagement = ({ shops: propShops, profiles: propProfiles, onRef
   }
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <UserPlus className="h-5 w-5" />
-            User Management
-          </CardTitle>
-          <CardDescription>
-            Manage users and their roles
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4">
-            {profiles.map((user) => (
-              <div key={user.id} className="border rounded-lg p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="font-medium">{user.name}</div>
-                    <div className="text-sm text-muted-foreground">
-                      {user.email || user.user_id}
+    <TooltipProvider>
+      <div className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <UserPlus className="h-5 w-5" />
+              User Management
+            </CardTitle>
+            <CardDescription>
+              Manage users and their roles
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4">
+              {profiles.map((user) => (
+                <div key={user.id} className="border rounded-lg p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="font-medium">{user.name}</div>
+                      <div className="text-sm text-muted-foreground">
+                        {user.email || user.user_id}
+                      </div>
+                      <div className="mt-1">
+                        <Badge variant="secondary">{user.role}</Badge>
+                      </div>
                     </div>
-                    <div className="mt-1">
-                      <Badge variant="secondary">{user.role}</Badge>
+                    <div className="flex gap-2">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleEditUser(user)}
+                            className="p-2"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Edit user</p>
+                        </TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => handleDelete(user.id)}
+                            className="p-2"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Delete user</p>
+                        </TooltipContent>
+                      </Tooltip>
                     </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleEditUser(user)}
-                      className="p-2"
-                      title="Edit user"
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => handleDelete(user.id)}
-                      className="p-2"
-                      title="Delete user"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
 
-      {/* Edit User Dialog */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Edit User</DialogTitle>
-            <DialogDescription>
-              Update user information and assignments
-            </DialogDescription>
-          </DialogHeader>
-          
-          {editingUser && (
-            <EditUserForm
-              user={editingUser}
-              shops={shops}
-              categories={categories}
-              sizes={sizes}
-              onSave={handleSaveUser}
-              onCancel={handleCancelEdit}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
-    </div>
+        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Edit User</DialogTitle>
+              <DialogDescription>
+                Update user information and assignments
+              </DialogDescription>
+            </DialogHeader>
+            
+            {editingUser && (
+              <EditUserForm
+                user={editingUser}
+                shops={shops}
+                categories={categories}
+                sizes={sizes}
+                onSave={handleSaveUser}
+                onCancel={handleCancelEdit}
+              />
+            )}
+          </DialogContent>
+        </Dialog>
+      </div>
+    </TooltipProvider>
   );
 };
 

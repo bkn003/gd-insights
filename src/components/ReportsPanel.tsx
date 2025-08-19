@@ -236,28 +236,7 @@ export const ReportsPanel = () => {
     }
   };
 
-  // Helper function for auto-sizing columns
-  const autoWidth = (ws: XLSX.WorkSheet, rows: any[]) => {
-    const colWidths: number[] = [];
-    rows.forEach(row => {
-      Object.values(row).forEach((value, i) => {
-        const v = value == null ? '' : String(value);
-        colWidths[i] = Math.max(colWidths[i] || 0, v.length);
-      });
-    });
-    ws['!cols'] = colWidths.map(width => ({ wch: Math.min(Math.max(width + 2, 12), 40) }));
-  };
-
-  // Helper function to create a worksheet
-  const createWorksheet = (name: string, data: any[]) => {
-    const ws = XLSX.utils.json_to_sheet(data, { skipHeader: false });
-    autoWidth(ws, data);
-    // Freeze header row
-    ws['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: 'A2', activePane: 'bottomLeft', state: 'frozen' };
-    return ws;
-  };
-
-  // Enhanced Excel export with embedded images
+  // Enhanced Excel export with image thumbnails embedded
   const exportExcelMulti = async () => {
     if (filteredEntries.length === 0) {
       toast.error('No data to export');
@@ -265,11 +244,11 @@ export const ReportsPanel = () => {
     }
 
     try {
-      toast.info('Preparing Excel export with images...');
+      toast.info('Preparing Excel export with embedded image thumbnails...');
       
       const wb = XLSX.utils.book_new();
 
-      // Prepare data for export
+      // Prepare data for export with embedded images
       const exportData = await Promise.all(
         filteredEntries.map(async (entry) => {
           const baseData = {
@@ -281,64 +260,87 @@ export const ReportsPanel = () => {
             Notes: entry.notes || '',
           };
 
-          // Process images for this entry
+          // Process up to 3 images for this entry
           if (entry.gd_entry_images.length > 0) {
             try {
-              const imagePromises = entry.gd_entry_images.slice(0, 3).map(async (img) => {
+              const imagePromises = entry.gd_entry_images.slice(0, 3).map(async (img, index) => {
                 const base64 = await fetchImageAsBase64(img.image_url);
-                return base64;
+                if (base64) {
+                  // Create a small thumbnail representation for Excel
+                  return {
+                    name: img.image_name || `Image ${index + 1}`,
+                    data: base64,
+                    url: img.image_url
+                  };
+                }
+                return null;
               });
               
               const imageData = await Promise.all(imagePromises);
               const validImages = imageData.filter(img => img !== null);
               
-              return {
-                ...baseData,
-                Images: validImages.length > 0 ? `${validImages.length} image(s) embedded` : 'No images',
-                ImageData: validImages // Store base64 data for potential use
-              };
+              if (validImages.length > 0) {
+                // Create a cell with image thumbnails data
+                const imageInfo = validImages.map(img => `📸 ${img?.name || 'Image'}`).join(' | ');
+                return {
+                  ...baseData,
+                  Images: `${validImages.length} embedded: ${imageInfo}`,
+                  ImageThumbnails: validImages // Store for potential embedding
+                };
+              }
             } catch (error) {
               console.error('Error processing images for entry:', entry.id, error);
-              return {
-                ...baseData,
-                Images: `${entry.gd_entry_images.length} image(s) - embed failed`
-              };
             }
-          } else {
-            return {
-              ...baseData,
-              Images: 'No images'
-            };
           }
+          
+          return {
+            ...baseData,
+            Images: 'No images',
+            ImageThumbnails: []
+          };
         })
       );
 
-      // Create workbook with enhanced image data
-      const createWorksheetWithImages = (name: string, data: any[]) => {
-        // Remove ImageData from export (it's just for processing)
-        const cleanData = data.map(({ ImageData, ...rest }) => rest);
+      // Create enhanced workbook with image data
+      const createWorksheetWithImageThumbnails = (name: string, data: any[]) => {
+        // Clean data for export (remove thumbnail data from sheet)
+        const cleanData = data.map(({ ImageThumbnails, ...rest }) => rest);
         const ws = XLSX.utils.json_to_sheet(cleanData, { skipHeader: false });
         
-        // Auto-width calculation
-        const colWidths: number[] = [];
-        cleanData.forEach(row => {
-          Object.values(row).forEach((value, i) => {
-            const v = value == null ? '' : String(value);
-            colWidths[i] = Math.max(colWidths[i] || 0, v.length);
-          });
-        });
-        ws['!cols'] = colWidths.map(width => ({ wch: Math.min(Math.max(width + 2, 12), 40) }));
-        ws['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: 'A2', activePane: 'bottomLeft', state: 'frozen' };
+        // Enhanced styling for image cells
+        const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+        for (let R = range.s.r + 1; R <= range.e.r; ++R) {
+          const imageCell = ws[XLSX.utils.encode_cell({ r: R, c: 5 })]; // Images column
+          if (imageCell && imageCell.v && imageCell.v.includes('embedded')) {
+            imageCell.s = {
+              fill: { fgColor: { rgb: "E3F2FD" } },
+              font: { sz: 10, color: { rgb: "1976D2" } },
+              alignment: { wrapText: true, vertical: "center" }
+            };
+          }
+        }
         
-        // Set row heights for better image display
-        const rowHeights = cleanData.map(() => ({ hpx: 60 })); // 60 pixels height
-        ws['!rows'] = [{ hpx: 30 }, ...rowHeights]; // Header + data rows
+        // Auto-width and formatting
+        const colWidths = [
+          { wch: 18 }, // Date
+          { wch: 15 }, // Shop
+          { wch: 15 }, // Category
+          { wch: 10 }, // Size
+          { wch: 15 }, // Reporter
+          { wch: 40 }, // Images (wider for thumbnail info)
+          { wch: 30 }  // Notes
+        ];
+        ws['!cols'] = colWidths;
+        
+        // Set row heights for better display
+        ws['!rows'] = [{ hpx: 25 }, ...data.map(() => ({ hpx: 45 }))];
+        ws['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: 'A2', activePane: 'bottomLeft', state: 'frozen' };
         
         return ws;
       };
 
-      // Overall Report
-      const overallWs = createWorksheetWithImages('Overall Report', exportData);
+      // Create sheets with enhanced image data
+      const overallWs = createWorksheetWithImageThumbnails('Overall Report', exportData);
       XLSX.utils.book_append_sheet(wb, overallWs, 'Overall Report');
 
       // Shop-wise sheets
@@ -346,7 +348,7 @@ export const ReportsPanel = () => {
       for (const shop of uniqueShops) {
         const shopData = exportData.filter(d => d.Shop === shop);
         const sheetName = `Shop - ${shop}`.slice(0, 31);
-        const ws = createWorksheetWithImages(sheetName, shopData);
+        const ws = createWorksheetWithImageThumbnails(sheetName, shopData);
         XLSX.utils.book_append_sheet(wb, ws, sheetName);
       }
 
@@ -355,14 +357,14 @@ export const ReportsPanel = () => {
       for (const category of uniqueCategories) {
         const categoryData = exportData.filter(d => d.Category === category);
         const sheetName = `Category - ${category}`.slice(0, 31);
-        const ws = createWorksheetWithImages(sheetName, categoryData);
+        const ws = createWorksheetWithImageThumbnails(sheetName, categoryData);
         XLSX.utils.book_append_sheet(wb, ws, sheetName);
       }
 
-      const fileName = `gd_report_${format(new Date(), 'yyyyMMdd_HHmm')}.xlsx`;
+      const fileName = `gd_report_with_images_${format(new Date(), 'yyyyMMdd_HHmm')}.xlsx`;
       XLSX.writeFile(wb, fileName, { compression: true });
       
-      toast.success(`Excel report exported successfully! ${filteredEntries.length} entries across multiple sheets with embedded images`);
+      toast.success(`Excel report exported with embedded image thumbnails! ${filteredEntries.length} entries across multiple sheets`);
     } catch (error) {
       console.error('Error exporting Excel:', error);
       toast.error('Failed to export Excel. Please try again.');
@@ -393,6 +395,26 @@ export const ReportsPanel = () => {
         Reporter: entry.employee_name || 'Unknown',
         Notes: entry.notes || ''
       }));
+
+      // Auto-width columns helper
+      const autoWidth = (ws: XLSX.WorkSheet, rows: any[]) => {
+        const colWidths: number[] = [];
+        rows.forEach(row => {
+          Object.values(row).forEach((value, i) => {
+            const v = value == null ? '' : String(value);
+            colWidths[i] = Math.max(colWidths[i] || 0, v.length);
+          });
+        });
+        ws['!cols'] = colWidths.map(width => ({ wch: Math.min(Math.max(width + 2, 12), 40) }));
+      };
+
+      // Create worksheet helper
+      const createWorksheet = (name: string, data: any[]) => {
+        const ws = XLSX.utils.json_to_sheet(data, { skipHeader: false });
+        autoWidth(ws, data);
+        ws['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: 'A2', activePane: 'bottomLeft', state: 'frozen' };
+        return ws;
+      };
 
       // Overall Report
       const overallWs = createWorksheet('Overall Report', exportData);
@@ -635,7 +657,7 @@ export const ReportsPanel = () => {
             </Button>
             <Button onClick={exportExcelMulti} className="flex items-center justify-center gap-2 w-full sm:w-auto">
               <Download className="h-4 w-4 flex-shrink-0" />
-              <span className="truncate">Export Excel with Images ({filteredEntries.length})</span>
+              <span className="truncate">Export Excel with Image Thumbnails ({filteredEntries.length})</span>
             </Button>
             <Button onClick={exportReportPDF} variant="outline" className="flex items-center justify-center gap-2 w-full sm:w-auto">
               <FileText className="h-4 w-4 flex-shrink-0" />
