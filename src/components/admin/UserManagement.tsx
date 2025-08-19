@@ -1,4 +1,5 @@
 
+
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -241,18 +242,18 @@ const EditUserForm = ({ user, shops, categories, sizes, onSave, onCancel }: Edit
   const [formData, setFormData] = useState({
     name: user.name,
     role: user.role,
-    shop_id: user.shop_id || '',
-    default_category_id: user.default_category_id || '',
-    default_size_id: user.default_size_id || ''
+    shop_id: user.shop_id || 'none',
+    default_category_id: user.default_category_id || 'none',
+    default_size_id: user.default_size_id || 'none'
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSave({
       ...formData,
-      shop_id: formData.shop_id || null,
-      default_category_id: formData.default_category_id || null,
-      default_size_id: formData.default_size_id || null
+      shop_id: formData.shop_id === 'none' ? null : formData.shop_id,
+      default_category_id: formData.default_category_id === 'none' ? null : formData.default_category_id,
+      default_size_id: formData.default_size_id === 'none' ? null : formData.default_size_id
     });
   };
 
@@ -287,14 +288,14 @@ const EditUserForm = ({ user, shops, categories, sizes, onSave, onCancel }: Edit
       <div className="space-y-2">
         <Label htmlFor="shop">Shop</Label>
         <Select
-          value={formData.shop_id || ''}
+          value={formData.shop_id}
           onValueChange={(value) => setFormData({ ...formData, shop_id: value })}
         >
           <SelectTrigger>
             <SelectValue placeholder="Select a shop" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">No Shop</SelectItem>
+            <SelectItem value="none">No Shop</SelectItem>
             {shops.map((shop) => (
               <SelectItem key={shop.id} value={shop.id}>
                 {shop.name}
@@ -307,14 +308,14 @@ const EditUserForm = ({ user, shops, categories, sizes, onSave, onCancel }: Edit
       <div className="space-y-2">
         <Label htmlFor="default_category">Default Category</Label>
         <Select
-          value={formData.default_category_id || ''}
+          value={formData.default_category_id}
           onValueChange={(value) => setFormData({ ...formData, default_category_id: value })}
         >
           <SelectTrigger>
             <SelectValue placeholder="Select a category" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">No Default Category</SelectItem>
+            <SelectItem value="none">No Default Category</SelectItem>
             {categories.map((category) => (
               <SelectItem key={category.id} value={category.id}>
                 {category.name}
@@ -327,14 +328,14 @@ const EditUserForm = ({ user, shops, categories, sizes, onSave, onCancel }: Edit
       <div className="space-y-2">
         <Label htmlFor="default_size">Default Size</Label>
         <Select
-          value={formData.default_size_id || ''}
+          value={formData.default_size_id}
           onValueChange={(value) => setFormData({ ...formData, default_size_id: value })}
         >
           <SelectTrigger>
             <SelectValue placeholder="Select a size" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">No Default Size</SelectItem>
+            <SelectItem value="none">No Default Size</SelectItem>
             {sizes.map((size) => (
               <SelectItem key={size.id} value={size.id}>
                 {size.size}
@@ -360,3 +361,4 @@ const EditUserForm = ({ user, shops, categories, sizes, onSave, onCancel }: Edit
     </form>
   );
 };
+

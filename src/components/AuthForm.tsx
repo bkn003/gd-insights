@@ -1,4 +1,5 @@
 
+
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -21,7 +22,7 @@ export const AuthForm = () => {
     email: '',
     password: '',
     name: '',
-    shopId: '',
+    shopId: 'none',
   });
 
   const { signIn, signUp } = useAuth();
@@ -53,7 +54,7 @@ export const AuthForm = () => {
 
     try {
       if (isSignUp) {
-        if (!formData.shopId) {
+        if (formData.shopId === 'none') {
           toast.error('Please select a shop');
           return;
         }
@@ -126,6 +127,7 @@ export const AuthForm = () => {
                       <SelectValue placeholder="Select your shop" />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="none">Select your shop</SelectItem>
                       {shops.map((shop) => (
                         <SelectItem key={shop.id} value={shop.id}>
                           {shop.name}
@@ -180,3 +182,4 @@ export const AuthForm = () => {
     </div>
   );
 };
+

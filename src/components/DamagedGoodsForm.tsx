@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useCachedData } from '@/hooks/useCachedData';
@@ -18,9 +19,9 @@ export const DamagedGoodsForm = () => {
   const [userShop, setUserShop] = useState<any>(null);
   const [selectedImages, setSelectedImages] = useState<File[]>([]);
   const [formData, setFormData] = useState({
-    category_id: '',
-    size_id: '',
-    shop_id: profile?.shop_id || '',
+    category_id: 'none',
+    size_id: 'none',
+    shop_id: profile?.shop_id || 'none',
     notes: '',
   });
 
@@ -28,9 +29,9 @@ export const DamagedGoodsForm = () => {
     if (profile?.shop_id) {
       setFormData(prev => ({ 
         ...prev, 
-        shop_id: profile.shop_id || '',
-        category_id: prev.category_id || (profile as any).default_category_id || '',
-        size_id: prev.size_id || (profile as any).default_size_id || ''
+        shop_id: profile.shop_id || 'none',
+        category_id: prev.category_id !== 'none' ? prev.category_id : (profile as any).default_category_id || 'none',
+        size_id: prev.size_id !== 'none' ? prev.size_id : (profile as any).default_size_id || 'none'
       }));
       
       if (shops.length > 0) {
@@ -94,7 +95,7 @@ export const DamagedGoodsForm = () => {
     e.preventDefault();
     if (!profile) return;
 
-    if (!formData.category_id || !formData.size_id || !formData.shop_id || !formData.notes.trim()) {
+    if (formData.category_id === 'none' || formData.size_id === 'none' || formData.shop_id === 'none' || !formData.notes.trim()) {
       toast.error('Please fill in all required fields');
       return;
     }
@@ -128,9 +129,9 @@ export const DamagedGoodsForm = () => {
 
       // Reset form
       setFormData({
-        category_id: (profile as any)?.default_category_id || '',
-        size_id: (profile as any)?.default_size_id || '',
-        shop_id: profile?.shop_id || '',
+        category_id: (profile as any)?.default_category_id || 'none',
+        size_id: (profile as any)?.default_size_id || 'none',
+        shop_id: profile?.shop_id || 'none',
         notes: '',
       });
       setSelectedImages([]);
@@ -183,6 +184,7 @@ export const DamagedGoodsForm = () => {
                   <SelectValue placeholder="Select a category" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="none">Select a category</SelectItem>
                   {categories.map((category) => (
                     <SelectItem key={category.id} value={category.id}>
                       {category.name}
@@ -203,6 +205,7 @@ export const DamagedGoodsForm = () => {
                   <SelectValue placeholder="Select a size" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="none">Select a size</SelectItem>
                   {sizes.map((size) => (
                     <SelectItem key={size.id} value={size.id}>
                       {size.size}
@@ -257,3 +260,4 @@ export const DamagedGoodsForm = () => {
     </Card>
   );
 };
+
