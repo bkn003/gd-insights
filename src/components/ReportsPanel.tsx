@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { ImageDisplay } from '@/components/ImageDisplay';
 import { toast } from 'sonner';
 import { Download, Filter, Calendar as CalendarIcon, FileText } from 'lucide-react';
 import { format } from 'date-fns';
@@ -21,6 +22,11 @@ type GoodsEntry = Database['public']['Tables']['goods_damaged_entries']['Row'] &
   categories: { name: string };
   sizes: { size: string };
   shops: { name: string };
+  gd_entry_images: Array<{
+    id: string;
+    image_url: string;
+    image_name?: string;
+  }>;
 };
 
 type Shop = Database['public']['Tables']['shops']['Row'];
@@ -36,7 +42,7 @@ export const ReportsPanel = () => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [sizes, setSizes] = useState<Size[]>([]);
   
-  // Filter states - changed default to "today"
+  // Filter states - default to "today"
   const [selectedShop, setSelectedShop] = useState<string>('all');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedSize, setSelectedSize] = useState<string>('all');
@@ -57,7 +63,7 @@ export const ReportsPanel = () => {
       setLoading(true);
       console.log('Starting to fetch data...');
       
-      // Fetch entries with manual joins to avoid foreign key relationship conflicts
+      // Fetch entries with images
       const { data: entriesData, error: entriesError } = await supabase
         .from('goods_damaged_entries')
         .select('*')
@@ -69,6 +75,19 @@ export const ReportsPanel = () => {
       }
 
       console.log('Fetched entries:', entriesData);
+
+      // Fetch images for all entries
+      const { data: imagesData, error: imagesError } = await supabase
+        .from('gd_entry_images')
+        .select('*')
+        .order('created_at', { ascending: true });
+
+      if (imagesError) {
+        console.error('Error fetching images:', imagesError);
+        throw imagesError;
+      }
+
+      console.log('Fetched images:', imagesData);
 
       // Fetch related data separately
       const [shopsRes, categoriesRes, sizesRes] = await Promise.all([
@@ -90,25 +109,23 @@ export const ReportsPanel = () => {
         throw sizesRes.error;
       }
 
-      console.log('Fetched shops:', shopsRes.data);
-      console.log('Fetched categories:', categoriesRes.data);
-      console.log('Fetched sizes:', sizesRes.data);
-
-      // Manually join the data
+      // Manually join the data including images
       const enrichedEntries = entriesData.map(entry => {
         const shop = shopsRes.data.find(s => s.id === entry.shop_id);
         const category = categoriesRes.data.find(c => c.id === entry.category_id);
         const size = sizesRes.data.find(s => s.id === entry.size_id);
+        const entryImages = imagesData.filter(img => img.gd_entry_id === entry.id);
 
         return {
           ...entry,
           shops: { name: shop?.name || 'Unknown Shop' },
           categories: { name: category?.name || 'Unknown Category' },
-          sizes: { size: size?.size || 'Unknown Size' }
+          sizes: { size: size?.size || 'Unknown Size' },
+          gd_entry_images: entryImages
         };
       });
 
-      console.log('Enriched entries:', enrichedEntries);
+      console.log('Enriched entries with images:', enrichedEntries);
 
       setEntries(enrichedEntries);
       setShops(shopsRes.data);
@@ -236,18 +253,37 @@ export const ReportsPanel = () => {
 
       const wb = XLSX.utils.book_new();
 
-      // Prepare data for export
+      // Prepare data for export with images column
       const exportData = filteredEntries.map(entry => ({
         Date: formatTime12Hour(new Date(entry.created_at)),
         Shop: entry.shops.name,
         Category: entry.categories.name,
         Size: entry.sizes.size,
         Reporter: entry.employee_name || 'Unknown',
-        Notes: entry.notes || ''
+        Notes: entry.notes || '',
+        Images: entry.gd_entry_images.length > 0 
+          ? `${entry.gd_entry_images.length} image(s)` 
+          : 'No images'
       }));
 
+      // Create sheets with images column
+      const createWorksheetWithImages = (name: string, data: any[]) => {
+        const ws = XLSX.utils.json_to_sheet(data, { skipHeader: false });
+        // Auto-width calculation
+        const colWidths: number[] = [];
+        data.forEach(row => {
+          Object.values(row).forEach((value, i) => {
+            const v = value == null ? '' : String(value);
+            colWidths[i] = Math.max(colWidths[i] || 0, v.length);
+          });
+        });
+        ws['!cols'] = colWidths.map(width => ({ wch: Math.min(Math.max(width + 2, 12), 40) }));
+        ws['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: 'A2', activePane: 'bottomLeft', state: 'frozen' };
+        return ws;
+      };
+
       // Overall Report
-      const overallWs = createWorksheet('Overall Report', exportData);
+      const overallWs = createWorksheetWithImages('Overall Report', exportData);
       XLSX.utils.book_append_sheet(wb, overallWs, 'Overall Report');
 
       // Shop-wise sheets
@@ -255,7 +291,7 @@ export const ReportsPanel = () => {
       for (const shop of uniqueShops) {
         const shopData = exportData.filter(d => d.Shop === shop);
         const sheetName = `Shop - ${shop}`.slice(0, 31);
-        const ws = createWorksheet(sheetName, shopData);
+        const ws = createWorksheetWithImages(sheetName, shopData);
         XLSX.utils.book_append_sheet(wb, ws, sheetName);
       }
 
@@ -264,11 +300,10 @@ export const ReportsPanel = () => {
       for (const category of uniqueCategories) {
         const categoryData = exportData.filter(d => d.Category === category);
         const sheetName = `Category - ${category}`.slice(0, 31);
-        const ws = createWorksheet(sheetName, categoryData);
+        const ws = createWorksheetWithImages(sheetName, categoryData);
         XLSX.utils.book_append_sheet(wb, ws, sheetName);
       }
 
-      // Generate filename and download
       const fileName = `gd_report_${format(new Date(), 'yyyyMMdd_HHmm')}.xlsx`;
       XLSX.writeFile(wb, fileName, { compression: true });
       
@@ -571,7 +606,7 @@ export const ReportsPanel = () => {
               </div>
             ) : (
               filteredEntries.map((entry) => (
-                <div key={entry.id} className="border rounded-lg p-3 sm:p-4 space-y-2 min-w-0">
+                <div key={entry.id} className="border rounded-lg p-3 sm:p-4 space-y-3 min-w-0">
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                     <div className="flex flex-wrap items-center gap-1 sm:gap-2 min-w-0">
                       <Badge variant="outline" className="text-xs">{entry.shops.name}</Badge>
@@ -592,6 +627,14 @@ export const ReportsPanel = () => {
                       {entry.notes}
                     </span>
                   </div>
+                  {entry.gd_entry_images.length > 0 && (
+                    <div className="text-sm min-w-0">
+                      <span className="font-medium">Images:</span>
+                      <div className="mt-2">
+                        <ImageDisplay images={entry.gd_entry_images} />
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))
             )}

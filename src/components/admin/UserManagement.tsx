@@ -1,252 +1,337 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Users, Edit, Trash2 } from 'lucide-react';
+import { UserPlus, Edit, Trash2 } from 'lucide-react';
 import { Database } from '@/types/database';
 
-type Shop = Database['public']['Tables']['shops']['Row'];
 type Profile = Database['public']['Tables']['profiles']['Row'];
+type Shop = Database['public']['Tables']['shops']['Row'];
 type Category = Database['public']['Tables']['categories']['Row'];
 type Size = Database['public']['Tables']['sizes']['Row'];
 
-interface UserManagementProps {
-  shops: Shop[];
-  profiles: Profile[];
-  onRefresh: () => void;
-}
-
-export const UserManagement = ({ shops, profiles, onRefresh }: UserManagementProps) => {
-  const [editingUser, setEditingUser] = useState<Profile | null>(null);
+export const UserManagement = () => {
+  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [shops, setShops] = useState<Shop[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [sizes, setSizes] = useState<Size[]>([]);
-  const [editFormData, setEditFormData] = useState({
-    role: 'user' as 'admin' | 'user',
-    shopId: '',
-    defaultCategoryId: '',
-    defaultSizeId: '',
-  });
+  const [loading, setLoading] = useState(true);
+  const [editingUser, setEditingUser] = useState<Profile | null>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
   useEffect(() => {
-    fetchCategoriesAndSizes();
+    fetchData();
   }, []);
 
-  const fetchCategoriesAndSizes = async () => {
+  const fetchData = async () => {
     try {
-      const [categoriesRes, sizesRes] = await Promise.all([
+      setLoading(true);
+
+      const { data: profilesData, error: profilesError } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('name');
+
+      if (profilesError) {
+        console.error('Error fetching profiles:', profilesError);
+        throw profilesError;
+      }
+
+      const [shopsRes, categoriesRes, sizesRes] = await Promise.all([
+        supabase.from('shops').select('*').order('name'),
         supabase.from('categories').select('*').order('name'),
         supabase.from('sizes').select('*').order('size'),
       ]);
 
-      if (categoriesRes.error) throw categoriesRes.error;
-      if (sizesRes.error) throw sizesRes.error;
+      if (shopsRes.error) {
+        console.error('Error fetching shops:', shopsRes.error);
+        throw shopsRes.error;
+      }
+      if (categoriesRes.error) {
+        console.error('Error fetching categories:', categoriesRes.error);
+        throw categoriesRes.error;
+      }
+      if (sizesRes.error) {
+        console.error('Error fetching sizes:', sizesRes.error);
+        throw sizesRes.error;
+      }
 
+      setProfiles(profilesData);
+      setShops(shopsRes.data);
       setCategories(categoriesRes.data);
       setSizes(sizesRes.data);
     } catch (error) {
-      console.error('Error fetching categories and sizes:', error);
+      console.error('Error fetching data:', error);
+      toast.error('Failed to load user management data');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleEditUser = async () => {
+  const handleDelete = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      toast.success('User deleted successfully');
+      fetchData();
+    } catch (error: any) {
+      console.error('Error deleting user:', error);
+      toast.error(error.message || 'Failed to delete user');
+    }
+  };
+
+  const handleEditUser = (user: Profile) => {
+    setEditingUser(user);
+    setIsEditDialogOpen(true);
+  };
+
+  const handleSaveUser = async (userData: Partial<Profile>) => {
     if (!editingUser) return;
 
     try {
       const { error } = await supabase
         .from('profiles')
-        .update({ 
-          role: editFormData.role,
-          shop_id: editFormData.shopId || null,
-          default_category_id: editFormData.defaultCategoryId === 'none' ? null : editFormData.defaultCategoryId,
-          default_size_id: editFormData.defaultSizeId === 'none' ? null : editFormData.defaultSizeId,
-        })
+        .update(userData)
         .eq('id', editingUser.id);
 
       if (error) throw error;
 
       toast.success('User updated successfully');
+      setIsEditDialogOpen(false);
       setEditingUser(null);
-      onRefresh();
+      fetchData();
     } catch (error: any) {
+      console.error('Error updating user:', error);
       toast.error(error.message || 'Failed to update user');
     }
   };
 
-  const handleDeleteUser = async (userId: string) => {
-    try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ deleted_at: new Date().toISOString() })
-        .eq('id', userId);
-
-      if (error) throw error;
-
-      toast.success('User deleted successfully');
-      onRefresh();
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to delete user');
-    }
+  const handleCancelEdit = () => {
+    setIsEditDialogOpen(false);
+    setEditingUser(null);
   };
 
-  const openEditDialog = (profile: Profile) => {
-    setEditingUser(profile);
-    setEditFormData({
-      role: profile.role as 'admin' | 'user',
-      shopId: profile.shop_id || '',
-      defaultCategoryId: (profile as any).default_category_id || 'none',
-      defaultSizeId: (profile as any).default_size_id || 'none',
-    });
-  };
-
-  // Filter out soft-deleted users (those with deleted_at set)
-  const activeProfiles = profiles.filter(profile => !profile.deleted_at);
+  if (loading) {
+    return <div className="flex justify-center items-center h-64">Loading user data...</div>;
+  }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Users className="h-5 w-5" />
-          User Management
-        </CardTitle>
-        <CardDescription>Manage user roles and shop assignments</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-2">
-          <h4 className="font-medium">Current Users ({activeProfiles.length})</h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-            {activeProfiles.map((profile) => (
-              <div key={profile.id} className="p-3 border rounded space-y-2">
-                <div className="font-medium">{profile.name}</div>
-                <div className="text-sm text-muted-foreground">{profile.user_id}</div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <Badge variant={profile.role === 'admin' ? 'default' : 'secondary'}>
-                    {profile.role}
-                  </Badge>
-                  {profile.shop_id && (
-                    <Badge variant="outline">
-                      {shops.find(s => s.id === profile.shop_id)?.name || 'Unknown Shop'}
-                    </Badge>
-                  )}
-                </div>
-                <div className="flex gap-1 pt-2">
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => openEditDialog(profile)}
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>Edit User</DialogTitle>
-                        <DialogDescription>Update user role and shop assignment</DialogDescription>
-                      </DialogHeader>
-                      <div className="space-y-4">
-                        <div>
-                          <label className="text-sm font-medium">User: {editingUser?.name}</label>
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium">Role</label>
-                          <Select
-                            value={editFormData.role}
-                            onValueChange={(value) => setEditFormData({ ...editFormData, role: value as 'admin' | 'user' })}
-                          >
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="user">User</SelectItem>
-                              <SelectItem value="admin">Admin</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium">Shop</label>
-                          <Select
-                            value={editFormData.shopId}
-                            onValueChange={(value) => setEditFormData({ ...editFormData, shopId: value })}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select shop" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {shops.map((shop) => (
-                                <SelectItem key={shop.id} value={shop.id}>
-                                  {shop.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium">Default Category</label>
-                          <Select
-                            value={editFormData.defaultCategoryId}
-                            onValueChange={(value) => setEditFormData({ ...editFormData, defaultCategoryId: value })}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select default category" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">No default</SelectItem>
-                              {categories.map((category) => (
-                                <SelectItem key={category.id} value={category.id}>
-                                  {category.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium">Default Size</label>
-                          <Select
-                            value={editFormData.defaultSizeId}
-                            onValueChange={(value) => setEditFormData({ ...editFormData, defaultSizeId: value })}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select default size" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">No default</SelectItem>
-                              {sizes.map((size) => (
-                                <SelectItem key={size.id} value={size.id}>
-                                  {size.size}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="flex gap-2 justify-end">
-                          <Button variant="outline" onClick={() => setEditingUser(null)}>
-                            Cancel
-                          </Button>
-                          <Button onClick={handleEditUser}>
-                            Save Changes
-                          </Button>
-                        </div>
-                      </div>
-                    </DialogContent>
-                  </Dialog>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleDeleteUser(profile.id)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <UserPlus className="h-5 w-5" />
+            User Management
+          </CardTitle>
+          <CardDescription>
+            Manage users and their roles
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4">
+            {profiles.map((user) => (
+              <div key={user.id} className="border rounded-lg p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="font-medium">{user.name}</div>
+                    <div className="text-sm text-muted-foreground">
+                      {user.email || user.user_id}
+                    </div>
+                    <div className="mt-1">
+                      <Badge variant="secondary">{user.role}</Badge>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleEditUser(user)}
+                    >
+                      <Edit className="h-4 w-4 mr-2" />
+                      Edit
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => handleDelete(user.id)}
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete
+                    </Button>
+                  </div>
                 </div>
               </div>
             ))}
           </div>
-        </div>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+
+      {/* Edit User Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit User</DialogTitle>
+            <DialogDescription>
+              Update user information and assignments
+            </DialogDescription>
+          </DialogHeader>
+          
+          {editingUser && (
+            <EditUserForm
+              user={editingUser}
+              shops={shops}
+              categories={categories}
+              sizes={sizes}
+              onSave={handleSaveUser}
+              onCancel={handleCancelEdit}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+};
+
+interface EditUserFormProps {
+  user: Profile;
+  shops: Shop[];
+  categories: Category[];
+  sizes: Size[];
+  onSave: (userData: Partial<Profile>) => void;
+  onCancel: () => void;
+}
+
+const EditUserForm = ({ user, shops, categories, sizes, onSave, onCancel }: EditUserFormProps) => {
+  const [formData, setFormData] = useState({
+    name: user.name,
+    role: user.role,
+    shop_id: user.shop_id || '',
+    default_category_id: user.default_category_id || '',
+    default_size_id: user.default_size_id || ''
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSave({
+      ...formData,
+      shop_id: formData.shop_id || null,
+      default_category_id: formData.default_category_id || null,
+      default_size_id: formData.default_size_id || null
+    });
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor="name">Name</Label>
+        <Input
+          id="name"
+          value={formData.name}
+          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+          required
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="role">Role</Label>
+        <Select
+          value={formData.role}
+          onValueChange={(value: 'admin' | 'user') => setFormData({ ...formData, role: value })}
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="user">User</SelectItem>
+            <SelectItem value="admin">Admin</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="shop">Shop</Label>
+        <Select
+          value={formData.shop_id || ''}
+          onValueChange={(value) => setFormData({ ...formData, shop_id: value })}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select a shop" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="">No Shop</SelectItem>
+            {shops.map((shop) => (
+              <SelectItem key={shop.id} value={shop.id}>
+                {shop.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="default_category">Default Category</Label>
+        <Select
+          value={formData.default_category_id || ''}
+          onValueChange={(value) => setFormData({ ...formData, default_category_id: value })}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select a category" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="">No Default Category</SelectItem>
+            {categories.map((category) => (
+              <SelectItem key={category.id} value={category.id}>
+                {category.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="default_size">Default Size</Label>
+        <Select
+          value={formData.default_size_id || ''}
+          onValueChange={(value) => setFormData({ ...formData, default_size_id: value })}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select a size" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="">No Default Size</SelectItem>
+            {sizes.map((size) => (
+              <SelectItem key={size.id} value={size.id}>
+                {size.size}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="flex gap-2 pt-4">
+        <Button type="submit" className="flex-1">
+          Save Changes
+        </Button>
+        <Button 
+          type="button" 
+          variant="outline" 
+          className="flex-1"
+          onClick={onCancel}
+        >
+          Cancel
+        </Button>
+      </div>
+    </form>
   );
 };

@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useCachedData } from '@/hooks/useCachedData';
@@ -9,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { WhatsAppImageUpload } from '@/components/WhatsAppImageUpload';
 import { toast } from 'sonner';
 
 export const DamagedGoodsForm = () => {
@@ -16,6 +16,7 @@ export const DamagedGoodsForm = () => {
   const { categories, sizes, shops, loading: dataLoading } = useCachedData();
   const [loading, setLoading] = useState(false);
   const [userShop, setUserShop] = useState<any>(null);
+  const [selectedImages, setSelectedImages] = useState<File[]>([]);
   const [formData, setFormData] = useState({
     category_id: '',
     size_id: '',
@@ -51,6 +52,44 @@ export const DamagedGoodsForm = () => {
     }
   }, [dataLoading]);
 
+  const uploadImages = async (entryId: string) => {
+    if (selectedImages.length === 0) return;
+
+    const uploadPromises = selectedImages.map(async (file, index) => {
+      const fileName = `${entryId}/${Date.now()}-${index}-${file.name}`;
+      
+      const { data, error } = await supabase.storage
+        .from('gd-entry-images')
+        .upload(fileName, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (error) throw error;
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('gd-entry-images')
+        .getPublicUrl(data.path);
+
+      // Save image record to database
+      const { error: dbError } = await supabase
+        .from('gd_entry_images')
+        .insert({
+          gd_entry_id: entryId,
+          image_url: publicUrl,
+          image_name: file.name,
+          file_size: file.size
+        });
+
+      if (dbError) throw dbError;
+
+      return publicUrl;
+    });
+
+    await Promise.all(uploadPromises);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!profile) return;
@@ -63,7 +102,8 @@ export const DamagedGoodsForm = () => {
     setLoading(true);
 
     try {
-      const { error } = await supabase
+      // Create the GD entry first
+      const { data: entryData, error: entryError } = await supabase
         .from('goods_damaged_entries')
         .insert({
           category_id: formData.category_id,
@@ -72,17 +112,28 @@ export const DamagedGoodsForm = () => {
           employee_id: profile.id,
           employee_name: profile.name,
           notes: formData.notes.trim(),
-        });
+        })
+        .select()
+        .single();
 
-      if (error) throw error;
+      if (entryError) throw entryError;
 
-      toast.success('GD entry created successfully!');
+      // Upload images if any
+      if (selectedImages.length > 0) {
+        await uploadImages(entryData.id);
+        toast.success(`GD entry created with ${selectedImages.length} image(s)!`);
+      } else {
+        toast.success('GD entry created successfully!');
+      }
+
+      // Reset form
       setFormData({
         category_id: (profile as any)?.default_category_id || '',
         size_id: (profile as any)?.default_size_id || '',
         shop_id: profile?.shop_id || '',
         notes: '',
       });
+      setSelectedImages([]);
 
       // Refocus notes input after successful submission
       setTimeout(() => {
@@ -92,6 +143,7 @@ export const DamagedGoodsForm = () => {
         }
       }, 100);
     } catch (error: any) {
+      console.error('Error creating entry:', error);
       toast.error(error.message || 'Failed to create entry');
     } finally {
       setLoading(false);
@@ -184,6 +236,17 @@ export const DamagedGoodsForm = () => {
               rows={4}
               autoFocus
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Images (Optional)</Label>
+            <WhatsAppImageUpload
+              onImagesChange={setSelectedImages}
+              maxImages={10}
+            />
+            <p className="text-sm text-muted-foreground">
+              Add photos to help document the damage. Each image will be compressed to ≤200KB automatically.
+            </p>
           </div>
 
           <Button type="submit" className="w-full" disabled={loading}>

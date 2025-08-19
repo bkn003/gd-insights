@@ -7,7 +7,7 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instanciate createClient with right options
+  // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "12.2.3 (519615d)"
@@ -38,6 +38,41 @@ export type Database = {
         }
         Relationships: []
       }
+      gd_entry_images: {
+        Row: {
+          created_at: string
+          file_size: number | null
+          gd_entry_id: string
+          id: string
+          image_name: string | null
+          image_url: string
+        }
+        Insert: {
+          created_at?: string
+          file_size?: number | null
+          gd_entry_id: string
+          id?: string
+          image_name?: string | null
+          image_url: string
+        }
+        Update: {
+          created_at?: string
+          file_size?: number | null
+          gd_entry_id?: string
+          id?: string
+          image_name?: string | null
+          image_url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gd_entry_images_gd_entry_id_fkey"
+            columns: ["gd_entry_id"]
+            isOneToOne: false
+            referencedRelation: "goods_damaged_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       goods_damaged_entries: {
         Row: {
           category_id: string
@@ -45,6 +80,7 @@ export type Database = {
           employee_id: string
           employee_name: string | null
           id: string
+          image_url: string | null
           notes: string
           shop_id: string
           size_id: string
@@ -56,6 +92,7 @@ export type Database = {
           employee_id: string
           employee_name?: string | null
           id?: string
+          image_url?: string | null
           notes: string
           shop_id: string
           size_id: string
@@ -67,6 +104,7 @@ export type Database = {
           employee_id?: string
           employee_name?: string | null
           id?: string
+          image_url?: string | null
           notes?: string
           shop_id?: string
           size_id?: string
