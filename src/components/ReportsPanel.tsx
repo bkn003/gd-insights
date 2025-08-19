@@ -11,7 +11,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ImageDisplay } from '@/components/ImageDisplay';
 import { toast } from 'sonner';
-import { Download, Filter, Calendar as CalendarIcon, FileText } from 'lucide-react';
+import { Download, Filter, Calendar as CalendarIcon, FileText, Image } from 'lucide-react';
 import { format } from 'date-fns';
 import { Database } from '@/types/database';
 import * as XLSX from 'xlsx';
@@ -371,6 +371,48 @@ export const ReportsPanel = () => {
     }
   };
 
+  const exportExcelAdvanced = async () => {
+    if (filteredEntries.length === 0) {
+      toast.error('No data to export');
+      return;
+    }
+
+    try {
+      toast.info('Generating advanced Excel export with images...');
+      
+      const { data, error } = await supabase.functions.invoke('export-excel-with-images', {
+        body: { 
+          entries: filteredEntries.map(entry => ({
+            ...entry,
+            // Include only necessary data to reduce payload size
+            gd_entry_images: entry.gd_entry_images.slice(0, 3)
+          }))
+        }
+      });
+
+      if (error) throw error;
+
+      // Create download link for the CSV file
+      const blob = new Blob([data], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `gd_report_enhanced_${format(new Date(), 'yyyy-MM-dd')}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+
+      toast.success('Advanced Excel export completed! Images are referenced by URL.');
+    } catch (error) {
+      console.error('Error with advanced export:', error);
+      toast.error('Failed to generate advanced export. Using fallback method...');
+      
+      // Fallback to existing Excel export
+      exportExcelMulti();
+    }
+  };
+
   const exportReportPDF = async () => {
     if (filteredEntries.length === 0) {
       toast.error('No data to export');
@@ -657,7 +699,11 @@ export const ReportsPanel = () => {
             </Button>
             <Button onClick={exportExcelMulti} className="flex items-center justify-center gap-2 w-full sm:w-auto">
               <Download className="h-4 w-4 flex-shrink-0" />
-              <span className="truncate">Export Excel with Image Thumbnails ({filteredEntries.length})</span>
+              <span className="truncate">Export Excel with Image Info ({filteredEntries.length})</span>
+            </Button>
+            <Button onClick={exportExcelAdvanced} variant="secondary" className="flex items-center justify-center gap-2 w-full sm:w-auto">
+              <Image className="h-4 w-4 flex-shrink-0" />
+              <span className="truncate">Enhanced Export with Image URLs ({filteredEntries.length})</span>
             </Button>
             <Button onClick={exportReportPDF} variant="outline" className="flex items-center justify-center gap-2 w-full sm:w-auto">
               <FileText className="h-4 w-4 flex-shrink-0" />
