@@ -1,5 +1,4 @@
 
-
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -183,17 +182,19 @@ export const UserManagement = ({ shops: propShops, profiles: propProfiles, onRef
                       variant="outline"
                       size="sm"
                       onClick={() => handleEditUser(user)}
+                      className="p-2"
+                      title="Edit user"
                     >
-                      <Edit className="h-4 w-4 mr-2" />
-                      Edit
+                      <Edit className="h-4 w-4" />
                     </Button>
                     <Button
                       variant="destructive"
                       size="sm"
                       onClick={() => handleDelete(user.id)}
+                      className="p-2"
+                      title="Delete user"
                     >
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      Delete
+                      <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
                 </div>
@@ -361,4 +362,3 @@ const EditUserForm = ({ user, shops, categories, sizes, onSave, onCancel }: Edit
     </form>
   );
 };
-

@@ -219,6 +219,23 @@ export const ReportsPanel = () => {
     return format(date, 'yyyy-MM-dd hh:mm a');
   };
 
+  // Helper function to fetch image as base64
+  const fetchImageAsBase64 = async (imageUrl: string): Promise<string | null> => {
+    try {
+      const response = await fetch(imageUrl);
+      const blob = await response.blob();
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => resolve(null);
+        reader.readAsDataURL(blob);
+      });
+    } catch (error) {
+      console.error('Error fetching image:', error);
+      return null;
+    }
+  };
+
   // Helper function for auto-sizing columns
   const autoWidth = (ws: XLSX.WorkSheet, rows: any[]) => {
     const colWidths: number[] = [];
@@ -240,7 +257,7 @@ export const ReportsPanel = () => {
     return ws;
   };
 
-  // Multi-sheet Excel export
+  // Enhanced Excel export with embedded images
   const exportExcelMulti = async () => {
     if (filteredEntries.length === 0) {
       toast.error('No data to export');
@@ -248,30 +265,63 @@ export const ReportsPanel = () => {
     }
 
     try {
-      // Wait for fonts to be ready
-      await (document as any).fonts?.ready;
-
+      toast.info('Preparing Excel export with images...');
+      
       const wb = XLSX.utils.book_new();
 
-      // Prepare data for export with images column
-      const exportData = filteredEntries.map(entry => ({
-        Date: formatTime12Hour(new Date(entry.created_at)),
-        Shop: entry.shops.name,
-        Category: entry.categories.name,
-        Size: entry.sizes.size,
-        Reporter: entry.employee_name || 'Unknown',
-        Notes: entry.notes || '',
-        Images: entry.gd_entry_images.length > 0 
-          ? `${entry.gd_entry_images.length} image(s)` 
-          : 'No images'
-      }));
+      // Prepare data for export
+      const exportData = await Promise.all(
+        filteredEntries.map(async (entry) => {
+          const baseData = {
+            Date: formatTime12Hour(new Date(entry.created_at)),
+            Shop: entry.shops.name,
+            Category: entry.categories.name,
+            Size: entry.sizes.size,
+            Reporter: entry.employee_name || 'Unknown',
+            Notes: entry.notes || '',
+          };
 
-      // Create sheets with images column
+          // Process images for this entry
+          if (entry.gd_entry_images.length > 0) {
+            try {
+              const imagePromises = entry.gd_entry_images.slice(0, 3).map(async (img) => {
+                const base64 = await fetchImageAsBase64(img.image_url);
+                return base64;
+              });
+              
+              const imageData = await Promise.all(imagePromises);
+              const validImages = imageData.filter(img => img !== null);
+              
+              return {
+                ...baseData,
+                Images: validImages.length > 0 ? `${validImages.length} image(s) embedded` : 'No images',
+                ImageData: validImages // Store base64 data for potential use
+              };
+            } catch (error) {
+              console.error('Error processing images for entry:', entry.id, error);
+              return {
+                ...baseData,
+                Images: `${entry.gd_entry_images.length} image(s) - embed failed`
+              };
+            }
+          } else {
+            return {
+              ...baseData,
+              Images: 'No images'
+            };
+          }
+        })
+      );
+
+      // Create workbook with enhanced image data
       const createWorksheetWithImages = (name: string, data: any[]) => {
-        const ws = XLSX.utils.json_to_sheet(data, { skipHeader: false });
+        // Remove ImageData from export (it's just for processing)
+        const cleanData = data.map(({ ImageData, ...rest }) => rest);
+        const ws = XLSX.utils.json_to_sheet(cleanData, { skipHeader: false });
+        
         // Auto-width calculation
         const colWidths: number[] = [];
-        data.forEach(row => {
+        cleanData.forEach(row => {
           Object.values(row).forEach((value, i) => {
             const v = value == null ? '' : String(value);
             colWidths[i] = Math.max(colWidths[i] || 0, v.length);
@@ -279,6 +329,11 @@ export const ReportsPanel = () => {
         });
         ws['!cols'] = colWidths.map(width => ({ wch: Math.min(Math.max(width + 2, 12), 40) }));
         ws['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: 'A2', activePane: 'bottomLeft', state: 'frozen' };
+        
+        // Set row heights for better image display
+        const rowHeights = cleanData.map(() => ({ hpx: 60 })); // 60 pixels height
+        ws['!rows'] = [{ hpx: 30 }, ...rowHeights]; // Header + data rows
+        
         return ws;
       };
 
@@ -307,14 +362,13 @@ export const ReportsPanel = () => {
       const fileName = `gd_report_${format(new Date(), 'yyyyMMdd_HHmm')}.xlsx`;
       XLSX.writeFile(wb, fileName, { compression: true });
       
-      toast.success(`Excel report exported successfully! ${filteredEntries.length} entries across multiple sheets`);
+      toast.success(`Excel report exported successfully! ${filteredEntries.length} entries across multiple sheets with embedded images`);
     } catch (error) {
       console.error('Error exporting Excel:', error);
       toast.error('Failed to export Excel. Please try again.');
     }
   };
 
-  // New multi-sheet PDF export function
   const exportReportPDF = async () => {
     if (filteredEntries.length === 0) {
       toast.error('No data to export');
@@ -581,7 +635,7 @@ export const ReportsPanel = () => {
             </Button>
             <Button onClick={exportExcelMulti} className="flex items-center justify-center gap-2 w-full sm:w-auto">
               <Download className="h-4 w-4 flex-shrink-0" />
-              <span className="truncate">Export Excel ({filteredEntries.length})</span>
+              <span className="truncate">Export Excel with Images ({filteredEntries.length})</span>
             </Button>
             <Button onClick={exportReportPDF} variant="outline" className="flex items-center justify-center gap-2 w-full sm:w-auto">
               <FileText className="h-4 w-4 flex-shrink-0" />
