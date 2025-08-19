@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -11,23 +12,33 @@ import { toast } from 'sonner';
 import { UserPlus, Edit, Trash2 } from 'lucide-react';
 import { Database } from '@/types/database';
 
-type Profile = Database['public']['Tables']['profiles']['Row'];
+type Profile = Database['public']['Tables']['profiles']['Row'] & {
+  email?: string;
+};
 type Shop = Database['public']['Tables']['shops']['Row'];
 type Category = Database['public']['Tables']['categories']['Row'];
 type Size = Database['public']['Tables']['sizes']['Row'];
 
-export const UserManagement = () => {
-  const [profiles, setProfiles] = useState<Profile[]>([]);
-  const [shops, setShops] = useState<Shop[]>([]);
+interface UserManagementProps {
+  shops?: Shop[];
+  profiles?: Profile[];
+  onRefresh?: () => void;
+}
+
+export const UserManagement = ({ shops: propShops, profiles: propProfiles, onRefresh: propOnRefresh }: UserManagementProps = {}) => {
+  const [profiles, setProfiles] = useState<Profile[]>(propProfiles || []);
+  const [shops, setShops] = useState<Shop[]>(propShops || []);
   const [categories, setCategories] = useState<Category[]>([]);
   const [sizes, setSizes] = useState<Size[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!propProfiles || !propShops);
   const [editingUser, setEditingUser] = useState<Profile | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    if (!propProfiles || !propShops) {
+      fetchData();
+    }
+  }, [propProfiles, propShops]);
 
   const fetchData = async () => {
     try {
@@ -62,7 +73,13 @@ export const UserManagement = () => {
         throw sizesRes.error;
       }
 
-      setProfiles(profilesData);
+      // Type assertion to handle the role field properly
+      const typedProfiles = profilesData.map(profile => ({
+        ...profile,
+        role: profile.role as 'admin' | 'user'
+      }));
+
+      setProfiles(typedProfiles);
       setShops(shopsRes.data);
       setCategories(categoriesRes.data);
       setSizes(sizesRes.data);
@@ -84,7 +101,11 @@ export const UserManagement = () => {
       if (error) throw error;
 
       toast.success('User deleted successfully');
-      fetchData();
+      if (propOnRefresh) {
+        propOnRefresh();
+      } else {
+        fetchData();
+      }
     } catch (error: any) {
       console.error('Error deleting user:', error);
       toast.error(error.message || 'Failed to delete user');
@@ -110,7 +131,11 @@ export const UserManagement = () => {
       toast.success('User updated successfully');
       setIsEditDialogOpen(false);
       setEditingUser(null);
-      fetchData();
+      if (propOnRefresh) {
+        propOnRefresh();
+      } else {
+        fetchData();
+      }
     } catch (error: any) {
       console.error('Error updating user:', error);
       toast.error(error.message || 'Failed to update user');
