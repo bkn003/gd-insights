@@ -1,7 +1,7 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import ExcelJS from 'https://esm.sh/exceljs@4.4.0';
+import * as ExcelJS from 'https://cdn.skypack.dev/exceljs@4.4.0';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -128,9 +128,11 @@ serve(async (req) => {
 
       // Embed images if they exist
       if (entry.gd_entry_images.length > 0) {
-        let imageCol = 0;
+        // Clear the text from images column first
+        worksheet.getCell(`G${rowIndex}`).value = '';
         
-        for (const imageData of entry.gd_entry_images.slice(0, 3)) { // Limit to 3 images per row
+        for (let i = 0; i < Math.min(entry.gd_entry_images.length, 3); i++) {
+          const imageData = entry.gd_entry_images[i];
           try {
             // Fetch image from Supabase storage
             const imageResponse = await fetch(imageData.image_url);
@@ -138,28 +140,24 @@ serve(async (req) => {
               const imageBuffer = await imageResponse.arrayBuffer();
               const uint8Array = new Uint8Array(imageBuffer);
               
+              // Detect image extension from URL or default to jpeg
+              const extension = imageData.image_url.toLowerCase().includes('.png') ? 'png' : 'jpeg';
+              
               // Add image to workbook
               const imageId = workbook.addImage({
                 buffer: uint8Array,
-                extension: 'jpeg', // Assume JPEG, adjust if needed
+                extension: extension,
               });
 
-              // Calculate image position within the cell
-              const colLetter = String.fromCharCode(71 + imageCol); // Start from column G (Images column)
-              const cellAddress = `${colLetter}${rowIndex}`;
-              
-              // Add image to worksheet
+              // Position images horizontally within the Images column
               worksheet.addImage(imageId, {
-                tl: { col: 6 + (imageCol * 0.3), row: rowIndex - 1 }, // Top-left position
-                br: { col: 6.3 + (imageCol * 0.3), row: rowIndex - 0.2 }, // Bottom-right position
+                tl: { col: 6.1 + (i * 0.6), row: rowIndex - 1.05 }, // Top-left position
+                br: { col: 6.5 + (i * 0.6), row: rowIndex - 0.05 }, // Bottom-right position
                 editAs: 'oneCell'
               });
-
-              imageCol++;
             }
           } catch (imageError) {
             console.error('Error processing image:', imageError);
-            // Continue with other images even if one fails
           }
         }
       }
