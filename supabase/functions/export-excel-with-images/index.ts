@@ -1,7 +1,6 @@
-
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import * as ExcelJS from 'https://cdn.skypack.dev/exceljs@4.4.0';
+import ExcelJS from 'https://cdn.skypack.dev/exceljs@4.4.0';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -120,53 +119,60 @@ serve(async (req) => {
         size: entry.sizes.size,
         reporter: entry.employee_name || 'Unknown',
         notes: entry.notes || '',
-        images: entry.gd_entry_images.length > 0 ? `${entry.gd_entry_images.length} image(s)` : 'No images'
+        images: '' // Keep this empty for actual image embedding
       });
 
       // Set row height to accommodate images
-      row.height = entry.gd_entry_images.length > 0 ? 80 : 20;
-
-      // Embed images if they exist
       if (entry.gd_entry_images.length > 0) {
-        // Clear the text from images column first
-        worksheet.getCell(`G${rowIndex}`).value = '';
+        row.height = 120; // Increase height for images
         
+        // Process up to 3 images per row
         for (let i = 0; i < Math.min(entry.gd_entry_images.length, 3); i++) {
           const imageData = entry.gd_entry_images[i];
           try {
+            console.log(`Fetching image: ${imageData.image_url}`);
+            
             // Fetch image from Supabase storage
             const imageResponse = await fetch(imageData.image_url);
             if (imageResponse.ok) {
               const imageBuffer = await imageResponse.arrayBuffer();
+              console.log(`Image fetched successfully, size: ${imageBuffer.byteLength} bytes`);
               
-              // Determine image type from URL or content-type
+              // Determine image extension
               let extension = 'jpeg';
-              const contentType = imageResponse.headers.get('content-type');
-              if (contentType) {
-                if (contentType.includes('png')) extension = 'png';
-                else if (contentType.includes('gif')) extension = 'gif';
-                else if (contentType.includes('jpeg') || contentType.includes('jpg')) extension = 'jpeg';
-              } else if (imageData.image_url.toLowerCase().includes('.png')) {
+              if (imageData.image_url.toLowerCase().includes('.png')) {
                 extension = 'png';
+              } else if (imageData.image_url.toLowerCase().includes('.gif')) {
+                extension = 'gif';
               }
               
               // Add image to workbook
               const imageId = workbook.addImage({
                 buffer: imageBuffer,
-                extension: extension,
+                extension: extension as 'jpeg' | 'png' | 'gif',
               });
 
-              // Position images within the Images column with proper coordinates
+              console.log(`Image added to workbook with ID: ${imageId}`);
+
+              // Calculate position for multiple images in the same row
+              const colOffset = i * 1.5; // Space images horizontally
+              
+              // Add image to worksheet with proper positioning
               worksheet.addImage(imageId, {
-                tl: { col: 6 + (i * 0.33), row: rowIndex - 1 }, // Top-left 
-                ext: { width: 100, height: 75 }, // Fixed size
-                editAs: 'absolute'
+                tl: { col: 6 + colOffset, row: rowIndex - 1 },
+                ext: { width: 120, height: 90 }
               });
+              
+              console.log(`Image positioned at col: ${6 + colOffset}, row: ${rowIndex - 1}`);
+            } else {
+              console.error(`Failed to fetch image: ${imageResponse.status} ${imageResponse.statusText}`);
             }
           } catch (imageError) {
             console.error('Error processing image:', imageError);
           }
         }
+      } else {
+        row.height = 25; // Standard row height when no images
       }
 
       rowIndex++;
@@ -186,9 +192,13 @@ serve(async (req) => {
       }
     });
 
+    console.log('Generating Excel buffer...');
+    
     // Generate Excel buffer
     const buffer = await workbook.xlsx.writeBuffer();
     const uint8Array = new Uint8Array(buffer);
+
+    console.log(`Excel file generated successfully, size: ${uint8Array.length} bytes`);
 
     // Return Excel file
     return new Response(uint8Array, {
