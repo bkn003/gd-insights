@@ -138,22 +138,29 @@ serve(async (req) => {
             const imageResponse = await fetch(imageData.image_url);
             if (imageResponse.ok) {
               const imageBuffer = await imageResponse.arrayBuffer();
-              const uint8Array = new Uint8Array(imageBuffer);
               
-              // Detect image extension from URL or default to jpeg
-              const extension = imageData.image_url.toLowerCase().includes('.png') ? 'png' : 'jpeg';
+              // Determine image type from URL or content-type
+              let extension = 'jpeg';
+              const contentType = imageResponse.headers.get('content-type');
+              if (contentType) {
+                if (contentType.includes('png')) extension = 'png';
+                else if (contentType.includes('gif')) extension = 'gif';
+                else if (contentType.includes('jpeg') || contentType.includes('jpg')) extension = 'jpeg';
+              } else if (imageData.image_url.toLowerCase().includes('.png')) {
+                extension = 'png';
+              }
               
               // Add image to workbook
               const imageId = workbook.addImage({
-                buffer: uint8Array,
+                buffer: imageBuffer,
                 extension: extension,
               });
 
-              // Position images horizontally within the Images column
+              // Position images within the Images column with proper coordinates
               worksheet.addImage(imageId, {
-                tl: { col: 6.1 + (i * 0.6), row: rowIndex - 1.05 }, // Top-left position
-                br: { col: 6.5 + (i * 0.6), row: rowIndex - 0.05 }, // Bottom-right position
-                editAs: 'oneCell'
+                tl: { col: 6 + (i * 0.33), row: rowIndex - 1 }, // Top-left 
+                ext: { width: 100, height: 75 }, // Fixed size
+                editAs: 'absolute'
               });
             }
           } catch (imageError) {
