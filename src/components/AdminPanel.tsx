@@ -27,6 +27,10 @@ export const AdminPanel = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
+      
+      // Clear cached data to ensure forms get fresh data
+      localStorage.removeItem('gd_app_data');
+      
       const [shopsRes, categoriesRes, sizesRes, profilesRes] = await Promise.all([
         supabase.from('shops').select('*').order('name'),
         supabase.from('categories').select('*').order('name'),

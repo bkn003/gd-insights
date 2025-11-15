@@ -140,6 +140,20 @@ export const useAuth = () => {
     return { error };
   };
 
+  const resetPassword = async (email: string) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/`,
+    });
+    return { error };
+  };
+
+  const refreshProfile = async () => {
+    if (!user) return;
+    // Clear cache and force refetch
+    localStorage.removeItem(PROFILE_CACHE_KEY);
+    await fetchProfile(user.id);
+  };
+
   return {
     user,
     profile,
@@ -147,6 +161,8 @@ export const useAuth = () => {
     signUp,
     signIn,
     signOut,
+    resetPassword,
+    refreshProfile,
     checkUserStatus,
     isAdmin: profile?.role === 'admin',
   };
