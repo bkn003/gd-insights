@@ -13,7 +13,7 @@ type Category = Database['public']['Tables']['categories']['Row'];
 type Size = Database['public']['Tables']['sizes']['Row'];
 
 export const UserProfile = () => {
-  const { profile } = useAuth();
+  const { profile, refreshProfile } = useAuth();
   const [loading, setLoading] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
   const [sizes, setSizes] = useState<Size[]>([]);
@@ -68,6 +68,9 @@ export const UserProfile = () => {
       if (error) throw error;
 
       toast.success('Profile settings updated successfully!');
+      
+      // Refresh the profile to reflect changes immediately
+      await refreshProfile();
     } catch (error: any) {
       toast.error(error.message || 'Failed to update profile');
     } finally {

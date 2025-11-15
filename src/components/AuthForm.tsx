@@ -16,6 +16,7 @@ type Shop = Database['public']['Tables']['shops']['Row'];
 
 export const AuthForm = () => {
   const [isSignUp, setIsSignUp] = useState(false);
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [shops, setShops] = useState<Shop[]>([]);
   const [formData, setFormData] = useState({
@@ -25,7 +26,7 @@ export const AuthForm = () => {
     shopId: 'none',
   });
 
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, resetPassword } = useAuth();
 
   useEffect(() => {
     if (isSignUp) {
@@ -53,7 +54,17 @@ export const AuthForm = () => {
     setLoading(true);
 
     try {
-      if (isSignUp) {
+      if (isForgotPassword) {
+        if (!formData.email) {
+          toast.error('Please enter your email');
+          return;
+        }
+        const { error } = await resetPassword(formData.email);
+        if (error) throw error;
+        toast.success('Password reset email sent! Please check your inbox.');
+        setIsForgotPassword(false);
+        setFormData({ ...formData, email: '' });
+      } else if (isSignUp) {
         if (formData.shopId === 'none') {
           toast.error('Please select a shop');
           return;
@@ -62,8 +73,6 @@ export const AuthForm = () => {
         const { error } = await signUp(formData.email, formData.password, formData.name);
         if (error) throw error;
         
-        // After successful signup, we need to update the user's shop_id
-        // This will be handled by a trigger or we can do it manually
         toast.success('Account created successfully! Please check your email to verify your account.');
       } else {
         const { error } = await signIn(formData.email, formData.password);
@@ -92,17 +101,19 @@ export const AuthForm = () => {
             <Package className="h-8 w-8 text-primary" />
           </div>
           <CardTitle className="text-2xl text-center">
-            {isSignUp ? 'Create Account' : 'Sign In'}
+            {isForgotPassword ? 'Reset Password' : isSignUp ? 'Create Account' : 'Sign In'}
           </CardTitle>
           <CardDescription className="text-center">
-            {isSignUp
+            {isForgotPassword
+              ? 'Enter your email to receive a password reset link'
+              : isSignUp
               ? 'Enter your information to create an account'
               : 'Enter your email and password to sign in'}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
-            {isSignUp && (
+            {isSignUp && !isForgotPassword && (
               <>
                 <div className="space-y-2">
                   <Label htmlFor="name">Full Name</Label>
@@ -150,32 +161,59 @@ export const AuthForm = () => {
                 required
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                name="password"
-                type="password"
-                placeholder="••••••••"
-                value={formData.password}
-                onChange={handleInputChange}
-                required
-              />
-            </div>
+            {!isForgotPassword && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="password">Password</Label>
+                  {!isSignUp && (
+                    <Button
+                      type="button"
+                      variant="link"
+                      onClick={() => setIsForgotPassword(true)}
+                      className="text-xs px-0 h-auto"
+                    >
+                      Forgot password?
+                    </Button>
+                  )}
+                </div>
+                <Input
+                  id="password"
+                  name="password"
+                  type="password"
+                  placeholder="••••••••"
+                  value={formData.password}
+                  onChange={handleInputChange}
+                  required
+                />
+              </div>
+            )}
             <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? 'Loading...' : isSignUp ? 'Create Account' : 'Sign In'}
+              {loading ? 'Loading...' : isForgotPassword ? 'Send Reset Link' : isSignUp ? 'Create Account' : 'Sign In'}
             </Button>
           </form>
-          <div className="mt-4 text-center">
-            <Button
-              variant="link"
-              onClick={() => setIsSignUp(!isSignUp)}
-              className="text-sm"
-            >
-              {isSignUp
-                ? 'Already have an account? Sign in'
-                : "Don't have an account? Sign up"}
-            </Button>
+          <div className="mt-4 text-center space-y-2">
+            {isForgotPassword ? (
+              <Button
+                variant="link"
+                onClick={() => {
+                  setIsForgotPassword(false);
+                  setFormData({ ...formData, email: '' });
+                }}
+                className="text-sm"
+              >
+                Back to sign in
+              </Button>
+            ) : (
+              <Button
+                variant="link"
+                onClick={() => setIsSignUp(!isSignUp)}
+                className="text-sm"
+              >
+                {isSignUp
+                  ? 'Already have an account? Sign in'
+                  : "Don't have an account? Sign up"}
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>

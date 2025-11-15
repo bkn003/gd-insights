@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -26,6 +27,7 @@ interface UserManagementProps {
 }
 
 export const UserManagement = ({ shops: propShops, profiles: propProfiles, onRefresh: propOnRefresh }: UserManagementProps = {}) => {
+  const { user, refreshProfile } = useAuth();
   const [profiles, setProfiles] = useState<Profile[]>(propProfiles || []);
   const [shops, setShops] = useState<Shop[]>(propShops || []);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -154,6 +156,12 @@ export const UserManagement = ({ shops: propShops, profiles: propProfiles, onRef
       if (error) throw error;
 
       toast.success('User updated successfully');
+      
+      // If the updated user is the current user, refresh their profile immediately
+      if (user && editingUser.id === user.id) {
+        await refreshProfile();
+      }
+      
       setIsEditDialogOpen(false);
       setEditingUser(null);
       if (propOnRefresh) {
