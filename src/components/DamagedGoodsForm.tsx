@@ -9,21 +9,39 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { WhatsAppImageUpload } from '@/components/WhatsAppImageUpload';
 import { toast } from 'sonner';
+import { Database } from '@/types/database';
+
+type CustomerType = Database['public']['Tables']['customer_types']['Row'];
 
 export const DamagedGoodsForm = () => {
   const { profile } = useAuth();
   const { categories, sizes, shops, loading: dataLoading } = useCachedData();
   const [loading, setLoading] = useState(false);
   const [userShop, setUserShop] = useState<any>(null);
+  const [customerTypes, setCustomerTypes] = useState<CustomerType[]>([]);
   const [selectedImages, setSelectedImages] = useState<File[]>([]);
   const [formData, setFormData] = useState({
     category_id: 'none',
     size_id: 'none',
     shop_id: profile?.shop_id || 'none',
+    customer_type_id: '',
     notes: '',
   });
+
+  useEffect(() => {
+    const fetchCustomerTypes = async () => {
+      const { data } = await supabase
+        .from('customer_types')
+        .select('*')
+        .is('deleted_at', null)
+        .order('name');
+      if (data) setCustomerTypes(data);
+    };
+    fetchCustomerTypes();
+  }, []);
 
   useEffect(() => {
     if (profile?.shop_id) {
@@ -95,8 +113,8 @@ export const DamagedGoodsForm = () => {
     e.preventDefault();
     if (!profile) return;
 
-    if (formData.category_id === 'none' || formData.size_id === 'none' || formData.shop_id === 'none' || !formData.notes.trim()) {
-      toast.error('Please fill in all required fields');
+    if (formData.category_id === 'none' || formData.size_id === 'none' || formData.shop_id === 'none' || !formData.customer_type_id || !formData.notes.trim()) {
+      toast.error('Please fill in all required fields including customer type');
       return;
     }
 
@@ -110,6 +128,7 @@ export const DamagedGoodsForm = () => {
           category_id: formData.category_id,
           size_id: formData.size_id,
           shop_id: formData.shop_id,
+          customer_type_id: formData.customer_type_id,
           employee_id: profile.id,
           employee_name: profile.name,
           notes: formData.notes.trim(),
@@ -127,11 +146,22 @@ export const DamagedGoodsForm = () => {
         toast.success('GD entry created successfully!');
       }
 
+      // Send notification to service worker for admin users
+      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({
+          type: 'NEW_GD_ENTRY',
+          title: 'New GD Entry',
+          body: `${profile.name} reported GD in ${userShop?.name || 'a shop'}`,
+          url: '/'
+        });
+      }
+
       // Reset form
       setFormData({
         category_id: (profile as any)?.default_category_id || 'none',
         size_id: (profile as any)?.default_size_id || 'none',
         shop_id: profile?.shop_id || 'none',
+        customer_type_id: '',
         notes: '',
       });
       setSelectedImages([]);
@@ -226,6 +256,27 @@ export const DamagedGoodsForm = () => {
             <p className="text-sm text-muted-foreground">
               Shop is automatically assigned based on your profile
             </p>
+          </div>
+
+          <div className="space-y-3">
+            <Label>Type of Customer *</Label>
+            <RadioGroup
+              value={formData.customer_type_id}
+              onValueChange={(value) => handleInputChange('customer_type_id', value)}
+              required
+            >
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {customerTypes.map((type) => (
+                  <div key={type.id} className="flex items-center space-x-2 border rounded-md p-3 hover:bg-accent cursor-pointer">
+                    <RadioGroupItem value={type.id} id={type.id} />
+                    <Label htmlFor={type.id} className="cursor-pointer flex-1">{type.name}</Label>
+                  </div>
+                ))}
+              </div>
+            </RadioGroup>
+            {customerTypes.length === 0 && (
+              <p className="text-sm text-muted-foreground">No customer types available. Please contact admin.</p>
+            )}
           </div>
 
           <div className="space-y-2">

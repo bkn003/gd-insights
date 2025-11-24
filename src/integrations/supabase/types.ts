@@ -38,6 +38,30 @@ export type Database = {
         }
         Relationships: []
       }
+      customer_types: {
+        Row: {
+          created_at: string | null
+          deleted_at: string | null
+          id: string
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          deleted_at?: string | null
+          id?: string
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          deleted_at?: string | null
+          id?: string
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       gd_entry_images: {
         Row: {
           created_at: string
@@ -77,6 +101,7 @@ export type Database = {
         Row: {
           category_id: string
           created_at: string | null
+          customer_type_id: string | null
           employee_id: string
           employee_name: string | null
           id: string
@@ -89,6 +114,7 @@ export type Database = {
         Insert: {
           category_id: string
           created_at?: string | null
+          customer_type_id?: string | null
           employee_id: string
           employee_name?: string | null
           id?: string
@@ -101,6 +127,7 @@ export type Database = {
         Update: {
           category_id?: string
           created_at?: string | null
+          customer_type_id?: string | null
           employee_id?: string
           employee_name?: string | null
           id?: string
@@ -144,6 +171,13 @@ export type Database = {
             columns: ["category_id"]
             isOneToOne: false
             referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "goods_damaged_entries_customer_type_id_fkey"
+            columns: ["customer_type_id"]
+            isOneToOne: false
+            referencedRelation: "customer_types"
             referencedColumns: ["id"]
           },
           {
