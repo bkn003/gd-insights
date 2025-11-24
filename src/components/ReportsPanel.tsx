@@ -22,6 +22,7 @@ type GoodsEntry = Database['public']['Tables']['goods_damaged_entries']['Row'] &
   categories: { name: string };
   sizes: { size: string };
   shops: { name: string };
+  customer_types?: { name: string };
   gd_entry_images: Array<{
     id: string;
     image_url: string;
@@ -32,6 +33,7 @@ type GoodsEntry = Database['public']['Tables']['goods_damaged_entries']['Row'] &
 type Shop = Database['public']['Tables']['shops']['Row'];
 type Category = Database['public']['Tables']['categories']['Row'];
 type Size = Database['public']['Tables']['sizes']['Row'];
+type CustomerType = Database['public']['Tables']['customer_types']['Row'];
 
 export const ReportsPanel = () => {
   const { isAdmin } = useAuth();
@@ -41,11 +43,13 @@ export const ReportsPanel = () => {
   const [shops, setShops] = useState<Shop[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [sizes, setSizes] = useState<Size[]>([]);
+  const [customerTypes, setCustomerTypes] = useState<CustomerType[]>([]);
   
   // Filter states - default to "today"
   const [selectedShop, setSelectedShop] = useState<string>('all');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedSize, setSelectedSize] = useState<string>('all');
+  const [selectedCustomerType, setSelectedCustomerType] = useState<string>('all');
   const [dateFilter, setDateFilter] = useState<string>('today');
   const [customDateFrom, setCustomDateFrom] = useState<Date>();
   const [customDateTo, setCustomDateTo] = useState<Date>();
@@ -56,7 +60,7 @@ export const ReportsPanel = () => {
 
   useEffect(() => {
     applyFilters();
-  }, [entries, selectedShop, selectedCategory, selectedSize, dateFilter, customDateFrom, customDateTo]);
+  }, [entries, selectedShop, selectedCategory, selectedSize, selectedCustomerType, dateFilter, customDateFrom, customDateTo]);
 
   const fetchData = async () => {
     try {
@@ -90,10 +94,11 @@ export const ReportsPanel = () => {
       console.log('Fetched images:', imagesData);
 
       // Fetch related data separately
-      const [shopsRes, categoriesRes, sizesRes] = await Promise.all([
+      const [shopsRes, categoriesRes, sizesRes, customerTypesRes] = await Promise.all([
         supabase.from('shops').select('*').order('name'),
         supabase.from('categories').select('*').order('name'),
         supabase.from('sizes').select('*').order('size'),
+        supabase.from('customer_types').select('*').is('deleted_at', null).order('name'),
       ]);
 
       if (shopsRes.error) {
@@ -108,12 +113,17 @@ export const ReportsPanel = () => {
         console.error('Error fetching sizes:', sizesRes.error);
         throw sizesRes.error;
       }
+      if (customerTypesRes.error) {
+        console.error('Error fetching customer types:', customerTypesRes.error);
+        throw customerTypesRes.error;
+      }
 
       // Manually join the data including images
       const enrichedEntries = entriesData.map(entry => {
         const shop = shopsRes.data.find(s => s.id === entry.shop_id);
         const category = categoriesRes.data.find(c => c.id === entry.category_id);
         const size = sizesRes.data.find(s => s.id === entry.size_id);
+        const customerType = customerTypesRes.data.find(ct => ct.id === entry.customer_type_id);
         const entryImages = imagesData.filter(img => img.gd_entry_id === entry.id);
 
         return {
@@ -121,6 +131,7 @@ export const ReportsPanel = () => {
           shops: { name: shop?.name || 'Unknown Shop' },
           categories: { name: category?.name || 'Unknown Category' },
           sizes: { size: size?.size || 'Unknown Size' },
+          customer_types: customerType ? { name: customerType.name } : undefined,
           gd_entry_images: entryImages
         };
       });
@@ -131,6 +142,7 @@ export const ReportsPanel = () => {
       setShops(shopsRes.data);
       setCategories(categoriesRes.data);
       setSizes(sizesRes.data);
+      setCustomerTypes(customerTypesRes.data);
     } catch (error) {
       console.error('Error fetching data:', error);
       toast.error('Failed to load reports data');
@@ -155,6 +167,11 @@ export const ReportsPanel = () => {
     // Size filter
     if (selectedSize !== 'all') {
       filtered = filtered.filter(entry => entry.size_id === selectedSize);
+    }
+
+    // Customer type filter
+    if (selectedCustomerType !== 'all') {
+      filtered = filtered.filter(entry => entry.customer_type_id === selectedCustomerType);
     }
 
     // Date filter
@@ -256,6 +273,7 @@ export const ReportsPanel = () => {
             Shop: entry.shops.name,
             Category: entry.categories.name,
             Size: entry.sizes.size,
+            'Customer Type': entry.customer_types?.name || 'Not specified',
             Reporter: entry.employee_name || 'Unknown',
             Notes: entry.notes || '',
           };
@@ -310,7 +328,7 @@ export const ReportsPanel = () => {
         // Enhanced styling for image cells
         const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
         for (let R = range.s.r + 1; R <= range.e.r; ++R) {
-          const imageCell = ws[XLSX.utils.encode_cell({ r: R, c: 5 })]; // Images column
+          const imageCell = ws[XLSX.utils.encode_cell({ r: R, c: 6 })]; // Images column (now at index 6)
           if (imageCell && imageCell.v && imageCell.v.includes('embedded')) {
             imageCell.s = {
               fill: { fgColor: { rgb: "E3F2FD" } },
@@ -326,6 +344,7 @@ export const ReportsPanel = () => {
           { wch: 15 }, // Shop
           { wch: 15 }, // Category
           { wch: 10 }, // Size
+          { wch: 15 }, // Customer Type
           { wch: 15 }, // Reporter
           { wch: 40 }, // Images (wider for thumbnail info)
           { wch: 30 }  // Notes
@@ -434,6 +453,7 @@ export const ReportsPanel = () => {
         Shop: entry.shops.name,
         Category: entry.categories.name,
         Size: entry.sizes.size,
+        'Customer Type': entry.customer_types?.name || 'Not specified',
         Reporter: entry.employee_name || 'Unknown',
         Notes: entry.notes || ''
       }));
@@ -526,12 +546,13 @@ export const ReportsPanel = () => {
             halign: 'center'
           },
           columnStyles: {
-            0: { cellWidth: 35 },
-            1: { cellWidth: 25 },
-            2: { cellWidth: 25 },
-            3: { cellWidth: 20 },
-            4: { cellWidth: 30 },
-            5: { cellWidth: 70, fontSize: 8 }
+            0: { cellWidth: 35 },  // Date
+            1: { cellWidth: 25 },  // Shop
+            2: { cellWidth: 25 },  // Category
+            3: { cellWidth: 20 },  // Size
+            4: { cellWidth: 25 },  // Customer Type
+            5: { cellWidth: 25 },  // Reporter
+            6: { cellWidth: 60, fontSize: 8 }  // Notes
           }
         });
       });
@@ -552,6 +573,7 @@ export const ReportsPanel = () => {
     setSelectedShop('all');
     setSelectedCategory('all');
     setSelectedSize('all');
+    setSelectedCustomerType('all');
     setDateFilter('today');
     setCustomDateFrom(undefined);
     setCustomDateTo(undefined);
@@ -575,7 +597,7 @@ export const ReportsPanel = () => {
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Mobile-friendly grid layout */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
             <div className="space-y-2 min-w-0">
               <Label className="text-sm font-medium">Shop</Label>
               <Select value={selectedShop} onValueChange={setSelectedShop}>
@@ -621,6 +643,23 @@ export const ReportsPanel = () => {
                   {sizes.map(size => (
                     <SelectItem key={size.id} value={size.id}>
                       {size.size}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2 min-w-0">
+              <Label className="text-sm font-medium">Customer Type</Label>
+              <Select value={selectedCustomerType} onValueChange={setSelectedCustomerType}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Types</SelectItem>
+                  {customerTypes.map(type => (
+                    <SelectItem key={type.id} value={type.id}>
+                      {type.name}
                     </SelectItem>
                   ))}
                 </SelectContent>

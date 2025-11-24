@@ -1,6 +1,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
+import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { Layout } from '@/components/Layout';
 import { Dashboard } from '@/components/Dashboard';
 import { DamagedGoodsForm } from '@/components/DamagedGoodsForm';
@@ -16,6 +17,7 @@ type ActiveTab = 'gd' | 'dashboard' | 'admin' | 'reports' | 'profile';
 
 export const MainApp = () => {
   const { isAdmin, profile, user, checkUserStatus } = useAuth();
+  const { permission } = usePushNotifications(); // Initialize push notifications
   const [activeTab, setActiveTab] = useState<ActiveTab>(isAdmin ? 'dashboard' : 'gd');
   const notesInputRef = useRef<HTMLTextAreaElement>(null);
 

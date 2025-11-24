@@ -62,6 +62,29 @@ export interface Database {
           updated_at?: string;
         };
       };
+      customer_types: {
+        Row: {
+          id: string;
+          name: string;
+          created_at: string;
+          updated_at: string;
+          deleted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          created_at?: string;
+          updated_at?: string;
+          deleted_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          created_at?: string;
+          updated_at?: string;
+          deleted_at?: string | null;
+        };
+      };
       profiles: {
         Row: {
           id: string;
@@ -108,6 +131,7 @@ export interface Database {
           employee_id: string;
           employee_name: string | null;
           shop_id: string;
+          customer_type_id: string | null;
           notes: string;
           created_at: string;
           updated_at: string;
@@ -119,6 +143,7 @@ export interface Database {
           employee_id: string;
           employee_name?: string | null;
           shop_id: string;
+          customer_type_id?: string | null;
           notes: string;
           created_at?: string;
           updated_at?: string;
@@ -130,6 +155,7 @@ export interface Database {
           employee_id?: string;
           employee_name?: string | null;
           shop_id?: string;
+          customer_type_id?: string | null;
           notes?: string;
           created_at?: string;
           updated_at?: string;
