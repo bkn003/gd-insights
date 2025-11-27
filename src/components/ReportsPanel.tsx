@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -35,7 +35,7 @@ type Category = Database['public']['Tables']['categories']['Row'];
 type Size = Database['public']['Tables']['sizes']['Row'];
 type CustomerType = Database['public']['Tables']['customer_types']['Row'];
 
-export const ReportsPanel = () => {
+export const ReportsPanel = memo(() => {
   const { isAdmin } = useAuth();
   const [loading, setLoading] = useState(true);
   const [entries, setEntries] = useState<GoodsEntry[]>([]);
@@ -804,4 +804,4 @@ export const ReportsPanel = () => {
       </Card>
     </div>
   );
-};
+});
