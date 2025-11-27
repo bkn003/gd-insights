@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, memo } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -19,7 +19,9 @@ interface ShopStats {
   name: string;
   count: number;
 }
-export const Dashboard = () => {
+const COLORS = ['hsl(var(--primary))', 'hsl(var(--accent))', 'hsl(var(--secondary))', '#FF8042', '#8884D8'];
+
+export const Dashboard = memo(() => {
   const {
     profile,
     isAdmin
@@ -103,95 +105,127 @@ export const Dashboard = () => {
       setLoading(false);
     }
   };
-  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
+
+  const memoizedCategoryChart = useMemo(() => (
+    <ResponsiveContainer width="100%" height={300}>
+      <BarChart data={categoryStats}>
+        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+        <XAxis dataKey="name" stroke="hsl(var(--foreground))" />
+        <YAxis stroke="hsl(var(--foreground))" />
+        <Tooltip 
+          contentStyle={{ 
+            backgroundColor: 'hsl(var(--card))',
+            border: '1px solid hsl(var(--border))',
+            borderRadius: '8px'
+          }}
+        />
+        <Bar dataKey="count" fill="hsl(var(--primary))" radius={[8, 8, 0, 0]} />
+      </BarChart>
+    </ResponsiveContainer>
+  ), [categoryStats]);
+
+  const memoizedPieChart = useMemo(() => (
+    <ResponsiveContainer width="100%" height={300}>
+      <PieChart>
+        <Pie 
+          data={shopStats} 
+          cx="50%" 
+          cy="50%" 
+          labelLine={false} 
+          label={({name, percent}) => `${name} ${(percent * 100).toFixed(0)}%`} 
+          outerRadius={80} 
+          fill="hsl(var(--primary))" 
+          dataKey="count"
+        >
+          {shopStats.map((entry, index) => 
+            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+          )}
+        </Pie>
+        <Tooltip 
+          contentStyle={{ 
+            backgroundColor: 'hsl(var(--card))',
+            border: '1px solid hsl(var(--border))',
+            borderRadius: '8px'
+          }}
+        />
+      </PieChart>
+    </ResponsiveContainer>
+  ), [shopStats]);
+
   if (loading) {
-    return <div className="flex justify-center items-center h-64">Loading dashboard...</div>;
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-pulse text-muted-foreground">Loading dashboard...</div>
+      </div>
+    );
   }
   return <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
+        <Card className="hover-glow border-2 border-primary/20 hover:border-primary/40 transition-all duration-300">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Entries</CardTitle>
-            <Package className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-semibold text-primary">Total Entries</CardTitle>
+            <Package className="h-5 w-5 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.totalEntries}</div>
-            <p className="text-xs text-muted-foreground">All time</p>
+            <div className="text-3xl font-bold text-gradient-primary">{stats.totalEntries}</div>
+            <p className="text-xs text-muted-foreground mt-1">All time records</p>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="hover-glow border-2 border-accent/20 hover:border-accent/40 transition-all duration-300">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">This Month</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-semibold text-accent">This Month</CardTitle>
+            <TrendingUp className="h-5 w-5 text-accent" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.entriesThisMonth}</div>
-            <p className="text-xs text-muted-foreground">New entries</p>
+            <div className="text-3xl font-bold text-gradient-accent">{stats.entriesThisMonth}</div>
+            <p className="text-xs text-muted-foreground mt-1">New entries</p>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="hover-glow border-2 border-secondary/20 hover:border-secondary/40 transition-all duration-300">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Categories</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-semibold text-secondary">Categories</CardTitle>
+            <AlertTriangle className="h-5 w-5 text-secondary" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.categoriesCount}</div>
-            <p className="text-xs text-muted-foreground">Total categories</p>
+            <div className="text-3xl font-bold text-gradient-secondary">{stats.categoriesCount}</div>
+            <p className="text-xs text-muted-foreground mt-1">Total categories</p>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="hover-glow border-2 border-primary/20 hover:border-primary/40 transition-all duration-300">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Shops</CardTitle>
-            <Building className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-semibold text-primary">Shops</CardTitle>
+            <Building className="h-5 w-5 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.shopsCount}</div>
-            <p className="text-xs text-muted-foreground">Total shops</p>
+            <div className="text-3xl font-bold text-gradient-primary">{stats.shopsCount}</div>
+            <p className="text-xs text-muted-foreground mt-1">Total locations</p>
           </CardContent>
         </Card>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
+        <Card className="hover-glow">
           <CardHeader>
-            <CardTitle>Entries by Category</CardTitle>
+            <CardTitle className="text-gradient-primary">Entries by Category</CardTitle>
             <CardDescription>Distribution of GD by category</CardDescription>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={categoryStats}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="count" fill="#8884d8" />
-              </BarChart>
-            </ResponsiveContainer>
+            {memoizedCategoryChart}
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="hover-glow">
           <CardHeader>
-            <CardTitle>Entries by Shop</CardTitle>
+            <CardTitle className="text-gradient-accent">Entries by Shop</CardTitle>
             <CardDescription>Distribution of GD by shop</CardDescription>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie data={shopStats} cx="50%" cy="50%" labelLine={false} label={({
-                name,
-                percent
-              }) => `${name} ${(percent * 100).toFixed(0)}%`} outerRadius={80} fill="#8884d8" dataKey="count">
-                  {shopStats.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
+            {memoizedPieChart}
           </CardContent>
         </Card>
       </div>
     </div>;
-};
+});

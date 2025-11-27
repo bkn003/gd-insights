@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { Plus, Trash2, RotateCcw } from 'lucide-react';
+import { Plus, Trash2, RotateCcw, Pencil, Check, X } from 'lucide-react';
 import { Database } from '@/types/database';
 
 type CustomerType = Database['public']['Tables']['customer_types']['Row'];
@@ -16,6 +16,8 @@ interface CustomerTypeManagementProps {
 
 export const CustomerTypeManagement = ({ customerTypes, onRefresh }: CustomerTypeManagementProps) => {
   const [newCustomerType, setNewCustomerType] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleAdd = async () => {
@@ -80,6 +82,42 @@ export const CustomerTypeManagement = ({ customerTypes, onRefresh }: CustomerTyp
     }
   };
 
+  const startEdit = (customerType: CustomerType) => {
+    setEditingId(customerType.id);
+    setEditingName(customerType.name);
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditingName('');
+  };
+
+  const handleEdit = async (id: string) => {
+    if (!editingName.trim()) {
+      toast.error('Please enter a customer type name');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { error } = await supabase
+        .from('customer_types')
+        .update({ name: editingName.trim() })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      toast.success('Customer type updated successfully');
+      setEditingId(null);
+      setEditingName('');
+      onRefresh();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to update customer type');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const activeCustomerTypes = customerTypes.filter(ct => !ct.deleted_at);
   const deletedCustomerTypes = customerTypes.filter(ct => ct.deleted_at);
 
@@ -108,16 +146,58 @@ export const CustomerTypeManagement = ({ customerTypes, onRefresh }: CustomerTyp
             <p className="text-sm text-muted-foreground">No customer types yet</p>
           ) : (
             activeCustomerTypes.map((customerType) => (
-              <div key={customerType.id} className="flex items-center justify-between p-2 border rounded">
-                <span>{customerType.name}</span>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => handleDelete(customerType.id)}
-                  disabled={loading}
-                >
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
+              <div key={customerType.id} className="flex items-center justify-between p-2 border rounded gap-2">
+                {editingId === customerType.id ? (
+                  <>
+                    <Input
+                      value={editingName}
+                      onChange={(e) => setEditingName(e.target.value)}
+                      onKeyPress={(e) => e.key === 'Enter' && handleEdit(customerType.id)}
+                      className="flex-1"
+                      autoFocus
+                    />
+                    <div className="flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleEdit(customerType.id)}
+                        disabled={loading}
+                      >
+                        <Check className="h-4 w-4 text-green-600" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={cancelEdit}
+                        disabled={loading}
+                      >
+                        <X className="h-4 w-4 text-muted-foreground" />
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <span className="flex-1">{customerType.name}</span>
+                    <div className="flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => startEdit(customerType)}
+                        disabled={loading}
+                      >
+                        <Pencil className="h-4 w-4 text-primary" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDelete(customerType.id)}
+                        disabled={loading}
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  </>
+                )}
               </div>
             ))
           )}

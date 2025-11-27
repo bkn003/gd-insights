@@ -24,21 +24,23 @@ export const WhatsAppImageUpload = ({ onImagesChange, maxImages = 10 }: WhatsApp
   const compressImage = async (file: File): Promise<File> => {
     try {
       const options = {
-        maxSizeMB: 0.2, // 200KB
+        maxSizeMB: 0.05, // 50KB
         maxWidthOrHeight: 1280,
         useWebWorker: true,
         fileType: 'image/jpeg',
-        quality: 0.8
+        quality: 0.85,
+        initialQuality: 0.85
       };
       
       const compressedFile = await imageCompression(file, options);
       
-      // Ensure it's under 200KB
-      if (compressedFile.size > 200 * 1024) {
+      // Ensure it's under 50KB
+      if (compressedFile.size > 50 * 1024) {
         const stricterOptions = {
           ...options,
-          quality: 0.6,
-          maxSizeMB: 0.19
+          quality: 0.75,
+          maxSizeMB: 0.048,
+          maxWidthOrHeight: 1024
         };
         return await imageCompression(file, stricterOptions);
       }
