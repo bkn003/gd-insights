@@ -11,91 +11,124 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* Vibrant gradient background */
+    --background: 240 100% 98%;
+    --foreground: 260 60% 20%;
 
+    /* Colorful cards with subtle gradient */
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 260 60% 20%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover-foreground: 260 60% 20%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    /* Vibrant purple-blue primary */
+    --primary: 262 83% 58%;
+    --primary-foreground: 0 0% 100%;
+    --primary-glow: 262 83% 68%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    /* Energetic orange secondary */
+    --secondary: 25 95% 58%;
+    --secondary-foreground: 0 0% 100%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    /* Soft pastel muted */
+    --muted: 240 20% 96%;
+    --muted-foreground: 260 20% 50%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    /* Vibrant teal accent */
+    --accent: 180 85% 55%;
+    --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    /* Bright red destructive */
+    --destructive: 0 85% 60%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    /* Subtle borders */
+    --border: 240 30% 90%;
+    --input: 240 30% 94%;
+    --ring: 262 83% 58%;
 
-    --radius: 0.5rem;
+    --radius: 0.75rem;
 
-    --sidebar-background: 0 0% 98%;
+    /* Colorful sidebar */
+    --sidebar-background: 260 100% 97%;
+    --sidebar-foreground: 260 60% 25%;
+    --sidebar-primary: 262 83% 58%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 180 85% 95%;
+    --sidebar-accent-foreground: 180 85% 30%;
+    --sidebar-border: 240 30% 88%;
+    --sidebar-ring: 262 83% 58%;
 
-    --sidebar-foreground: 240 5.3% 26.1%;
+    /* Beautiful gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(262 83% 58%), hsl(220 90% 60%));
+    --gradient-secondary: linear-gradient(135deg, hsl(25 95% 58%), hsl(340 90% 60%));
+    --gradient-accent: linear-gradient(135deg, hsl(180 85% 55%), hsl(200 90% 50%));
+    --gradient-background: linear-gradient(180deg, hsl(240 100% 98%), hsl(260 100% 96%));
 
-    --sidebar-primary: 240 5.9% 10%;
-
-    --sidebar-primary-foreground: 0 0% 98%;
-
-    --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    /* Glow effects */
+    --shadow-primary: 0 10px 40px -10px hsl(262 83% 58% / 0.5);
+    --shadow-secondary: 0 10px 40px -10px hsl(25 95% 58% / 0.5);
+    --shadow-accent: 0 10px 40px -10px hsl(180 85% 55% / 0.5);
+    --shadow-glow: 0 0 60px hsl(262 83% 68% / 0.3);
 
     --tamil-font: 'Noto Sans Tamil', 'Latha', 'Tamil Sangam MN', 'Arial Unicode MS', sans-serif;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
+    /* Dark vibrant background */
+    --background: 260 60% 8%;
+    --foreground: 240 20% 95%;
 
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
+    --card: 260 50% 12%;
+    --card-foreground: 240 20% 95%;
 
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 260 50% 12%;
+    --popover-foreground: 240 20% 95%;
 
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    /* Bright primary for dark mode */
+    --primary: 262 83% 65%;
+    --primary-foreground: 0 0% 100%;
+    --primary-glow: 262 83% 75%;
 
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
+    /* Vibrant secondary for dark */
+    --secondary: 25 95% 62%;
+    --secondary-foreground: 0 0% 100%;
 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --muted: 260 40% 18%;
+    --muted-foreground: 240 20% 70%;
 
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+    /* Bright accent for dark */
+    --accent: 180 85% 60%;
+    --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 85% 65%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
+    --border: 260 40% 20%;
+    --input: 260 40% 18%;
+    --ring: 262 83% 65%;
+
+    --sidebar-background: 260 50% 10%;
+    --sidebar-foreground: 240 20% 90%;
+    --sidebar-primary: 262 83% 65%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-accent: 260 40% 18%;
+    --sidebar-accent-foreground: 240 20% 90%;
+    --sidebar-border: 260 40% 18%;
+    --sidebar-ring: 262 83% 65%;
+
+    /* Dark mode gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(262 83% 65%), hsl(220 90% 65%));
+    --gradient-secondary: linear-gradient(135deg, hsl(25 95% 62%), hsl(340 90% 65%));
+    --gradient-accent: linear-gradient(135deg, hsl(180 85% 60%), hsl(200 90% 55%));
+    --gradient-background: linear-gradient(180deg, hsl(260 60% 8%), hsl(260 50% 12%));
+
+    /* Enhanced glow for dark mode */
+    --shadow-primary: 0 10px 50px -10px hsl(262 83% 65% / 0.6);
+    --shadow-secondary: 0 10px 50px -10px hsl(25 95% 62% / 0.6);
+    --shadow-accent: 0 10px 50px -10px hsl(180 85% 60% / 0.6);
+    --shadow-glow: 0 0 80px hsl(262 83% 75% / 0.4);
   }
 }
 
@@ -110,6 +143,7 @@ All colors MUST be HSL.
 
   body {
     @apply bg-background text-foreground;
+    background: var(--gradient-background);
     unicode-bidi: embed;
     direction: ltr;
   }
@@ -123,6 +157,39 @@ All colors MUST be HSL.
   -webkit-font-feature-settings: "liga" 1;
   unicode-bidi: embed;
   direction: ltr;
+}
+
+/* Utility classes for colorful effects */
+@layer utilities {
+  .text-gradient-primary {
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .text-gradient-secondary {
+    background: var(--gradient-secondary);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .text-gradient-accent {
+    background: var(--gradient-accent);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .hover-glow {
+    transition: all 0.3s ease;
+  }
+
+  .hover-glow:hover {
+    box-shadow: var(--shadow-glow);
+    transform: translateY(-2px);
+  }
 }
 
 /* Print styles for PDF export */
