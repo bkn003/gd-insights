@@ -242,43 +242,13 @@ export const DamagedGoodsForm = () => {
             {customerTypes.length === 0 && <p className="text-sm text-muted-foreground">No customer types available. Please contact admin.</p>}
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="reporter">Reporter Name</Label>
-            <div className="flex gap-2">
-              <Input
-                id="reporter"
-                placeholder="Your name"
-                value={reporterName}
-                onChange={(e) => setReporterName(e.target.value)}
-              />
-              <VoiceMicButton
-                language="en-IN"
-                mode="replace"
-                value={reporterName}
-                onChange={setReporterName}
-              />
-            </div>
-          </div>
+          
 
           <div className="space-y-2">
             <Label htmlFor="notes">Notes *</Label>
             <div className="flex gap-2 items-start">
-              <Textarea 
-                id="notes" 
-                placeholder="Describe additional details" 
-                value={formData.notes} 
-                onChange={e => handleInputChange('notes', e.target.value)} 
-                required 
-                rows={4} 
-                autoFocus 
-                className="flex-1"
-              />
-              <VoiceMicButton
-                language="ta-IN"
-                mode="append"
-                value={formData.notes}
-                onChange={(newValue) => handleInputChange('notes', newValue)}
-              />
+              <Textarea id="notes" placeholder="Describe additional details" value={formData.notes} onChange={e => handleInputChange('notes', e.target.value)} required rows={4} autoFocus className="flex-1" />
+              <VoiceMicButton language="ta-IN" mode="append" value={formData.notes} onChange={newValue => handleInputChange('notes', newValue)} />
             </div>
             <p className="text-sm text-muted-foreground">Use mic for Tamil voice input</p>
           </div>
