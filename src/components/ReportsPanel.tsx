@@ -9,9 +9,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { ImageDisplay } from '@/components/ImageDisplay';
 import { toast } from 'sonner';
-import { Download, Filter, Calendar as CalendarIcon, FileText, Image } from 'lucide-react';
+import { Download, Filter, Calendar as CalendarIcon, FileText, Image, BarChart3 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Database } from '@/types/database';
 import * as XLSX from 'xlsx';
@@ -231,6 +232,60 @@ export const ReportsPanel = memo(() => {
 
     setFilteredEntries(filtered);
   };
+
+  // Compute summary statistics
+  const summary = useMemo(() => {
+    if (!filteredEntries || filteredEntries.length === 0) {
+      return null;
+    }
+
+    const byShop: Record<string, number> = {};
+    const byCategory: Record<string, number> = {};
+    const bySize: Record<string, number> = {};
+    const byCustomerType: Record<string, number> = {};
+    let firstDate = filteredEntries[0].created_at;
+    let lastDate = filteredEntries[0].created_at;
+
+    filteredEntries.forEach((report) => {
+      // Count by shop
+      const shopName = report.shops?.name || 'Unknown';
+      byShop[shopName] = (byShop[shopName] || 0) + 1;
+
+      // Count by category
+      const categoryName = report.categories?.name || 'Unknown';
+      byCategory[categoryName] = (byCategory[categoryName] || 0) + 1;
+
+      // Count by size
+      const sizeName = report.sizes?.size || 'Unknown';
+      bySize[sizeName] = (bySize[sizeName] || 0) + 1;
+
+      // Count by customer type
+      const customerType = report.customer_types?.name || 'Unknown';
+      byCustomerType[customerType] = (byCustomerType[customerType] || 0) + 1;
+
+      // Track date range
+      if (report.created_at < firstDate) firstDate = report.created_at;
+      if (report.created_at > lastDate) lastDate = report.created_at;
+    });
+
+    return {
+      totalEntries: filteredEntries.length,
+      byShop,
+      byCategory,
+      bySize,
+      byCustomerType,
+      firstDate: new Date(firstDate).toLocaleDateString('en-IN', { 
+        year: 'numeric', 
+        month: 'short', 
+        day: 'numeric' 
+      }),
+      lastDate: new Date(lastDate).toLocaleDateString('en-IN', { 
+        year: 'numeric', 
+        month: 'short', 
+        day: 'numeric' 
+      })
+    };
+  }, [filteredEntries]);
 
   const formatTime12Hour = (date: Date) => {
     return format(date, 'yyyy-MM-dd hh:mm a');
@@ -754,10 +809,100 @@ export const ReportsPanel = memo(() => {
 
       <Card className="w-full">
         <CardHeader>
-          <CardTitle className="text-lg sm:text-xl">GD Reports</CardTitle>
-          <CardDescription className="text-sm">
-            Showing {filteredEntries.length} of {entries.length} entries
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-lg sm:text-xl">GD Reports</CardTitle>
+              <CardDescription className="text-sm">
+                Showing {filteredEntries.length} of {entries.length} entries
+              </CardDescription>
+            </div>
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-2">
+                  <BarChart3 className="h-4 w-4" />
+                  Summary
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle className="text-gradient-primary">GD Summary</DialogTitle>
+                </DialogHeader>
+                {summary ? (
+                  <div className="space-y-4">
+                    <div className="text-center p-4 bg-gradient-to-r from-primary/10 to-secondary/10 rounded-lg">
+                      <div className="text-3xl font-bold text-gradient-primary">{summary.totalEntries}</div>
+                      <div className="text-sm text-muted-foreground">Total Entries</div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div>
+                        <h4 className="font-semibold text-sm mb-2 text-gradient-secondary">By Shop</h4>
+                        <div className="space-y-1">
+                          {Object.entries(summary.byShop).map(([shop, count]) => (
+                            <div key={shop} className="flex justify-between text-sm p-2 bg-muted/50 rounded">
+                              <span>{shop}</span>
+                              <span className="font-medium">{count}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <h4 className="font-semibold text-sm mb-2 text-gradient-secondary">By Category</h4>
+                        <div className="space-y-1">
+                          {Object.entries(summary.byCategory).map(([category, count]) => (
+                            <div key={category} className="flex justify-between text-sm p-2 bg-muted/50 rounded">
+                              <span>{category}</span>
+                              <span className="font-medium">{count}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <h4 className="font-semibold text-sm mb-2 text-gradient-secondary">By Size</h4>
+                        <div className="space-y-1">
+                          {Object.entries(summary.bySize).map(([size, count]) => (
+                            <div key={size} className="flex justify-between text-sm p-2 bg-muted/50 rounded">
+                              <span>{size}</span>
+                              <span className="font-medium">{count}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <h4 className="font-semibold text-sm mb-2 text-gradient-secondary">By Customer Type</h4>
+                        <div className="space-y-1">
+                          {Object.entries(summary.byCustomerType).map(([type, count]) => (
+                            <div key={type} className="flex justify-between text-sm p-2 bg-muted/50 rounded">
+                              <span>{type}</span>
+                              <span className="font-medium">{count}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="pt-4 border-t space-y-1 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">From:</span>
+                        <span className="font-medium">{summary.firstDate}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">To:</span>
+                        <span className="font-medium">{summary.lastDate}</span>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    No GD entries found.
+                  </div>
+                )}
+              </DialogContent>
+            </Dialog>
+          </div>
         </CardHeader>
         <CardContent className="min-w-0">
           <div className="space-y-4">

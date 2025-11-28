@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { WhatsAppImageUpload } from '@/components/WhatsAppImageUpload';
+import { VoiceMicButton } from '@/components/VoiceMicButton';
 import { toast } from 'sonner';
 import { Database } from '@/types/database';
 type CustomerType = Database['public']['Tables']['customer_types']['Row'];
@@ -27,6 +28,7 @@ export const DamagedGoodsForm = () => {
   const [userShop, setUserShop] = useState<any>(null);
   const [customerTypes, setCustomerTypes] = useState<CustomerType[]>([]);
   const [selectedImages, setSelectedImages] = useState<File[]>([]);
+  const [reporterName, setReporterName] = useState('');
   const [formData, setFormData] = useState({
     category_id: 'none',
     size_id: 'none',
@@ -241,8 +243,44 @@ export const DamagedGoodsForm = () => {
           </div>
 
           <div className="space-y-2">
+            <Label htmlFor="reporter">Reporter Name</Label>
+            <div className="flex gap-2">
+              <Input
+                id="reporter"
+                placeholder="Your name"
+                value={reporterName}
+                onChange={(e) => setReporterName(e.target.value)}
+              />
+              <VoiceMicButton
+                language="en-IN"
+                mode="replace"
+                value={reporterName}
+                onChange={setReporterName}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
             <Label htmlFor="notes">Notes *</Label>
-            <Textarea id="notes" placeholder="Describe additional details" value={formData.notes} onChange={e => handleInputChange('notes', e.target.value)} required rows={4} autoFocus />
+            <div className="flex gap-2 items-start">
+              <Textarea 
+                id="notes" 
+                placeholder="Describe additional details" 
+                value={formData.notes} 
+                onChange={e => handleInputChange('notes', e.target.value)} 
+                required 
+                rows={4} 
+                autoFocus 
+                className="flex-1"
+              />
+              <VoiceMicButton
+                language="ta-IN"
+                mode="append"
+                value={formData.notes}
+                onChange={(newValue) => handleInputChange('notes', newValue)}
+              />
+            </div>
+            <p className="text-sm text-muted-foreground">Use mic for Tamil voice input</p>
           </div>
 
           <div className="space-y-2">
