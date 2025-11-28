@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useCachedData } from '@/hooks/useCachedData';
+import { useOfflineSync } from '@/hooks/useOfflineSync';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -24,11 +25,11 @@ export const DamagedGoodsForm = () => {
     shops,
     loading: dataLoading
   } = useCachedData();
+  const { isOnline, pendingCount, saveOfflineEntry } = useOfflineSync();
   const [loading, setLoading] = useState(false);
   const [userShop, setUserShop] = useState<any>(null);
   const [customerTypes, setCustomerTypes] = useState<CustomerType[]>([]);
   const [selectedImages, setSelectedImages] = useState<File[]>([]);
-  const [reporterName, setReporterName] = useState('');
   const [formData, setFormData] = useState({
     category_id: 'none',
     size_id: 'none',
@@ -113,25 +114,53 @@ export const DamagedGoodsForm = () => {
       return;
     }
     setLoading(true);
+
+    const entryData = {
+      category_id: formData.category_id,
+      size_id: formData.size_id,
+      shop_id: formData.shop_id,
+      customer_type_id: formData.customer_type_id,
+      employee_id: profile.id,
+      employee_name: profile.name,
+      notes: formData.notes.trim()
+    };
+
     try {
-      // Create the GD entry first
-      const {
-        data: entryData,
-        error: entryError
-      } = await supabase.from('goods_damaged_entries').insert({
-        category_id: formData.category_id,
-        size_id: formData.size_id,
-        shop_id: formData.shop_id,
-        customer_type_id: formData.customer_type_id,
-        employee_id: profile.id,
-        employee_name: profile.name,
-        notes: formData.notes.trim()
-      }).select().single();
+      // If offline, save to IndexedDB
+      if (!isOnline) {
+        const saved = await saveOfflineEntry(entryData, selectedImages);
+        if (saved) {
+          // Reset form
+          setFormData({
+            category_id: (profile as any)?.default_category_id || 'none',
+            size_id: (profile as any)?.default_size_id || 'none',
+            shop_id: profile?.shop_id || 'none',
+            customer_type_id: '',
+            notes: ''
+          });
+          setSelectedImages([]);
+
+          // Refocus notes input
+          setTimeout(() => {
+            const notesInput = document.querySelector('textarea#notes') as HTMLTextAreaElement;
+            if (notesInput) notesInput.focus();
+          }, 100);
+        }
+        return;
+      }
+
+      // Online: Save directly to Supabase
+      const { data: createdEntry, error: entryError } = await supabase
+        .from('goods_damaged_entries')
+        .insert(entryData)
+        .select()
+        .single();
+
       if (entryError) throw entryError;
 
       // Upload images if any
       if (selectedImages.length > 0) {
-        await uploadImages(entryData.id);
+        await uploadImages(createdEntry.id);
         toast.success(`GD entry created with ${selectedImages.length} image(s)!`);
       } else {
         toast.success('GD entry created successfully!');
@@ -182,7 +211,22 @@ export const DamagedGoodsForm = () => {
   }
   return <Card className="w-full max-w-2xl mx-auto">
       <CardHeader>
-        <CardTitle>Report GD</CardTitle>
+        <CardTitle className="flex items-center justify-between">
+          <span>Report GD</span>
+          <div className="flex items-center gap-2 text-sm font-normal">
+            {!isOnline && (
+              <span className="text-orange-500 flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse"></span>
+                Offline Mode
+              </span>
+            )}
+            {pendingCount > 0 && (
+              <span className="text-blue-500">
+                {pendingCount} pending
+              </span>
+            )}
+          </div>
+        </CardTitle>
         <CardDescription>
           Fill out this form to report GD in your store
         </CardDescription>
@@ -240,24 +284,6 @@ export const DamagedGoodsForm = () => {
               </div>
             </RadioGroup>
             {customerTypes.length === 0 && <p className="text-sm text-muted-foreground">No customer types available. Please contact admin.</p>}
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="reporter">Reporter Name</Label>
-            <div className="flex gap-2">
-              <Input
-                id="reporter"
-                placeholder="Your name"
-                value={reporterName}
-                onChange={(e) => setReporterName(e.target.value)}
-              />
-              <VoiceMicButton
-                language="en-IN"
-                mode="replace"
-                value={reporterName}
-                onChange={setReporterName}
-              />
-            </div>
           </div>
 
           <div className="space-y-2">

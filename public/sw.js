@@ -1,25 +1,100 @@
-const CACHE_NAME = 'dgi-v1';
+const CACHE_NAME = 'dgi-v2';
+const STATIC_CACHE = 'static-v2';
+const DATA_CACHE = 'data-v2';
+
 const urlsToCache = [
   '/',
   '/src/main.tsx',
   '/src/index.css'
 ];
 
+// Install service worker and cache static assets
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME)
+    caches.open(STATIC_CACHE)
       .then((cache) => cache.addAll(urlsToCache))
+      .then(() => self.skipWaiting())
   );
 });
 
+// Activate service worker and clean old caches
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches.keys().then((cacheNames) => {
+      return Promise.all(
+        cacheNames.map((cacheName) => {
+          if (cacheName !== STATIC_CACHE && cacheName !== DATA_CACHE) {
+            return caches.delete(cacheName);
+          }
+        })
+      );
+    }).then(() => self.clients.claim())
+  );
+});
+
+// Fetch with network-first strategy for API calls, cache-first for static assets
 self.addEventListener('fetch', (event) => {
+  const { request } = event;
+  const url = new URL(request.url);
+
+  // Skip chrome-extension and non-http(s) requests
+  if (!url.protocol.startsWith('http')) {
+    return;
+  }
+
+  // Network-first for API calls (Supabase)
+  if (url.hostname.includes('supabase.co')) {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          // Cache successful GET requests
+          if (request.method === 'GET' && response.ok) {
+            const responseClone = response.clone();
+            caches.open(DATA_CACHE).then((cache) => {
+              cache.put(request, responseClone);
+            });
+          }
+          return response;
+        })
+        .catch(() => {
+          // Return cached data if offline
+          return caches.match(request).then((response) => {
+            return response || new Response(JSON.stringify({ 
+              error: 'Offline', 
+              message: 'You are offline. Data saved locally.' 
+            }), {
+              status: 503,
+              headers: { 'Content-Type': 'application/json' }
+            });
+          });
+        })
+    );
+    return;
+  }
+
+  // Cache-first for static assets
   event.respondWith(
-    caches.match(event.request)
+    caches.match(request)
       .then((response) => {
         if (response) {
           return response;
         }
-        return fetch(event.request);
+        return fetch(request).then((response) => {
+          // Cache successful responses
+          if (response.ok) {
+            const responseClone = response.clone();
+            caches.open(STATIC_CACHE).then((cache) => {
+              cache.put(request, responseClone);
+            });
+          }
+          return response;
+        });
+      })
+      .catch(() => {
+        // Return offline page for navigation requests
+        if (request.mode === 'navigate') {
+          return caches.match('/');
+        }
       })
   );
 });
