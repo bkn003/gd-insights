@@ -96,18 +96,19 @@ export const SizeManagement = ({ sizes, onRefresh }: SizeManagementProps) => {
           {sizes.map((size) => (
             <div key={size.id} className="flex items-center justify-between p-2 border rounded">
               <span className="text-sm">{size.size}</span>
-              <div className="flex gap-1">
+              <div className="flex gap-2">
                 <Dialog>
                   <DialogTrigger asChild>
                     <Button
-                      variant="outline"
-                      size="sm"
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9 rounded-lg border-2 border-primary/20 hover:border-primary hover:bg-primary/10"
                       onClick={() => {
                         setEditingSize(size);
                         setEditName(size.size);
                       }}
                     >
-                      <Edit className="h-4 w-4" />
+                      <Edit className="h-4 w-4 text-primary" />
                     </Button>
                   </DialogTrigger>
                   <DialogContent>
@@ -133,11 +134,12 @@ export const SizeManagement = ({ sizes, onRefresh }: SizeManagementProps) => {
                   </DialogContent>
                 </Dialog>
                 <Button
-                  variant="outline"
-                  size="sm"
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-9 rounded-lg border-2 border-destructive/20 hover:border-destructive hover:bg-destructive/10"
                   onClick={() => handleDeleteSize(size.id)}
                 >
-                  <Trash2 className="h-4 w-4" />
+                  <Trash2 className="h-4 w-4 text-destructive" />
                 </Button>
               </div>
             </div>

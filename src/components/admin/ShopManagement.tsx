@@ -99,18 +99,19 @@ export const ShopManagement = ({ shops, onRefresh }: ShopManagementProps) => {
           {shops.map((shop) => (
             <div key={shop.id} className="flex items-center justify-between p-2 border rounded">
               <span className="text-sm">{shop.name}</span>
-              <div className="flex gap-1">
+              <div className="flex gap-2">
                 <Dialog>
                   <DialogTrigger asChild>
                     <Button
-                      variant="outline"
-                      size="sm"
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9 rounded-lg border-2 border-primary/20 hover:border-primary hover:bg-primary/10"
                       onClick={() => {
                         setEditingShop(shop);
                         setEditName(shop.name);
                       }}
                     >
-                      <Edit className="h-4 w-4" />
+                      <Edit className="h-4 w-4 text-primary" />
                     </Button>
                   </DialogTrigger>
                   <DialogContent>
@@ -136,11 +137,12 @@ export const ShopManagement = ({ shops, onRefresh }: ShopManagementProps) => {
                   </DialogContent>
                 </Dialog>
                 <Button
-                  variant="outline"
-                  size="sm"
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-9 rounded-lg border-2 border-destructive/20 hover:border-destructive hover:bg-destructive/10"
                   onClick={() => handleDeleteShop(shop.id)}
                 >
-                  <Trash2 className="h-4 w-4" />
+                  <Trash2 className="h-4 w-4 text-destructive" />
                 </Button>
               </div>
             </div>
