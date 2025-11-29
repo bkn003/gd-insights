@@ -243,6 +243,7 @@ export const ReportsPanel = memo(() => {
     const byCategory: Record<string, number> = {};
     const bySize: Record<string, number> = {};
     const byCustomerType: Record<string, number> = {};
+    const byNotes: Record<string, number> = {};
     let firstDate = filteredEntries[0].created_at;
     let lastDate = filteredEntries[0].created_at;
 
@@ -263,6 +264,10 @@ export const ReportsPanel = memo(() => {
       const customerType = report.customer_types?.name || 'Unknown';
       byCustomerType[customerType] = (byCustomerType[customerType] || 0) + 1;
 
+      // Count by notes (first 50 characters as grouping key)
+      const noteKey = report.notes ? report.notes.substring(0, 50).trim() : 'No notes';
+      byNotes[noteKey] = (byNotes[noteKey] || 0) + 1;
+
       // Track date range
       if (report.created_at < firstDate) firstDate = report.created_at;
       if (report.created_at > lastDate) lastDate = report.created_at;
@@ -274,6 +279,7 @@ export const ReportsPanel = memo(() => {
       byCategory,
       bySize,
       byCustomerType,
+      byNotes,
       firstDate: new Date(firstDate).toLocaleDateString('en-IN', { 
         year: 'numeric', 
         month: 'short', 
@@ -880,6 +886,20 @@ export const ReportsPanel = memo(() => {
                               <span className="font-medium">{count}</span>
                             </div>
                           ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <h4 className="font-semibold text-sm mb-2 text-gradient-secondary">By Notes</h4>
+                        <div className="space-y-1 max-h-48 overflow-y-auto">
+                          {Object.entries(summary.byNotes)
+                            .sort(([, a], [, b]) => b - a)
+                            .map(([note, count]) => (
+                              <div key={note} className="flex justify-between text-sm p-2 bg-muted/50 rounded gap-2">
+                                <span className="flex-1 truncate" title={note}>{note}</span>
+                                <span className="font-medium flex-shrink-0">{count}</span>
+                              </div>
+                            ))}
                         </div>
                       </div>
                     </div>
