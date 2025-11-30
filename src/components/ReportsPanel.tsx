@@ -764,7 +764,9 @@ export const ReportsPanel = memo(() => {
                       mode="single"
                       selected={customDateFrom}
                       onSelect={setCustomDateFrom}
+                      disabled={(date) => date > new Date()}
                       initialFocus
+                      className="pointer-events-auto"
                     />
                   </PopoverContent>
                 </Popover>
@@ -785,7 +787,17 @@ export const ReportsPanel = memo(() => {
                       mode="single"
                       selected={customDateTo}
                       onSelect={setCustomDateTo}
+                      disabled={(date) => {
+                        const today = new Date();
+                        today.setHours(23, 59, 59, 999);
+                        if (date > today) return true;
+                        if (customDateFrom) {
+                          return date < customDateFrom;
+                        }
+                        return false;
+                      }}
                       initialFocus
+                      className="pointer-events-auto"
                     />
                   </PopoverContent>
                 </Popover>
