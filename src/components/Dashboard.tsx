@@ -264,32 +264,32 @@ export const Dashboard = () => {
       ) : (
         <>
           {/* Header with Filters */}
-          <div className="flex items-center justify-between gap-3 mb-2">
-            <div className="flex items-center gap-3">
-              <BarChart3 className="h-6 w-6 text-primary" />
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-2">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <BarChart3 className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
+              <h1 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
                 Dashboard Overview
               </h1>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setShowComparison(!showComparison)}
-                className="gap-2"
+                className="gap-1 sm:gap-2 text-xs sm:text-sm"
               >
-                <ArrowUpDown className="h-4 w-4" />
-                {showComparison ? 'Hide' : 'Show'} Comparison
+                <ArrowUpDown className="h-3 w-3 sm:h-4 sm:w-4" />
+                <span className="hidden xs:inline">{showComparison ? 'Hide' : 'Show'}</span> Comparison
               </Button>
               <Button
                 variant={hasActiveFilters ? "default" : "outline"}
                 size="sm"
                 onClick={() => setShowFilters(!showFilters)}
-                className="gap-2"
+                className="gap-1 sm:gap-2 text-xs sm:text-sm"
               >
-                <Filter className="h-4 w-4" />
+                <Filter className="h-3 w-3 sm:h-4 sm:w-4" />
                 Filters
-                {hasActiveFilters && <span className="ml-1 bg-background/80 text-foreground rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold">!</span>}
+                {hasActiveFilters && <span className="ml-1 bg-background/80 text-foreground rounded-full w-4 h-4 sm:w-5 sm:h-5 flex items-center justify-center text-xs font-bold">!</span>}
               </Button>
             </div>
           </div>
@@ -323,7 +323,7 @@ export const Dashboard = () => {
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                   <div className="space-y-2">
                     <Label>Shop</Label>
                     <Select value={selectedShop} onValueChange={setSelectedShop}>
@@ -370,7 +370,7 @@ export const Dashboard = () => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                   <div className="space-y-2">
                     <Label>From Date</Label>
                     <Popover>
@@ -445,17 +445,17 @@ export const Dashboard = () => {
               </CardContent>
             </Card>
 
-            <Card className="group hover:shadow-xl border-2 border-secondary/20 hover:border-secondary/40 transition-all duration-300 cursor-pointer overflow-hidden relative">
-              <div className="absolute inset-0 bg-gradient-to-br from-secondary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+            <Card className="group hover:shadow-xl border-2 border-primary/20 hover:border-primary/40 transition-all duration-300 cursor-pointer overflow-hidden relative bg-gradient-to-br from-card to-card/80">
+              <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-semibold text-secondary-foreground">This Week</CardTitle>
-                <CalendarDays className="h-5 w-5 text-secondary-foreground" />
+                <CardTitle className="text-sm font-semibold text-foreground">This Week</CardTitle>
+                <CalendarDays className="h-5 w-5 text-primary" />
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold text-secondary-foreground">{summary?.thisWeek || 0}</div>
+                <div className="text-3xl font-bold text-foreground">{summary?.thisWeek || 0}</div>
                 <p className="text-xs text-muted-foreground mt-1">Last 7 days</p>
                 {showComparison && summary && summary.prevWeek !== undefined && (
-                  <p className="text-xs mt-1 flex items-center gap-1">
+                  <p className="text-xs mt-1 flex items-center gap-1 text-muted-foreground">
                     <TrendingUp className="h-3 w-3" />
                     {calculateChange(summary.thisWeek, summary.prevWeek)}% vs last week
                   </p>
@@ -463,17 +463,17 @@ export const Dashboard = () => {
               </CardContent>
             </Card>
 
-            <Card className="group hover:shadow-xl border-2 border-accent/20 hover:border-accent/40 transition-all duration-300 cursor-pointer overflow-hidden relative">
-              <div className="absolute inset-0 bg-gradient-to-br from-accent/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+            <Card className="group hover:shadow-xl border-2 border-primary/20 hover:border-primary/40 transition-all duration-300 cursor-pointer overflow-hidden relative bg-gradient-to-br from-card to-card/80">
+              <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-semibold text-accent-foreground">This Month</CardTitle>
-                <Package className="h-5 w-5 text-accent-foreground" />
+                <CardTitle className="text-sm font-semibold text-foreground">This Month</CardTitle>
+                <Package className="h-5 w-5 text-primary" />
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold text-accent-foreground">{summary?.thisMonth || 0}</div>
+                <div className="text-3xl font-bold text-foreground">{summary?.thisMonth || 0}</div>
                 <p className="text-xs text-muted-foreground mt-1">Current month</p>
                 {showComparison && summary && summary.prevMonth !== undefined && (
-                  <p className="text-xs mt-1 flex items-center gap-1">
+                  <p className="text-xs mt-1 flex items-center gap-1 text-muted-foreground">
                     <TrendingUp className="h-3 w-3" />
                     {calculateChange(summary.thisMonth, summary.prevMonth)}% vs last month
                   </p>
