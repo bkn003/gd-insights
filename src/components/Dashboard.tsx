@@ -154,16 +154,18 @@ export const Dashboard = () => {
       return d >= prevMonthStart && d < monthStart;
     }).length;
 
-    // Calculate breakdowns - ONLY FOR TODAY
+    // Calculate breakdowns
     const byShop: Record<string, number> = {};
     const byCategory: Record<string, number> = {};
     const bySize: Record<string, number> = {};
     const byCustomerType: Record<string, number> = {};
 
-    // Filter for today only for breakdowns
-    const todayEntries = filtered.filter(e => new Date(e.created_at) >= todayStart);
+    // Use filtered entries if date filters are applied, otherwise default to today
+    const breakdownEntries = (customDateFrom || customDateTo) 
+      ? filtered 
+      : filtered.filter(e => new Date(e.created_at) >= todayStart);
 
-    todayEntries.forEach(entry => {
+    breakdownEntries.forEach(entry => {
       const shop = entry.shops?.name || 'Unknown';
       const category = entry.categories?.name || 'Unknown';
       const size = entry.sizes?.size || 'Unknown';
@@ -235,25 +237,40 @@ export const Dashboard = () => {
   const getModalEntries = useMemo(() => {
     if (!allEntries || !modalFilter.value) return [];
 
-    // Always filter for today's entries
-    const now = new Date();
-    const todayStart = new Date(now.setHours(0, 0, 0, 0));
-    const todayEntries = allEntries.filter(e => new Date(e.created_at) >= todayStart);
+    // Use date filters if applied, otherwise default to today
+    let dateFilteredEntries = allEntries;
+    
+    if (customDateFrom || customDateTo) {
+      // Apply custom date filters
+      if (customDateFrom) {
+        dateFilteredEntries = dateFilteredEntries.filter(e => new Date(e.created_at) >= customDateFrom);
+      }
+      if (customDateTo) {
+        const endOfDay = new Date(customDateTo);
+        endOfDay.setHours(23, 59, 59, 999);
+        dateFilteredEntries = dateFilteredEntries.filter(e => new Date(e.created_at) <= endOfDay);
+      }
+    } else {
+      // Default to today's entries
+      const now = new Date();
+      const todayStart = new Date(now.setHours(0, 0, 0, 0));
+      dateFilteredEntries = allEntries.filter(e => new Date(e.created_at) >= todayStart);
+    }
 
     // Apply specific filter based on clicked item
     switch (modalFilter.type) {
       case 'shop':
-        return todayEntries.filter(e => e.shops?.name === modalFilter.value);
+        return dateFilteredEntries.filter(e => e.shops?.name === modalFilter.value);
       case 'category':
-        return todayEntries.filter(e => e.categories?.name === modalFilter.value);
+        return dateFilteredEntries.filter(e => e.categories?.name === modalFilter.value);
       case 'size':
-        return todayEntries.filter(e => e.sizes?.size === modalFilter.value);
+        return dateFilteredEntries.filter(e => e.sizes?.size === modalFilter.value);
       case 'customer_type':
-        return todayEntries.filter(e => e.customer_types?.name === modalFilter.value);
+        return dateFilteredEntries.filter(e => e.customer_types?.name === modalFilter.value);
       default:
-        return todayEntries;
+        return dateFilteredEntries;
     }
-  }, [allEntries, modalFilter]);
+  }, [allEntries, modalFilter, customDateFrom, customDateTo]);
 
   const handleItemClick = (type: 'shop' | 'category' | 'size' | 'customer_type', value: string) => {
     setModalFilter({ type, value });
@@ -685,7 +702,16 @@ export const Dashboard = () => {
                   {modalFilter.type === 'customer_type' && `Customer Type: ${modalFilter.value}`}
                 </DialogTitle>
                 <DialogDescription className="text-xs md:text-sm">
-                  Today's entries ({getModalEntries.length} total)
+                  {(customDateFrom || customDateTo) ? (
+                    <>
+                      {customDateFrom && `From ${format(customDateFrom, 'PP')}`}
+                      {customDateFrom && customDateTo && ' - '}
+                      {customDateTo && `To ${format(customDateTo, 'PP')}`}
+                      {` (${getModalEntries.length} entries)`}
+                    </>
+                  ) : (
+                    `Today's entries (${getModalEntries.length} total)`
+                  )}
                 </DialogDescription>
               </DialogHeader>
               
