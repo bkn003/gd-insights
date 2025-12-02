@@ -7,7 +7,10 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
-import { TrendingUp, Package, Calendar, CalendarDays, Sparkles, Filter, X, ArrowUpDown, BarChart3 } from 'lucide-react';
+import { TrendingUp, Package, Calendar, CalendarDays, Sparkles, Filter, X, ArrowUpDown, BarChart3, FileDown, FileSpreadsheet } from 'lucide-react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import * as XLSX from 'xlsx';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -35,6 +38,7 @@ export const Dashboard = () => {
   const [selectedShop, setSelectedShop] = useState<string>('all');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedCustomerType, setSelectedCustomerType] = useState<string>('all');
+  const [dateRangePreset, setDateRangePreset] = useState<string>('today');
   const [customDateFrom, setCustomDateFrom] = useState<Date>();
   const [customDateTo, setCustomDateTo] = useState<Date>();
   const [showFilters, setShowFilters] = useState(false);
@@ -221,12 +225,53 @@ export const Dashboard = () => {
     setSelectedShop('all');
     setSelectedCategory('all');
     setSelectedCustomerType('all');
+    setDateRangePreset('today');
     setCustomDateFrom(undefined);
     setCustomDateTo(undefined);
   };
 
+  // Handle date range preset changes
+  const handleDateRangePresetChange = (value: string) => {
+    setDateRangePreset(value);
+    const now = new Date();
+    
+    switch (value) {
+      case 'today':
+        setCustomDateFrom(new Date(now.setHours(0, 0, 0, 0)));
+        setCustomDateTo(new Date());
+        break;
+      case 'yesterday':
+        const yesterday = new Date(now);
+        yesterday.setDate(yesterday.getDate() - 1);
+        setCustomDateFrom(new Date(yesterday.setHours(0, 0, 0, 0)));
+        setCustomDateTo(new Date(yesterday.setHours(23, 59, 59, 999)));
+        break;
+      case 'this_week':
+        const weekStart = new Date(now);
+        weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+        setCustomDateFrom(new Date(weekStart.setHours(0, 0, 0, 0)));
+        setCustomDateTo(new Date());
+        break;
+      case 'this_month':
+        setCustomDateFrom(new Date(now.getFullYear(), now.getMonth(), 1));
+        setCustomDateTo(new Date());
+        break;
+      case 'this_year':
+        setCustomDateFrom(new Date(now.getFullYear(), 0, 1));
+        setCustomDateTo(new Date());
+        break;
+      case 'all_time':
+        setCustomDateFrom(undefined);
+        setCustomDateTo(undefined);
+        break;
+      case 'custom':
+        // Keep existing dates or clear them
+        break;
+    }
+  };
+
   const hasActiveFilters = selectedShop !== 'all' || selectedCategory !== 'all' || 
-    selectedCustomerType !== 'all' || customDateFrom || customDateTo;
+    selectedCustomerType !== 'all' || dateRangePreset !== 'today';
 
   const calculateChange = (current: number, previous: number) => {
     if (previous === 0) return current > 0 ? 100 : 0;
@@ -287,6 +332,88 @@ export const Dashboard = () => {
     const ampm = hours >= 12 ? 'PM' : 'AM';
     hours = hours % 12 || 12;
     return `${day}-${month}-${year} ${String(hours).padStart(2, '0')}:${minutes} ${ampm}`;
+  };
+
+  // Export to Excel
+  const exportToExcel = () => {
+    const data = getModalEntries.map((entry, idx) => ({
+      'S.NO': idx + 1,
+      'SHOP': entry.shops?.name || 'N/A',
+      'CATEGORY': entry.categories?.name || 'N/A',
+      'SIZE': entry.sizes?.size || 'N/A',
+      'CUSTOMER TYPE': entry.customer_types?.name || 'N/A',
+      'NOTES': entry.notes,
+      'DATE AND TIME': formatDateTime(entry.created_at)
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(data);
+    
+    // Auto-fit columns
+    const colWidths = [
+      { wch: 6 },  // S.NO
+      { wch: 20 }, // SHOP
+      { wch: 20 }, // CATEGORY
+      { wch: 10 }, // SIZE
+      { wch: 20 }, // CUSTOMER TYPE
+      { wch: 40 }, // NOTES
+      { wch: 20 }, // DATE AND TIME
+    ];
+    ws['!cols'] = colWidths;
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'GD Entries');
+    
+    const fileName = `GD_${modalFilter.type}_${modalFilter.value}_${format(new Date(), 'yyyy-MM-dd')}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+  };
+
+  // Export to PDF
+  const exportToPDF = () => {
+    const doc = new jsPDF();
+    
+    // Add title
+    doc.setFontSize(16);
+    doc.text(`GD Report: ${modalFilter.value}`, 14, 15);
+    
+    // Add subtitle with date range
+    doc.setFontSize(10);
+    const dateRangeText = (customDateFrom || customDateTo) 
+      ? `${customDateFrom ? format(customDateFrom, 'PP') : ''} - ${customDateTo ? format(customDateTo, 'PP') : ''}`
+      : "Today's entries";
+    doc.text(dateRangeText, 14, 22);
+    
+    // Add table
+    const tableData = getModalEntries.map((entry, idx) => [
+      idx + 1,
+      entry.shops?.name || 'N/A',
+      entry.categories?.name || 'N/A',
+      entry.sizes?.size || 'N/A',
+      entry.customer_types?.name || 'N/A',
+      entry.notes,
+      formatDateTime(entry.created_at)
+    ]);
+
+    autoTable(doc, {
+      startY: 28,
+      head: [['S.NO', 'SHOP', 'CATEGORY', 'SIZE', 'CUSTOMER TYPE', 'NOTES', 'DATE & TIME']],
+      body: tableData,
+      styles: { fontSize: 8, cellPadding: 2 },
+      headStyles: { fillColor: [59, 130, 246], fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [245, 247, 250] },
+      columnStyles: {
+        0: { cellWidth: 12 },
+        1: { cellWidth: 25 },
+        2: { cellWidth: 25 },
+        3: { cellWidth: 15 },
+        4: { cellWidth: 30 },
+        5: { cellWidth: 50 },
+        6: { cellWidth: 30 }
+      },
+      margin: { top: 28 }
+    });
+    
+    const fileName = `GD_${modalFilter.type}_${modalFilter.value}_${format(new Date(), 'yyyy-MM-dd')}.pdf`;
+    doc.save(fileName);
   };
 
   if (!isAdmin) {
@@ -440,56 +567,78 @@ export const Dashboard = () => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                <div className="space-y-4">
                   <div className="space-y-2">
-                    <Label>From Date</Label>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button variant="outline" className="w-full justify-start">
-                          <Calendar className="mr-2 h-4 w-4" />
-                          {customDateFrom ? format(customDateFrom, 'PPP') : 'Pick a date'}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0">
-                        <CalendarComponent
-                          mode="single"
-                          selected={customDateFrom}
-                          onSelect={setCustomDateFrom}
-                          disabled={(date) => date > new Date()}
-                          initialFocus
-                          className="pointer-events-auto"
-                        />
-                      </PopoverContent>
-                    </Popover>
+                    <Label>Date Range</Label>
+                    <Select value={dateRangePreset} onValueChange={handleDateRangePresetChange}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select date range" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="today">Today</SelectItem>
+                        <SelectItem value="yesterday">Yesterday</SelectItem>
+                        <SelectItem value="this_week">This Week</SelectItem>
+                        <SelectItem value="this_month">This Month</SelectItem>
+                        <SelectItem value="this_year">This Year</SelectItem>
+                        <SelectItem value="all_time">All Time</SelectItem>
+                        <SelectItem value="custom">Custom Range</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label>To Date</Label>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button variant="outline" className="w-full justify-start">
-                          <Calendar className="mr-2 h-4 w-4" />
-                          {customDateTo ? format(customDateTo, 'PPP') : 'Pick a date'}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0">
-                        <CalendarComponent
-                          mode="single"
-                          selected={customDateTo}
-                          onSelect={setCustomDateTo}
-                          disabled={(date) => {
-                            const today = new Date();
-                            today.setHours(23, 59, 59, 999);
-                            if (date > today) return true;
-                            if (customDateFrom) return date < customDateFrom;
-                            return false;
-                          }}
-                          initialFocus
-                          className="pointer-events-auto"
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  </div>
+                  {dateRangePreset === 'custom' && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                      <div className="space-y-2">
+                        <Label>From Date</Label>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button variant="outline" className="w-full justify-start">
+                              <Calendar className="mr-2 h-4 w-4" />
+                              {customDateFrom ? format(customDateFrom, 'PPP') : 'Pick a date'}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0">
+                            <CalendarComponent
+                              mode="single"
+                              selected={customDateFrom}
+                              onSelect={setCustomDateFrom}
+                              disabled={(date) => date > new Date()}
+                              initialFocus
+                              className="pointer-events-auto"
+                            />
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>To Date</Label>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button variant="outline" className="w-full justify-start">
+                              <Calendar className="mr-2 h-4 w-4" />
+                              {customDateTo ? format(customDateTo, 'PPP') : 'Pick a date'}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0">
+                            <CalendarComponent
+                              mode="single"
+                              selected={customDateTo}
+                              onSelect={setCustomDateTo}
+                              disabled={(date) => {
+                                const today = new Date();
+                                today.setHours(23, 59, 59, 999);
+                                if (date > today) return true;
+                                if (customDateFrom) return date < customDateFrom;
+                                return false;
+                              }}
+                              initialFocus
+                              className="pointer-events-auto"
+                            />
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -695,24 +844,50 @@ export const Dashboard = () => {
           <Dialog open={detailModalOpen} onOpenChange={setDetailModalOpen}>
             <DialogContent className="max-w-[95vw] md:max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
               <DialogHeader>
-                <DialogTitle className="text-lg md:text-xl">
-                  {modalFilter.type === 'shop' && `Shop: ${modalFilter.value}`}
-                  {modalFilter.type === 'category' && `Category: ${modalFilter.value}`}
-                  {modalFilter.type === 'size' && `Size: ${modalFilter.value}`}
-                  {modalFilter.type === 'customer_type' && `Customer Type: ${modalFilter.value}`}
-                </DialogTitle>
-                <DialogDescription className="text-xs md:text-sm">
-                  {(customDateFrom || customDateTo) ? (
-                    <>
-                      {customDateFrom && `From ${format(customDateFrom, 'PP')}`}
-                      {customDateFrom && customDateTo && ' - '}
-                      {customDateTo && `To ${format(customDateTo, 'PP')}`}
-                      {` (${getModalEntries.length} entries)`}
-                    </>
-                  ) : (
-                    `Today's entries (${getModalEntries.length} total)`
-                  )}
-                </DialogDescription>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1">
+                    <DialogTitle className="text-lg md:text-xl">
+                      {modalFilter.type === 'shop' && `Shop: ${modalFilter.value}`}
+                      {modalFilter.type === 'category' && `Category: ${modalFilter.value}`}
+                      {modalFilter.type === 'size' && `Size: ${modalFilter.value}`}
+                      {modalFilter.type === 'customer_type' && `Customer Type: ${modalFilter.value}`}
+                    </DialogTitle>
+                    <DialogDescription className="text-xs md:text-sm mt-1">
+                      {(customDateFrom || customDateTo) ? (
+                        <>
+                          {customDateFrom && `From ${format(customDateFrom, 'PP')}`}
+                          {customDateFrom && customDateTo && ' - '}
+                          {customDateTo && `To ${format(customDateTo, 'PP')}`}
+                          {` (${getModalEntries.length} entries)`}
+                        </>
+                      ) : (
+                        `Today's entries (${getModalEntries.length} total)`
+                      )}
+                    </DialogDescription>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={exportToExcel}
+                      className="gap-2"
+                      disabled={getModalEntries.length === 0}
+                    >
+                      <FileSpreadsheet className="h-4 w-4" />
+                      <span className="hidden sm:inline">Excel</span>
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={exportToPDF}
+                      className="gap-2"
+                      disabled={getModalEntries.length === 0}
+                    >
+                      <FileDown className="h-4 w-4" />
+                      <span className="hidden sm:inline">PDF</span>
+                    </Button>
+                  </div>
+                </div>
               </DialogHeader>
               
               <ScrollArea className="flex-1 -mx-6 px-6">
