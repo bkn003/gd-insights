@@ -10,6 +10,9 @@ import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { TrendingUp, Package, Calendar, CalendarDays, Sparkles, Filter, X, ArrowUpDown, BarChart3 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface GDEntry {
   id: string;
@@ -18,6 +21,7 @@ interface GDEntry {
   category_id: string;
   size_id: string;
   customer_type_id: string | null;
+  notes: string;
   shops: { name: string } | null;
   categories: { name: string } | null;
   sizes: { size: string } | null;
@@ -35,6 +39,10 @@ export const Dashboard = () => {
   const [customDateTo, setCustomDateTo] = useState<Date>();
   const [showFilters, setShowFilters] = useState(false);
   const [showComparison, setShowComparison] = useState(false);
+  
+  // Modal state
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [modalFilter, setModalFilter] = useState<{ type: 'shop' | 'category' | 'size' | 'customer_type'; value: string }>({ type: 'shop', value: '' });
 
   // Fetch master data (shops, categories, customer types)
   const { data: masterData } = useQuery({
@@ -69,6 +77,7 @@ export const Dashboard = () => {
           category_id,
           size_id,
           customer_type_id,
+          notes,
           shops!fk_goods_damaged_entries_shop(name),
           categories!fk_goods_damaged_entries_category(name),
           sizes!fk_goods_damaged_entries_size(size),
@@ -145,13 +154,16 @@ export const Dashboard = () => {
       return d >= prevMonthStart && d < monthStart;
     }).length;
 
-    // Calculate breakdowns
+    // Calculate breakdowns - ONLY FOR TODAY
     const byShop: Record<string, number> = {};
     const byCategory: Record<string, number> = {};
     const bySize: Record<string, number> = {};
     const byCustomerType: Record<string, number> = {};
 
-    filtered.forEach(entry => {
+    // Filter for today only for breakdowns
+    const todayEntries = filtered.filter(e => new Date(e.created_at) >= todayStart);
+
+    todayEntries.forEach(entry => {
       const shop = entry.shops?.name || 'Unknown';
       const category = entry.categories?.name || 'Unknown';
       const size = entry.sizes?.size || 'Unknown';
@@ -217,6 +229,47 @@ export const Dashboard = () => {
   const calculateChange = (current: number, previous: number) => {
     if (previous === 0) return current > 0 ? 100 : 0;
     return Math.round(((current - previous) / previous) * 100);
+  };
+
+  // Get filtered entries for modal based on clicked item
+  const getModalEntries = useMemo(() => {
+    if (!allEntries || !modalFilter.value) return [];
+
+    // Always filter for today's entries
+    const now = new Date();
+    const todayStart = new Date(now.setHours(0, 0, 0, 0));
+    const todayEntries = allEntries.filter(e => new Date(e.created_at) >= todayStart);
+
+    // Apply specific filter based on clicked item
+    switch (modalFilter.type) {
+      case 'shop':
+        return todayEntries.filter(e => e.shops?.name === modalFilter.value);
+      case 'category':
+        return todayEntries.filter(e => e.categories?.name === modalFilter.value);
+      case 'size':
+        return todayEntries.filter(e => e.sizes?.size === modalFilter.value);
+      case 'customer_type':
+        return todayEntries.filter(e => e.customer_types?.name === modalFilter.value);
+      default:
+        return todayEntries;
+    }
+  }, [allEntries, modalFilter]);
+
+  const handleItemClick = (type: 'shop' | 'category' | 'size' | 'customer_type', value: string) => {
+    setModalFilter({ type, value });
+    setDetailModalOpen(true);
+  };
+
+  const formatDateTime = (dateString: string) => {
+    const date = new Date(dateString);
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = String(date.getFullYear()).slice(-2);
+    let hours = date.getHours();
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12 || 12;
+    return `${day}-${month}-${year} ${String(hours).padStart(2, '0')}:${minutes} ${ampm}`;
   };
 
   if (!isAdmin) {
@@ -509,10 +562,14 @@ export const Dashboard = () => {
                   Object.entries(summary.byShop)
                     .sort(([, a], [, b]) => b - a)
                     .map(([name, count], idx) => (
-                      <div key={name} className="flex justify-between items-center p-3 rounded-lg bg-gradient-to-r from-muted/50 to-transparent hover:from-muted hover:to-muted/50 transition-all duration-200 border border-transparent hover:border-primary/20">
+                      <div 
+                        key={name} 
+                        onClick={() => handleItemClick('shop', name)}
+                        className="flex justify-between items-center p-3 rounded-lg bg-card hover:bg-muted transition-all duration-200 border border-border hover:border-primary/40 cursor-pointer active:scale-[0.98]"
+                      >
                         <div className="flex items-center gap-2 flex-1 min-w-0">
                           <span className="text-xs font-bold text-primary/60 w-6 text-center">{idx + 1}</span>
-                          <span className="font-medium truncate">{name}</span>
+                          <span className="font-medium truncate text-foreground">{name}</span>
                         </div>
                         <span className="font-bold text-primary text-lg ml-2">{count}</span>
                       </div>
@@ -524,11 +581,11 @@ export const Dashboard = () => {
             </Card>
 
             {/* By Category */}
-            <Card className="hover:shadow-lg transition-shadow">
+            <Card className="hover:shadow-lg transition-shadow bg-card/95">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base flex items-center gap-2">
-                  <div className="h-1 w-8 bg-gradient-to-r from-secondary to-secondary/50 rounded-full" />
-                  <span className="text-secondary-foreground">By Category</span>
+                  <div className="h-1 w-8 bg-gradient-to-r from-orange-500 to-orange-400 rounded-full" />
+                  <span className="font-semibold text-foreground">By Category</span>
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
@@ -536,12 +593,16 @@ export const Dashboard = () => {
                   Object.entries(summary.byCategory)
                     .sort(([, a], [, b]) => b - a)
                     .map(([name, count], idx) => (
-                      <div key={name} className="flex justify-between items-center p-3 rounded-lg bg-gradient-to-r from-muted/50 to-transparent hover:from-muted hover:to-muted/50 transition-all duration-200 border border-transparent hover:border-primary/20">
+                      <div 
+                        key={name} 
+                        onClick={() => handleItemClick('category', name)}
+                        className="flex justify-between items-center p-3 rounded-lg bg-card hover:bg-muted transition-all duration-200 border border-border hover:border-primary/40 cursor-pointer active:scale-[0.98]"
+                      >
                         <div className="flex items-center gap-2 flex-1 min-w-0">
-                          <span className="text-xs font-bold text-primary/60 w-6 text-center">{idx + 1}</span>
-                          <span className="font-medium truncate">{name}</span>
+                          <span className="text-xs font-bold text-orange-500/80 w-6 text-center">{idx + 1}</span>
+                          <span className="font-medium truncate text-foreground">{name}</span>
                         </div>
-                        <span className="font-bold text-primary text-lg ml-2">{count}</span>
+                        <span className="font-bold text-orange-500 text-lg ml-2">{count}</span>
                       </div>
                     ))
                 ) : (
@@ -551,11 +612,11 @@ export const Dashboard = () => {
             </Card>
 
             {/* By Size */}
-            <Card className="hover:shadow-lg transition-shadow">
+            <Card className="hover:shadow-lg transition-shadow bg-card/95">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base flex items-center gap-2">
-                  <div className="h-1 w-8 bg-gradient-to-r from-accent to-accent/50 rounded-full" />
-                  <span className="text-accent-foreground">By Size</span>
+                  <div className="h-1 w-8 bg-gradient-to-r from-cyan-500 to-cyan-400 rounded-full" />
+                  <span className="font-semibold text-foreground">By Size</span>
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
@@ -563,12 +624,16 @@ export const Dashboard = () => {
                   Object.entries(summary.bySize)
                     .sort(([, a], [, b]) => b - a)
                     .map(([name, count], idx) => (
-                      <div key={name} className="flex justify-between items-center p-3 rounded-lg bg-gradient-to-r from-muted/50 to-transparent hover:from-muted hover:to-muted/50 transition-all duration-200 border border-transparent hover:border-primary/20">
+                      <div 
+                        key={name} 
+                        onClick={() => handleItemClick('size', name)}
+                        className="flex justify-between items-center p-3 rounded-lg bg-card hover:bg-muted transition-all duration-200 border border-border hover:border-primary/40 cursor-pointer active:scale-[0.98]"
+                      >
                         <div className="flex items-center gap-2 flex-1 min-w-0">
-                          <span className="text-xs font-bold text-primary/60 w-6 text-center">{idx + 1}</span>
-                          <span className="font-medium truncate">{name}</span>
+                          <span className="text-xs font-bold text-cyan-500/80 w-6 text-center">{idx + 1}</span>
+                          <span className="font-medium truncate text-foreground">{name}</span>
                         </div>
-                        <span className="font-bold text-primary text-lg ml-2">{count}</span>
+                        <span className="font-bold text-cyan-500 text-lg ml-2">{count}</span>
                       </div>
                     ))
                 ) : (
@@ -590,10 +655,14 @@ export const Dashboard = () => {
                   Object.entries(summary.byCustomerType)
                     .sort(([, a], [, b]) => b - a)
                     .map(([name, count], idx) => (
-                      <div key={name} className="flex justify-between items-center p-3 rounded-lg bg-gradient-to-r from-muted/50 to-transparent hover:from-muted hover:to-muted/50 transition-all duration-200 border border-transparent hover:border-primary/20">
+                      <div 
+                        key={name} 
+                        onClick={() => handleItemClick('customer_type', name)}
+                        className="flex justify-between items-center p-3 rounded-lg bg-card hover:bg-muted transition-all duration-200 border border-border hover:border-primary/40 cursor-pointer active:scale-[0.98]"
+                      >
                         <div className="flex items-center gap-2 flex-1 min-w-0">
                           <span className="text-xs font-bold text-primary/60 w-6 text-center">{idx + 1}</span>
-                          <span className="font-medium truncate">{name}</span>
+                          <span className="font-medium truncate text-foreground">{name}</span>
                         </div>
                         <span className="font-bold text-primary text-lg ml-2">{count}</span>
                       </div>
@@ -604,6 +673,66 @@ export const Dashboard = () => {
               </CardContent>
             </Card>
           </div>
+
+          {/* Detail Modal */}
+          <Dialog open={detailModalOpen} onOpenChange={setDetailModalOpen}>
+            <DialogContent className="max-w-[95vw] md:max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+              <DialogHeader>
+                <DialogTitle className="text-lg md:text-xl">
+                  {modalFilter.type === 'shop' && `Shop: ${modalFilter.value}`}
+                  {modalFilter.type === 'category' && `Category: ${modalFilter.value}`}
+                  {modalFilter.type === 'size' && `Size: ${modalFilter.value}`}
+                  {modalFilter.type === 'customer_type' && `Customer Type: ${modalFilter.value}`}
+                </DialogTitle>
+                <DialogDescription className="text-xs md:text-sm">
+                  Today's entries ({getModalEntries.length} total)
+                </DialogDescription>
+              </DialogHeader>
+              
+              <ScrollArea className="flex-1 -mx-6 px-6">
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-12 text-xs md:text-sm">S.NO</TableHead>
+                        <TableHead className="min-w-[100px] text-xs md:text-sm">SHOP</TableHead>
+                        <TableHead className="min-w-[100px] text-xs md:text-sm">CATEGORY</TableHead>
+                        <TableHead className="w-16 text-xs md:text-sm">SIZE</TableHead>
+                        <TableHead className="min-w-[120px] text-xs md:text-sm">CUSTOMER TYPE</TableHead>
+                        <TableHead className="min-w-[150px] text-xs md:text-sm">NOTES</TableHead>
+                        <TableHead className="min-w-[140px] text-xs md:text-sm">DATE AND TIME</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {getModalEntries.length > 0 ? (
+                        getModalEntries.map((entry, idx) => (
+                          <TableRow key={entry.id}>
+                            <TableCell className="font-medium text-xs md:text-sm">{idx + 1}</TableCell>
+                            <TableCell className="text-xs md:text-sm">{entry.shops?.name || 'N/A'}</TableCell>
+                            <TableCell className="text-xs md:text-sm">{entry.categories?.name || 'N/A'}</TableCell>
+                            <TableCell className="text-xs md:text-sm">{entry.sizes?.size || 'N/A'}</TableCell>
+                            <TableCell className="text-xs md:text-sm">{entry.customer_types?.name || 'N/A'}</TableCell>
+                            <TableCell className="text-xs md:text-sm max-w-[200px] truncate" title={entry.notes}>
+                              {entry.notes}
+                            </TableCell>
+                            <TableCell className="text-xs md:text-sm whitespace-nowrap">
+                              {formatDateTime(entry.created_at)}
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      ) : (
+                        <TableRow>
+                          <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                            No entries found for today
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </ScrollArea>
+            </DialogContent>
+          </Dialog>
         </>
       )}
     </div>
