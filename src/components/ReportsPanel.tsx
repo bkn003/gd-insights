@@ -10,9 +10,11 @@ import { Label } from '@/components/ui/label';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { ImageDisplay } from '@/components/ImageDisplay';
 import { toast } from 'sonner';
-import { Download, Filter, Calendar as CalendarIcon, FileText, Image, BarChart3 } from 'lucide-react';
+import { Download, Filter, Calendar as CalendarIcon, FileText, Image, BarChart3, List, LayoutGrid } from 'lucide-react';
 import { format } from 'date-fns';
 import { Database } from '@/types/database';
 import * as XLSX from 'xlsx';
@@ -54,6 +56,7 @@ export const ReportsPanel = memo(() => {
   const [dateFilter, setDateFilter] = useState<string>('today');
   const [customDateFrom, setCustomDateFrom] = useState<Date>();
   const [customDateTo, setCustomDateTo] = useState<Date>();
+  const [viewMode, setViewMode] = useState<'table' | 'card'>('table');
 
   useEffect(() => {
     fetchData();
@@ -295,6 +298,18 @@ export const ReportsPanel = memo(() => {
 
   const formatTime12Hour = (date: Date) => {
     return format(date, 'yyyy-MM-dd hh:mm a');
+  };
+
+  const formatDateTime = (dateString: string) => {
+    const date = new Date(dateString);
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = String(date.getFullYear()).slice(-2);
+    let hours = date.getHours();
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12 || 12;
+    return `${day}-${month}-${year} ${String(hours).padStart(2, '0')}:${minutes} ${ampm}`;
   };
 
   // Helper function to fetch image as base64
@@ -827,123 +842,179 @@ export const ReportsPanel = memo(() => {
 
       <Card className="w-full">
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
               <CardTitle className="text-lg sm:text-xl">GD Reports</CardTitle>
               <CardDescription className="text-sm">
                 Showing {filteredEntries.length} of {entries.length} entries
               </CardDescription>
             </div>
-            <Dialog>
-              <DialogTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-2">
-                  <BarChart3 className="h-4 w-4" />
-                  Summary
+            <div className="flex items-center gap-2">
+              {/* View Mode Toggle */}
+              <div className="flex items-center border rounded-lg overflow-hidden">
+                <Button
+                  variant={viewMode === 'table' ? 'default' : 'ghost'}
+                  size="sm"
+                  className="rounded-none"
+                  onClick={() => setViewMode('table')}
+                >
+                  <List className="h-4 w-4" />
                 </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle className="text-gradient-primary">GD Summary</DialogTitle>
-                </DialogHeader>
-                {summary ? (
-                  <div className="space-y-4">
-                    <div className="text-center p-4 bg-gradient-to-r from-primary/10 to-secondary/10 rounded-lg">
-                      <div className="text-3xl font-bold text-gradient-primary">{summary.totalEntries}</div>
-                      <div className="text-sm text-muted-foreground">Total Entries</div>
-                    </div>
-
-                    <div className="space-y-3">
-                      <div>
-                        <h4 className="font-semibold text-sm mb-2 text-gradient-secondary">By Shop</h4>
-                        <div className="space-y-1">
-                          {Object.entries(summary.byShop).map(([shop, count]) => (
-                            <div key={shop} className="flex justify-between text-sm p-2 bg-muted/50 rounded">
-                              <span>{shop}</span>
-                              <span className="font-medium">{count}</span>
-                            </div>
-                          ))}
-                        </div>
+                <Button
+                  variant={viewMode === 'card' ? 'default' : 'ghost'}
+                  size="sm"
+                  className="rounded-none"
+                  onClick={() => setViewMode('card')}
+                >
+                  <LayoutGrid className="h-4 w-4" />
+                </Button>
+              </div>
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-2">
+                    <BarChart3 className="h-4 w-4" />
+                    Summary
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle className="text-gradient-primary">GD Summary</DialogTitle>
+                  </DialogHeader>
+                  {summary ? (
+                    <div className="space-y-4">
+                      <div className="text-center p-4 bg-gradient-to-r from-primary/10 to-secondary/10 rounded-lg">
+                        <div className="text-3xl font-bold text-gradient-primary">{summary.totalEntries}</div>
+                        <div className="text-sm text-muted-foreground">Total Entries</div>
                       </div>
 
-                      <div>
-                        <h4 className="font-semibold text-sm mb-2 text-gradient-secondary">By Category</h4>
-                        <div className="space-y-1">
-                          {Object.entries(summary.byCategory).map(([category, count]) => (
-                            <div key={category} className="flex justify-between text-sm p-2 bg-muted/50 rounded">
-                              <span>{category}</span>
-                              <span className="font-medium">{count}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div>
-                        <h4 className="font-semibold text-sm mb-2 text-gradient-secondary">By Size</h4>
-                        <div className="space-y-1">
-                          {Object.entries(summary.bySize).map(([size, count]) => (
-                            <div key={size} className="flex justify-between text-sm p-2 bg-muted/50 rounded">
-                              <span>{size}</span>
-                              <span className="font-medium">{count}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div>
-                        <h4 className="font-semibold text-sm mb-2 text-gradient-secondary">By Customer Type</h4>
-                        <div className="space-y-1">
-                          {Object.entries(summary.byCustomerType).map(([type, count]) => (
-                            <div key={type} className="flex justify-between text-sm p-2 bg-muted/50 rounded">
-                              <span>{type}</span>
-                              <span className="font-medium">{count}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div>
-                        <h4 className="font-semibold text-sm mb-2 text-gradient-secondary">By Notes</h4>
-                        <div className="space-y-1 max-h-48 overflow-y-auto">
-                          {Object.entries(summary.byNotes)
-                            .sort(([, a], [, b]) => b - a)
-                            .map(([note, count]) => (
-                              <div key={note} className="flex justify-between text-sm p-2 bg-muted/50 rounded gap-2">
-                                <span className="flex-1 truncate" title={note}>{note}</span>
-                                <span className="font-medium flex-shrink-0">{count}</span>
+                      <div className="space-y-3">
+                        <div>
+                          <h4 className="font-semibold text-sm mb-2 text-gradient-secondary">By Shop</h4>
+                          <div className="space-y-1">
+                            {Object.entries(summary.byShop).map(([shop, count]) => (
+                              <div key={shop} className="flex justify-between text-sm p-2 bg-muted/50 rounded">
+                                <span>{shop}</span>
+                                <span className="font-medium">{count}</span>
                               </div>
                             ))}
+                          </div>
+                        </div>
+
+                        <div>
+                          <h4 className="font-semibold text-sm mb-2 text-gradient-secondary">By Category</h4>
+                          <div className="space-y-1">
+                            {Object.entries(summary.byCategory).map(([category, count]) => (
+                              <div key={category} className="flex justify-between text-sm p-2 bg-muted/50 rounded">
+                                <span>{category}</span>
+                                <span className="font-medium">{count}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div>
+                          <h4 className="font-semibold text-sm mb-2 text-gradient-secondary">By Size</h4>
+                          <div className="space-y-1">
+                            {Object.entries(summary.bySize).map(([size, count]) => (
+                              <div key={size} className="flex justify-between text-sm p-2 bg-muted/50 rounded">
+                                <span>{size}</span>
+                                <span className="font-medium">{count}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div>
+                          <h4 className="font-semibold text-sm mb-2 text-gradient-secondary">By Customer Type</h4>
+                          <div className="space-y-1">
+                            {Object.entries(summary.byCustomerType).map(([type, count]) => (
+                              <div key={type} className="flex justify-between text-sm p-2 bg-muted/50 rounded">
+                                <span>{type}</span>
+                                <span className="font-medium">{count}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div>
+                          <h4 className="font-semibold text-sm mb-2 text-gradient-secondary">By Notes</h4>
+                          <div className="space-y-1 max-h-48 overflow-y-auto">
+                            {Object.entries(summary.byNotes)
+                              .sort(([, a], [, b]) => b - a)
+                              .map(([note, count]) => (
+                                <div key={note} className="flex justify-between text-sm p-2 bg-muted/50 rounded gap-2">
+                                  <span className="flex-1 truncate" title={note}>{note}</span>
+                                  <span className="font-medium flex-shrink-0">{count}</span>
+                                </div>
+                              ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="pt-4 border-t space-y-1 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">From:</span>
+                          <span className="font-medium">{summary.firstDate}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">To:</span>
+                          <span className="font-medium">{summary.lastDate}</span>
                         </div>
                       </div>
                     </div>
-
-                    <div className="pt-4 border-t space-y-1 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">From:</span>
-                        <span className="font-medium">{summary.firstDate}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">To:</span>
-                        <span className="font-medium">{summary.lastDate}</span>
-                      </div>
+                  ) : (
+                    <div className="text-center py-8 text-muted-foreground">
+                      No GD entries found.
                     </div>
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-muted-foreground">
-                    No GD entries found.
-                  </div>
-                )}
-              </DialogContent>
-            </Dialog>
+                  )}
+                </DialogContent>
+              </Dialog>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="min-w-0">
-          <div className="space-y-4">
-            {filteredEntries.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                No entries found matching the selected filters.
+          {filteredEntries.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              No entries found matching the selected filters.
+            </div>
+          ) : viewMode === 'table' ? (
+            <ScrollArea className="w-full">
+              <div className="min-w-[700px]">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/50">
+                      <TableHead className="w-14 text-center font-semibold text-primary">S.NO</TableHead>
+                      <TableHead className="font-semibold text-primary">SHOP</TableHead>
+                      <TableHead className="font-semibold text-primary">CATEGORY</TableHead>
+                      <TableHead className="w-20 text-center font-semibold text-primary">SIZE</TableHead>
+                      <TableHead className="font-semibold text-primary">CUSTOMER TYPE</TableHead>
+                      <TableHead className="font-semibold text-primary">NOTES</TableHead>
+                      <TableHead className="w-40 font-semibold text-primary">DATE AND TIME</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredEntries.map((entry, index) => (
+                      <TableRow key={entry.id} className="hover:bg-muted/30">
+                        <TableCell className="text-center font-medium">{index + 1}</TableCell>
+                        <TableCell className="font-medium">{entry.shops.name}</TableCell>
+                        <TableCell>{entry.categories.name}</TableCell>
+                        <TableCell className="text-center">{entry.sizes.size}</TableCell>
+                        <TableCell>{entry.customer_types?.name || 'N/A'}</TableCell>
+                        <TableCell className="max-w-[200px] truncate" title={entry.notes}>
+                          {entry.notes}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {formatDateTime(entry.created_at!)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </div>
-            ) : (
-              filteredEntries.map((entry) => (
+            </ScrollArea>
+          ) : (
+            <div className="space-y-4">
+              {filteredEntries.map((entry) => (
                 <div key={entry.id} className="border rounded-lg p-3 sm:p-4 space-y-3 min-w-0">
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                     <div className="flex flex-wrap items-center gap-1 sm:gap-2 min-w-0">
@@ -974,9 +1045,9 @@ export const ReportsPanel = memo(() => {
                     </div>
                   )}
                 </div>
-              ))
-            )}
-          </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

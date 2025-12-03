@@ -164,10 +164,15 @@ export const Dashboard = () => {
     const bySize: Record<string, number> = {};
     const byCustomerType: Record<string, number> = {};
 
-    // Use filtered entries if date filters are applied, otherwise default to today
-    const breakdownEntries = (customDateFrom || customDateTo) 
+    // Use filtered entries based on dateRangePreset:
+    // - "all_time": show all filtered entries
+    // - Custom dates set: show filtered entries
+    // - Otherwise (default "today"): show only today's entries
+    const breakdownEntries = dateRangePreset === 'all_time' 
       ? filtered 
-      : filtered.filter(e => new Date(e.created_at) >= todayStart);
+      : (customDateFrom || customDateTo) 
+        ? filtered 
+        : filtered.filter(e => new Date(e.created_at) >= todayStart);
 
     breakdownEntries.forEach(entry => {
       const shop = entry.shops?.name || 'Unknown';
@@ -194,7 +199,7 @@ export const Dashboard = () => {
       bySize,
       byCustomerType,
     };
-  }, [allEntries, selectedShop, selectedCategory, selectedCustomerType, customDateFrom, customDateTo]);
+  }, [allEntries, selectedShop, selectedCategory, selectedCustomerType, customDateFrom, customDateTo, dateRangePreset]);
 
   // Real-time subscription
   useEffect(() => {
@@ -282,10 +287,13 @@ export const Dashboard = () => {
   const getModalEntries = useMemo(() => {
     if (!allEntries || !modalFilter.value) return [];
 
-    // Use date filters if applied, otherwise default to today
+    // Use date filters based on dateRangePreset
     let dateFilteredEntries = allEntries;
     
-    if (customDateFrom || customDateTo) {
+    if (dateRangePreset === 'all_time') {
+      // Show all entries for All Time
+      dateFilteredEntries = allEntries;
+    } else if (customDateFrom || customDateTo) {
       // Apply custom date filters
       if (customDateFrom) {
         dateFilteredEntries = dateFilteredEntries.filter(e => new Date(e.created_at) >= customDateFrom);
@@ -315,7 +323,7 @@ export const Dashboard = () => {
       default:
         return dateFilteredEntries;
     }
-  }, [allEntries, modalFilter, customDateFrom, customDateTo]);
+  }, [allEntries, modalFilter, customDateFrom, customDateTo, dateRangePreset]);
 
   const handleItemClick = (type: 'shop' | 'category' | 'size' | 'customer_type', value: string) => {
     setModalFilter({ type, value });
