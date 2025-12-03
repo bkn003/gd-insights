@@ -14,7 +14,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ImageDisplay } from '@/components/ImageDisplay';
 import { toast } from 'sonner';
-import { Download, Filter, Calendar as CalendarIcon, FileText, Image, BarChart3, List, LayoutGrid } from 'lucide-react';
+import { Download, Filter, Calendar as CalendarIcon, FileText, Image, BarChart3, List, LayoutGrid, ChevronDown, Check } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 import { format } from 'date-fns';
 import { Database } from '@/types/database';
 import * as XLSX from 'xlsx';
@@ -57,6 +58,12 @@ export const ReportsPanel = memo(() => {
   const [customDateFrom, setCustomDateFrom] = useState<Date>();
   const [customDateTo, setCustomDateTo] = useState<Date>();
   const [viewMode, setViewMode] = useState<'table' | 'card'>('table');
+  
+  // Table column filters (Excel-like)
+  const [tableShopFilters, setTableShopFilters] = useState<string[]>([]);
+  const [tableCategoryFilters, setTableCategoryFilters] = useState<string[]>([]);
+  const [tableSizeFilters, setTableSizeFilters] = useState<string[]>([]);
+  const [tableCustomerTypeFilters, setTableCustomerTypeFilters] = useState<string[]>([]);
 
   useEffect(() => {
     fetchData();
@@ -295,6 +302,110 @@ export const ReportsPanel = memo(() => {
       })
     };
   }, [filteredEntries]);
+
+  // Apply table column filters for table view
+  const tableFilteredEntries = useMemo(() => {
+    let result = filteredEntries;
+    
+    if (tableShopFilters.length > 0) {
+      result = result.filter(e => tableShopFilters.includes(e.shops.name));
+    }
+    if (tableCategoryFilters.length > 0) {
+      result = result.filter(e => tableCategoryFilters.includes(e.categories.name));
+    }
+    if (tableSizeFilters.length > 0) {
+      result = result.filter(e => tableSizeFilters.includes(e.sizes.size));
+    }
+    if (tableCustomerTypeFilters.length > 0) {
+      result = result.filter(e => tableCustomerTypeFilters.includes(e.customer_types?.name || 'N/A'));
+    }
+    
+    return result;
+  }, [filteredEntries, tableShopFilters, tableCategoryFilters, tableSizeFilters, tableCustomerTypeFilters]);
+
+  // Get unique values for column filters
+  const uniqueShopNames = useMemo(() => [...new Set(filteredEntries.map(e => e.shops.name))].sort(), [filteredEntries]);
+  const uniqueCategoryNames = useMemo(() => [...new Set(filteredEntries.map(e => e.categories.name))].sort(), [filteredEntries]);
+  const uniqueSizeNames = useMemo(() => [...new Set(filteredEntries.map(e => e.sizes.size))].sort(), [filteredEntries]);
+  const uniqueCustomerTypeNames = useMemo(() => [...new Set(filteredEntries.map(e => e.customer_types?.name || 'N/A'))].sort(), [filteredEntries]);
+
+  // Toggle filter value
+  const toggleFilter = (value: string, filters: string[], setFilters: React.Dispatch<React.SetStateAction<string[]>>) => {
+    if (filters.includes(value)) {
+      setFilters(filters.filter(f => f !== value));
+    } else {
+      setFilters([...filters, value]);
+    }
+  };
+
+  // Select all / Clear all for a filter
+  const selectAllFilter = (values: string[], setFilters: React.Dispatch<React.SetStateAction<string[]>>) => {
+    setFilters([...values]);
+  };
+  
+  const clearFilter = (setFilters: React.Dispatch<React.SetStateAction<string[]>>) => {
+    setFilters([]);
+  };
+
+  // Column filter dropdown component
+  const ColumnFilterDropdown = ({ 
+    title, 
+    values, 
+    selectedFilters, 
+    setFilters 
+  }: { 
+    title: string; 
+    values: string[]; 
+    selectedFilters: string[]; 
+    setFilters: React.Dispatch<React.SetStateAction<string[]>>; 
+  }) => (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="ghost" size="sm" className="h-auto p-0 ml-1 hover:bg-transparent">
+          <ChevronDown className={`h-3 w-3 ${selectedFilters.length > 0 ? 'text-primary' : 'text-muted-foreground'}`} />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-48 p-2" align="start">
+        <div className="space-y-2">
+          <div className="flex gap-1 border-b pb-2">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="h-6 text-xs flex-1"
+              onClick={() => selectAllFilter(values, setFilters)}
+            >
+              Select All
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="h-6 text-xs flex-1"
+              onClick={() => clearFilter(setFilters)}
+            >
+              Clear
+            </Button>
+          </div>
+          <ScrollArea className="h-40">
+            <div className="space-y-1">
+              {values.map((value) => (
+                <div
+                  key={value}
+                  className="flex items-center gap-2 px-1 py-1 hover:bg-muted rounded cursor-pointer"
+                  onClick={() => toggleFilter(value, selectedFilters, setFilters)}
+                >
+                  <Checkbox 
+                    checked={selectedFilters.includes(value)}
+                    className="h-3.5 w-3.5"
+                  />
+                  <span className="text-xs truncate">{value}</span>
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
 
   const formatTime12Hour = (date: Date) => {
     return format(date, 'yyyy-MM-dd hh:mm a');
@@ -846,7 +957,10 @@ export const ReportsPanel = memo(() => {
             <div>
               <CardTitle className="text-lg sm:text-xl">GD Reports</CardTitle>
               <CardDescription className="text-sm">
-                Showing {filteredEntries.length} of {entries.length} entries
+                Showing {viewMode === 'table' ? tableFilteredEntries.length : filteredEntries.length} of {entries.length} entries
+                {viewMode === 'table' && (tableShopFilters.length > 0 || tableCategoryFilters.length > 0 || tableSizeFilters.length > 0 || tableCustomerTypeFilters.length > 0) && (
+                  <span className="text-primary ml-1">(column filters active)</span>
+                )}
               </CardDescription>
             </div>
             <div className="flex items-center gap-2">
@@ -972,38 +1086,78 @@ export const ReportsPanel = memo(() => {
             </div>
           </div>
         </CardHeader>
-        <CardContent className="min-w-0">
+        <CardContent className="min-w-0 overflow-hidden">
           {filteredEntries.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               No entries found matching the selected filters.
             </div>
           ) : viewMode === 'table' ? (
-            <ScrollArea className="w-full">
-              <div className="min-w-[700px]">
-                <Table>
+            <div className="overflow-x-auto -mx-4 sm:-mx-6 px-4 sm:px-6">
+              <div className="inline-block min-w-full align-middle">
+                <Table className="min-w-[900px]">
                   <TableHeader>
                     <TableRow className="bg-muted/50">
-                      <TableHead className="w-14 text-center font-semibold text-primary">S.NO</TableHead>
-                      <TableHead className="font-semibold text-primary">SHOP</TableHead>
-                      <TableHead className="font-semibold text-primary">CATEGORY</TableHead>
-                      <TableHead className="w-20 text-center font-semibold text-primary">SIZE</TableHead>
-                      <TableHead className="font-semibold text-primary">CUSTOMER TYPE</TableHead>
-                      <TableHead className="font-semibold text-primary">NOTES</TableHead>
-                      <TableHead className="w-40 font-semibold text-primary">DATE AND TIME</TableHead>
+                      <TableHead className="w-14 text-center font-semibold text-primary whitespace-nowrap">S.NO</TableHead>
+                      <TableHead className="font-semibold text-primary whitespace-nowrap min-w-[100px]">
+                        <div className="flex items-center">
+                          SHOP
+                          <ColumnFilterDropdown 
+                            title="Shop" 
+                            values={uniqueShopNames} 
+                            selectedFilters={tableShopFilters} 
+                            setFilters={setTableShopFilters} 
+                          />
+                        </div>
+                      </TableHead>
+                      <TableHead className="font-semibold text-primary whitespace-nowrap min-w-[100px]">
+                        <div className="flex items-center">
+                          CATEGORY
+                          <ColumnFilterDropdown 
+                            title="Category" 
+                            values={uniqueCategoryNames} 
+                            selectedFilters={tableCategoryFilters} 
+                            setFilters={setTableCategoryFilters} 
+                          />
+                        </div>
+                      </TableHead>
+                      <TableHead className="font-semibold text-primary whitespace-nowrap min-w-[80px] text-center">
+                        <div className="flex items-center justify-center">
+                          SIZE
+                          <ColumnFilterDropdown 
+                            title="Size" 
+                            values={uniqueSizeNames} 
+                            selectedFilters={tableSizeFilters} 
+                            setFilters={setTableSizeFilters} 
+                          />
+                        </div>
+                      </TableHead>
+                      <TableHead className="font-semibold text-primary whitespace-nowrap min-w-[130px]">
+                        <div className="flex items-center">
+                          CUSTOMER TYPE
+                          <ColumnFilterDropdown 
+                            title="Customer Type" 
+                            values={uniqueCustomerTypeNames} 
+                            selectedFilters={tableCustomerTypeFilters} 
+                            setFilters={setTableCustomerTypeFilters} 
+                          />
+                        </div>
+                      </TableHead>
+                      <TableHead className="font-semibold text-primary whitespace-nowrap min-w-[150px]">NOTES</TableHead>
+                      <TableHead className="font-semibold text-primary whitespace-nowrap min-w-[140px]">DATE AND TIME</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredEntries.map((entry, index) => (
+                    {tableFilteredEntries.map((entry, index) => (
                       <TableRow key={entry.id} className="hover:bg-muted/30">
                         <TableCell className="text-center font-medium">{index + 1}</TableCell>
-                        <TableCell className="font-medium">{entry.shops.name}</TableCell>
-                        <TableCell>{entry.categories.name}</TableCell>
-                        <TableCell className="text-center">{entry.sizes.size}</TableCell>
-                        <TableCell>{entry.customer_types?.name || 'N/A'}</TableCell>
+                        <TableCell className="font-medium whitespace-nowrap">{entry.shops.name}</TableCell>
+                        <TableCell className="whitespace-nowrap">{entry.categories.name}</TableCell>
+                        <TableCell className="text-center whitespace-nowrap">{entry.sizes.size}</TableCell>
+                        <TableCell className="whitespace-nowrap">{entry.customer_types?.name || 'N/A'}</TableCell>
                         <TableCell className="max-w-[200px] truncate" title={entry.notes}>
                           {entry.notes}
                         </TableCell>
-                        <TableCell className="text-muted-foreground">
+                        <TableCell className="text-muted-foreground whitespace-nowrap">
                           {formatDateTime(entry.created_at!)}
                         </TableCell>
                       </TableRow>
@@ -1011,7 +1165,7 @@ export const ReportsPanel = memo(() => {
                   </TableBody>
                 </Table>
               </div>
-            </ScrollArea>
+            </div>
           ) : (
             <div className="space-y-4">
               {filteredEntries.map((entry) => (
