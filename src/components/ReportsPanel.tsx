@@ -14,7 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ImageDisplay } from '@/components/ImageDisplay';
 import { toast } from 'sonner';
-import { Download, Filter, Calendar as CalendarIcon, FileText, Image, BarChart3, List, LayoutGrid, ChevronDown, Check } from 'lucide-react';
+import { Download, Filter, Calendar as CalendarIcon, FileText, Image, BarChart3, List, LayoutGrid, ChevronDown, Check, ArrowUpDown, ArrowUp, ArrowDown, FileSpreadsheet } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { format } from 'date-fns';
 import { Database } from '@/types/database';
@@ -64,6 +64,14 @@ export const ReportsPanel = memo(() => {
   const [tableCategoryFilters, setTableCategoryFilters] = useState<string[]>([]);
   const [tableSizeFilters, setTableSizeFilters] = useState<string[]>([]);
   const [tableCustomerTypeFilters, setTableCustomerTypeFilters] = useState<string[]>([]);
+  
+  // Sorting state
+  const [sortColumn, setSortColumn] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
 
   useEffect(() => {
     fetchData();
@@ -303,7 +311,7 @@ export const ReportsPanel = memo(() => {
     };
   }, [filteredEntries]);
 
-  // Apply table column filters for table view
+  // Apply table column filters and sorting for table view
   const tableFilteredEntries = useMemo(() => {
     let result = filteredEntries;
     
@@ -320,8 +328,79 @@ export const ReportsPanel = memo(() => {
       result = result.filter(e => tableCustomerTypeFilters.includes(e.customer_types?.name || 'N/A'));
     }
     
+    // Apply sorting
+    if (sortColumn) {
+      result = [...result].sort((a, b) => {
+        let aVal: string = '';
+        let bVal: string = '';
+        
+        switch (sortColumn) {
+          case 'shop':
+            aVal = a.shops.name;
+            bVal = b.shops.name;
+            break;
+          case 'category':
+            aVal = a.categories.name;
+            bVal = b.categories.name;
+            break;
+          case 'size':
+            aVal = a.sizes.size;
+            bVal = b.sizes.size;
+            break;
+          case 'customerType':
+            aVal = a.customer_types?.name || 'N/A';
+            bVal = b.customer_types?.name || 'N/A';
+            break;
+          case 'notes':
+            aVal = a.notes || '';
+            bVal = b.notes || '';
+            break;
+          case 'date':
+            aVal = a.created_at || '';
+            bVal = b.created_at || '';
+            break;
+        }
+        
+        const comparison = aVal.localeCompare(bVal);
+        return sortDirection === 'asc' ? comparison : -comparison;
+      });
+    }
+    
     return result;
-  }, [filteredEntries, tableShopFilters, tableCategoryFilters, tableSizeFilters, tableCustomerTypeFilters]);
+  }, [filteredEntries, tableShopFilters, tableCategoryFilters, tableSizeFilters, tableCustomerTypeFilters, sortColumn, sortDirection]);
+
+  // Paginated entries
+  const paginatedEntries = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize;
+    return tableFilteredEntries.slice(startIndex, startIndex + pageSize);
+  }, [tableFilteredEntries, currentPage, pageSize]);
+
+  const totalPages = useMemo(() => Math.ceil(tableFilteredEntries.length / pageSize), [tableFilteredEntries.length, pageSize]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [tableShopFilters, tableCategoryFilters, tableSizeFilters, tableCustomerTypeFilters, filteredEntries]);
+
+  // Handle sort
+  const handleSort = (column: string) => {
+    if (sortColumn === column) {
+      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+  };
+
+  // Get sort icon
+  const getSortIcon = (column: string) => {
+    if (sortColumn !== column) {
+      return <ArrowUpDown className="h-3 w-3 ml-1 text-muted-foreground" />;
+    }
+    return sortDirection === 'asc' 
+      ? <ArrowUp className="h-3 w-3 ml-1 text-primary" />
+      : <ArrowDown className="h-3 w-3 ml-1 text-primary" />;
+  };
 
   // Get unique values for column filters
   const uniqueShopNames = useMemo(() => [...new Set(filteredEntries.map(e => e.shops.name))].sort(), [filteredEntries]);
@@ -347,23 +426,33 @@ export const ReportsPanel = memo(() => {
     setFilters([]);
   };
 
-  // Column filter dropdown component
+  // Column filter dropdown component - entire header clickable
   const ColumnFilterDropdown = ({ 
     title, 
     values, 
     selectedFilters, 
-    setFilters 
+    setFilters,
+    sortKey,
+    showSort = true
   }: { 
     title: string; 
     values: string[]; 
     selectedFilters: string[]; 
-    setFilters: React.Dispatch<React.SetStateAction<string[]>>; 
+    setFilters: React.Dispatch<React.SetStateAction<string[]>>;
+    sortKey?: string;
+    showSort?: boolean;
   }) => (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="sm" className="h-auto p-0 ml-1 hover:bg-transparent">
-          <ChevronDown className={`h-3 w-3 ${selectedFilters.length > 0 ? 'text-primary' : 'text-muted-foreground'}`} />
-        </Button>
+        <div className="flex items-center cursor-pointer hover:text-primary/80 transition-colors select-none">
+          <span>{title}</span>
+          <ChevronDown className={`h-3 w-3 ml-1 ${selectedFilters.length > 0 ? 'text-primary' : 'text-muted-foreground'}`} />
+          {showSort && sortKey && (
+            <span onClick={(e) => { e.stopPropagation(); handleSort(sortKey); }}>
+              {getSortIcon(sortKey)}
+            </span>
+          )}
+        </div>
       </PopoverTrigger>
       <PopoverContent className="w-48 p-2" align="start">
         <div className="space-y-2">
@@ -406,6 +495,93 @@ export const ReportsPanel = memo(() => {
       </PopoverContent>
     </Popover>
   );
+
+  // Export table data to Excel
+  const exportTableExcel = () => {
+    if (tableFilteredEntries.length === 0) {
+      toast.error('No data to export');
+      return;
+    }
+
+    const exportData = tableFilteredEntries.map((entry, index) => ({
+      'S.NO': index + 1,
+      'SHOP': entry.shops.name,
+      'CATEGORY': entry.categories.name,
+      'SIZE': entry.sizes.size,
+      'CUSTOMER TYPE': entry.customer_types?.name || 'N/A',
+      'NOTES': entry.notes || '',
+      'DATE AND TIME': formatDateTime(entry.created_at!)
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    
+    // Auto-fit columns
+    const colWidths = [
+      { wch: 6 },  // S.NO
+      { wch: 15 }, // SHOP
+      { wch: 15 }, // CATEGORY
+      { wch: 10 }, // SIZE
+      { wch: 18 }, // CUSTOMER TYPE
+      { wch: 40 }, // NOTES
+      { wch: 20 }, // DATE AND TIME
+    ];
+    ws['!cols'] = colWidths;
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'GD Reports');
+    
+    const fileName = `gd-reports-table-${format(new Date(), 'yyyy-MM-dd-HHmm')}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+    toast.success('Excel exported successfully');
+  };
+
+  // Export table data to PDF
+  const exportTablePDF = () => {
+    if (tableFilteredEntries.length === 0) {
+      toast.error('No data to export');
+      return;
+    }
+
+    const doc = new jsPDF('l', 'mm', 'a4');
+    
+    doc.setFontSize(16);
+    doc.text('GD Reports', 14, 15);
+    
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.text(`Generated: ${format(new Date(), 'dd-MM-yyyy HH:mm')} | Total: ${tableFilteredEntries.length} entries`, 14, 22);
+
+    const tableData = tableFilteredEntries.map((entry, index) => [
+      index + 1,
+      entry.shops.name,
+      entry.categories.name,
+      entry.sizes.size,
+      entry.customer_types?.name || 'N/A',
+      entry.notes || '',
+      formatDateTime(entry.created_at!)
+    ]);
+
+    autoTable(doc, {
+      head: [['S.NO', 'SHOP', 'CATEGORY', 'SIZE', 'CUSTOMER TYPE', 'NOTES', 'DATE AND TIME']],
+      body: tableData,
+      startY: 28,
+      styles: { fontSize: 8, cellPadding: 2 },
+      headStyles: { fillColor: [124, 58, 237], textColor: 255 },
+      columnStyles: {
+        0: { cellWidth: 12, halign: 'center' },
+        1: { cellWidth: 25 },
+        2: { cellWidth: 25 },
+        3: { cellWidth: 15, halign: 'center' },
+        4: { cellWidth: 30 },
+        5: { cellWidth: 80 },
+        6: { cellWidth: 35 }
+      }
+    });
+
+    const fileName = `gd-reports-table-${format(new Date(), 'yyyy-MM-dd-HHmm')}.pdf`;
+    doc.save(fileName);
+    toast.success('PDF exported successfully');
+  };
 
   const formatTime12Hour = (date: Date) => {
     return format(date, 'yyyy-MM-dd hh:mm a');
@@ -963,7 +1139,30 @@ export const ReportsPanel = memo(() => {
                 )}
               </CardDescription>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Table Export Buttons - only show in table view */}
+              {viewMode === 'table' && (
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={exportTableExcel}
+                    className="gap-1"
+                  >
+                    <FileSpreadsheet className="h-4 w-4" />
+                    <span className="hidden sm:inline">Excel</span>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={exportTablePDF}
+                    className="gap-1"
+                  >
+                    <FileText className="h-4 w-4" />
+                    <span className="hidden sm:inline">PDF</span>
+                  </Button>
+                </>
+              )}
               {/* View Mode Toggle */}
               <div className="flex items-center border rounded-lg overflow-hidden">
                 <Button
@@ -1099,57 +1298,59 @@ export const ReportsPanel = memo(() => {
                     <TableRow className="bg-muted/50">
                       <TableHead className="w-14 text-center font-semibold text-primary whitespace-nowrap">S.NO</TableHead>
                       <TableHead className="font-semibold text-primary whitespace-nowrap min-w-[100px]">
-                        <div className="flex items-center">
-                          SHOP
-                          <ColumnFilterDropdown 
-                            title="Shop" 
-                            values={uniqueShopNames} 
-                            selectedFilters={tableShopFilters} 
-                            setFilters={setTableShopFilters} 
-                          />
-                        </div>
+                        <ColumnFilterDropdown 
+                          title="SHOP" 
+                          values={uniqueShopNames} 
+                          selectedFilters={tableShopFilters} 
+                          setFilters={setTableShopFilters}
+                          sortKey="shop"
+                        />
                       </TableHead>
                       <TableHead className="font-semibold text-primary whitespace-nowrap min-w-[100px]">
-                        <div className="flex items-center">
-                          CATEGORY
-                          <ColumnFilterDropdown 
-                            title="Category" 
-                            values={uniqueCategoryNames} 
-                            selectedFilters={tableCategoryFilters} 
-                            setFilters={setTableCategoryFilters} 
-                          />
-                        </div>
+                        <ColumnFilterDropdown 
+                          title="CATEGORY" 
+                          values={uniqueCategoryNames} 
+                          selectedFilters={tableCategoryFilters} 
+                          setFilters={setTableCategoryFilters}
+                          sortKey="category"
+                        />
                       </TableHead>
-                      <TableHead className="font-semibold text-primary whitespace-nowrap min-w-[80px] text-center">
-                        <div className="flex items-center justify-center">
-                          SIZE
-                          <ColumnFilterDropdown 
-                            title="Size" 
-                            values={uniqueSizeNames} 
-                            selectedFilters={tableSizeFilters} 
-                            setFilters={setTableSizeFilters} 
-                          />
-                        </div>
+                      <TableHead className="font-semibold text-primary whitespace-nowrap min-w-[80px]">
+                        <ColumnFilterDropdown 
+                          title="SIZE" 
+                          values={uniqueSizeNames} 
+                          selectedFilters={tableSizeFilters} 
+                          setFilters={setTableSizeFilters}
+                          sortKey="size"
+                        />
                       </TableHead>
                       <TableHead className="font-semibold text-primary whitespace-nowrap min-w-[130px]">
+                        <ColumnFilterDropdown 
+                          title="CUSTOMER TYPE" 
+                          values={uniqueCustomerTypeNames} 
+                          selectedFilters={tableCustomerTypeFilters} 
+                          setFilters={setTableCustomerTypeFilters}
+                          sortKey="customerType"
+                        />
+                      </TableHead>
+                      <TableHead className="font-semibold text-primary whitespace-nowrap min-w-[150px] cursor-pointer" onClick={() => handleSort('notes')}>
                         <div className="flex items-center">
-                          CUSTOMER TYPE
-                          <ColumnFilterDropdown 
-                            title="Customer Type" 
-                            values={uniqueCustomerTypeNames} 
-                            selectedFilters={tableCustomerTypeFilters} 
-                            setFilters={setTableCustomerTypeFilters} 
-                          />
+                          NOTES
+                          {getSortIcon('notes')}
                         </div>
                       </TableHead>
-                      <TableHead className="font-semibold text-primary whitespace-nowrap min-w-[150px]">NOTES</TableHead>
-                      <TableHead className="font-semibold text-primary whitespace-nowrap min-w-[140px]">DATE AND TIME</TableHead>
+                      <TableHead className="font-semibold text-primary whitespace-nowrap min-w-[140px] cursor-pointer" onClick={() => handleSort('date')}>
+                        <div className="flex items-center">
+                          DATE AND TIME
+                          {getSortIcon('date')}
+                        </div>
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {tableFilteredEntries.map((entry, index) => (
+                    {paginatedEntries.map((entry, index) => (
                       <TableRow key={entry.id} className="hover:bg-muted/30">
-                        <TableCell className="text-center font-medium">{index + 1}</TableCell>
+                        <TableCell className="text-center font-medium">{(currentPage - 1) * pageSize + index + 1}</TableCell>
                         <TableCell className="font-medium whitespace-nowrap">{entry.shops.name}</TableCell>
                         <TableCell className="whitespace-nowrap">{entry.categories.name}</TableCell>
                         <TableCell className="text-center whitespace-nowrap">{entry.sizes.size}</TableCell>
@@ -1165,6 +1366,73 @@ export const ReportsPanel = memo(() => {
                   </TableBody>
                 </Table>
               </div>
+              
+              {/* Pagination Controls */}
+              {tableFilteredEntries.length > 0 && (
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 pt-4 border-t">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <span>Show</span>
+                    <Select value={pageSize.toString()} onValueChange={(v) => { setPageSize(Number(v)); setCurrentPage(1); }}>
+                      <SelectTrigger className="w-16 h-8">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="10">10</SelectItem>
+                        <SelectItem value="25">25</SelectItem>
+                        <SelectItem value="50">50</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <span>per page</span>
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground">
+                      {(currentPage - 1) * pageSize + 1}-{Math.min(currentPage * pageSize, tableFilteredEntries.length)} of {tableFilteredEntries.length}
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(1)}
+                        disabled={currentPage === 1}
+                        className="h-8 px-2"
+                      >
+                        ««
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                        disabled={currentPage === 1}
+                        className="h-8 px-2"
+                      >
+                        «
+                      </Button>
+                      <span className="px-2 text-sm">
+                        Page {currentPage} of {totalPages}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                        disabled={currentPage === totalPages}
+                        className="h-8 px-2"
+                      >
+                        »
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(totalPages)}
+                        disabled={currentPage === totalPages}
+                        className="h-8 px-2"
+                      >
+                        »»
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="space-y-4">
