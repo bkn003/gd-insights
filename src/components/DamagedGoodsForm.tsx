@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { WhatsAppImageUpload } from '@/components/WhatsAppImageUpload';
 import { VoiceMicButton } from '@/components/VoiceMicButton';
+import { VoiceNoteRecorder } from '@/components/VoiceNoteRecorder';
 import { toast } from 'sonner';
 import { Database } from '@/types/database';
 type CustomerType = Database['public']['Tables']['customer_types']['Row'];
@@ -30,6 +31,7 @@ export const DamagedGoodsForm = () => {
   const [userShop, setUserShop] = useState<any>(null);
   const [customerTypes, setCustomerTypes] = useState<CustomerType[]>([]);
   const [selectedImages, setSelectedImages] = useState<File[]>([]);
+  const [voiceNoteFile, setVoiceNoteFile] = useState<File | null>(null);
   const [formData, setFormData] = useState({
     category_id: 'none',
     size_id: 'none',
@@ -106,13 +108,44 @@ export const DamagedGoodsForm = () => {
     });
     await Promise.all(uploadPromises);
   };
+
+  const uploadVoiceNote = async (entryId: string): Promise<string | null> => {
+    if (!voiceNoteFile) return null;
+    
+    const fileName = `${entryId}/${Date.now()}-${voiceNoteFile.name}`;
+    const { data, error } = await supabase.storage
+      .from('gd-voice-notes')
+      .upload(fileName, voiceNoteFile, {
+        cacheControl: '3600',
+        upsert: false
+      });
+    
+    if (error) throw error;
+    
+    const { data: { publicUrl } } = supabase.storage
+      .from('gd-voice-notes')
+      .getPublicUrl(data.path);
+    
+    return publicUrl;
+  };
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!profile) return;
-    if (formData.category_id === 'none' || formData.size_id === 'none' || formData.shop_id === 'none' || !formData.customer_type_id || !formData.notes.trim()) {
+    
+    // Validation: Notes OR Voice Note is required
+    const hasNotes = formData.notes.trim().length > 0;
+    const hasVoiceNote = voiceNoteFile !== null;
+    
+    if (formData.category_id === 'none' || formData.size_id === 'none' || formData.shop_id === 'none' || !formData.customer_type_id) {
       toast.error('Please fill in all required fields including customer type');
       return;
     }
+    
+    if (!hasNotes && !hasVoiceNote) {
+      toast.error('Please provide either Notes or Voice Note');
+      return;
+    }
+    
     setLoading(true);
 
     const entryData = {
@@ -122,7 +155,7 @@ export const DamagedGoodsForm = () => {
       customer_type_id: formData.customer_type_id,
       employee_id: profile.id,
       employee_name: profile.name,
-      notes: formData.notes.trim()
+      notes: formData.notes.trim() || 'Voice note attached'
     };
 
     try {
@@ -139,6 +172,7 @@ export const DamagedGoodsForm = () => {
             notes: ''
           });
           setSelectedImages([]);
+          setVoiceNoteFile(null);
 
           // Refocus notes input
           setTimeout(() => {
@@ -158,10 +192,30 @@ export const DamagedGoodsForm = () => {
 
       if (entryError) throw entryError;
 
+      // Upload voice note if any
+      let voiceNoteUrl: string | null = null;
+      if (voiceNoteFile) {
+        voiceNoteUrl = await uploadVoiceNote(createdEntry.id);
+        if (voiceNoteUrl) {
+          // Update entry with voice note URL
+          await supabase
+            .from('goods_damaged_entries')
+            .update({ voice_note_url: voiceNoteUrl })
+            .eq('id', createdEntry.id);
+        }
+      }
+
       // Upload images if any
       if (selectedImages.length > 0) {
         await uploadImages(createdEntry.id);
-        toast.success(`GD entry created with ${selectedImages.length} image(s)!`);
+      }
+      
+      const successParts = [];
+      if (selectedImages.length > 0) successParts.push(`${selectedImages.length} image(s)`);
+      if (voiceNoteUrl) successParts.push('voice note');
+      
+      if (successParts.length > 0) {
+        toast.success(`GD entry created with ${successParts.join(' and ')}!`);
       } else {
         toast.success('GD entry created successfully!');
       }
@@ -185,6 +239,7 @@ export const DamagedGoodsForm = () => {
         notes: ''
       });
       setSelectedImages([]);
+      setVoiceNoteFile(null);
 
       // Refocus notes input after successful submission
       setTimeout(() => {
@@ -287,14 +342,13 @@ export const DamagedGoodsForm = () => {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="notes">Notes *</Label>
+            <Label htmlFor="notes">Notes {!voiceNoteFile && '*'}</Label>
             <div className="flex gap-2 items-start">
               <Textarea 
                 id="notes" 
                 placeholder="Describe additional details" 
                 value={formData.notes} 
                 onChange={e => handleInputChange('notes', e.target.value)} 
-                required 
                 rows={4} 
                 autoFocus 
                 className="flex-1"
@@ -306,7 +360,13 @@ export const DamagedGoodsForm = () => {
                 onChange={(newValue) => handleInputChange('notes', newValue)}
               />
             </div>
-            <p className="text-sm text-muted-foreground">Use mic for Tamil voice input</p>
+            <p className="text-sm text-muted-foreground">Use mic for Tamil voice input. {voiceNoteFile ? 'Voice note attached - notes optional.' : 'Either Notes or Voice Note is required.'}</p>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Voice Note {!formData.notes.trim() && '*'}</Label>
+            <VoiceNoteRecorder onVoiceNoteChange={setVoiceNoteFile} />
+            <p className="text-sm text-muted-foreground">Record a voice message instead of typing notes.</p>
           </div>
 
           <div className="space-y-2">

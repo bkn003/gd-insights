@@ -13,8 +13,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ImageDisplay } from '@/components/ImageDisplay';
+import { ImageThumbnail } from '@/components/ImageThumbnail';
+import { VoiceNotePlayer } from '@/components/VoiceNotePlayer';
 import { toast } from 'sonner';
-import { Download, Filter, Calendar as CalendarIcon, FileText, Image, BarChart3, List, LayoutGrid, ChevronDown, Check, ArrowUpDown, ArrowUp, ArrowDown, FileSpreadsheet } from 'lucide-react';
+import { Download, Filter, Calendar as CalendarIcon, FileText, Image, BarChart3, List, LayoutGrid, ChevronDown, Check, ArrowUpDown, ArrowUp, ArrowDown, FileSpreadsheet, Volume2 } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { format } from 'date-fns';
 import { Database } from '@/types/database';
@@ -32,6 +34,7 @@ type GoodsEntry = Database['public']['Tables']['goods_damaged_entries']['Row'] &
     image_url: string;
     image_name?: string;
   }>;
+  voice_note_url?: string | null;
 };
 
 type Shop = Database['public']['Tables']['shops']['Row'];
@@ -1293,10 +1296,11 @@ export const ReportsPanel = memo(() => {
           ) : viewMode === 'table' ? (
             <div className="overflow-x-auto -mx-4 sm:-mx-6 px-4 sm:px-6">
               <div className="inline-block min-w-full align-middle">
-                <Table className="min-w-[900px]">
+                <Table className="min-w-[1100px]">
                   <TableHeader>
                     <TableRow className="bg-muted/50">
                       <TableHead className="w-14 text-center font-semibold text-primary whitespace-nowrap">S.NO</TableHead>
+                      <TableHead className="w-16 text-center font-semibold text-primary whitespace-nowrap">IMAGE</TableHead>
                       <TableHead className="font-semibold text-primary whitespace-nowrap min-w-[100px]">
                         <ColumnFilterDropdown 
                           title="SHOP" 
@@ -1339,6 +1343,9 @@ export const ReportsPanel = memo(() => {
                           {getSortIcon('notes')}
                         </div>
                       </TableHead>
+                      <TableHead className="w-12 text-center font-semibold text-primary whitespace-nowrap">
+                        <Volume2 className="h-4 w-4 mx-auto" />
+                      </TableHead>
                       <TableHead className="font-semibold text-primary whitespace-nowrap min-w-[140px] cursor-pointer" onClick={() => handleSort('date')}>
                         <div className="flex items-center">
                           DATE AND TIME
@@ -1351,12 +1358,22 @@ export const ReportsPanel = memo(() => {
                     {paginatedEntries.map((entry, index) => (
                       <TableRow key={entry.id} className="hover:bg-muted/30">
                         <TableCell className="text-center font-medium">{(currentPage - 1) * pageSize + index + 1}</TableCell>
+                        <TableCell className="text-center">
+                          <ImageThumbnail images={entry.gd_entry_images} maxDisplay={1} />
+                        </TableCell>
                         <TableCell className="font-medium whitespace-nowrap">{entry.shops.name}</TableCell>
                         <TableCell className="whitespace-nowrap">{entry.categories.name}</TableCell>
                         <TableCell className="text-center whitespace-nowrap">{entry.sizes.size}</TableCell>
                         <TableCell className="whitespace-nowrap">{entry.customer_types?.name || 'N/A'}</TableCell>
                         <TableCell className="max-w-[200px] truncate" title={entry.notes}>
                           {entry.notes}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {entry.voice_note_url ? (
+                            <VoiceNotePlayer voiceUrl={entry.voice_note_url} compact />
+                          ) : (
+                            <span className="text-muted-foreground text-xs">-</span>
+                          )}
                         </TableCell>
                         <TableCell className="text-muted-foreground whitespace-nowrap">
                           {formatDateTime(entry.created_at!)}
@@ -1458,6 +1475,14 @@ export const ReportsPanel = memo(() => {
                       {entry.notes}
                     </span>
                   </div>
+                  {entry.voice_note_url && (
+                    <div className="text-sm min-w-0">
+                      <span className="font-medium">Voice Note:</span>
+                      <div className="mt-2">
+                        <VoiceNotePlayer voiceUrl={entry.voice_note_url} />
+                      </div>
+                    </div>
+                  )}
                   {entry.gd_entry_images.length > 0 && (
                     <div className="text-sm min-w-0">
                       <span className="font-medium">Images:</span>

@@ -110,6 +110,7 @@ export type Database = {
           shop_id: string
           size_id: string
           updated_at: string | null
+          voice_note_url: string | null
         }
         Insert: {
           category_id: string
@@ -123,6 +124,7 @@ export type Database = {
           shop_id: string
           size_id: string
           updated_at?: string | null
+          voice_note_url?: string | null
         }
         Update: {
           category_id?: string
@@ -136,6 +138,7 @@ export type Database = {
           shop_id?: string
           size_id?: string
           updated_at?: string | null
+          voice_note_url?: string | null
         }
         Relationships: [
           {
