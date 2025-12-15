@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { useCachedData } from '@/hooks/useCachedData';
 import { useOfflineSync } from '@/hooks/useOfflineSync';
@@ -28,6 +29,7 @@ export const DamagedGoodsForm = () => {
     loading: dataLoading
   } = useCachedData();
   const { isOnline, pendingCount, saveOfflineEntry } = useOfflineSync();
+  const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
   const [userShop, setUserShop] = useState<any>(null);
   const [customerTypes, setCustomerTypes] = useState<CustomerType[]>([]);
@@ -238,6 +240,11 @@ export const DamagedGoodsForm = () => {
           url: '/'
         });
       }
+
+      // Invalidate relevant queries to refresh Dashboard and Reports
+      await queryClient.invalidateQueries({ queryKey: ['dashboard-entries'] });
+      await queryClient.invalidateQueries({ queryKey: ['reports-data'] }); // If reports uses React Query in future
+
 
       // Reset form
       setFormData({
