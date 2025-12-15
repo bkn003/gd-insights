@@ -103,7 +103,7 @@ export const UserManagement = ({ shops: propShops, profiles: propProfiles, onRef
 
       const typedProfiles = profilesData.map(profile => ({
         ...profile,
-        role: profile.role as 'admin' | 'user'
+        role: profile.role as 'admin' | 'user' | 'manager'
       }));
 
       setProfiles(typedProfiles);
@@ -156,12 +156,12 @@ export const UserManagement = ({ shops: propShops, profiles: propProfiles, onRef
       if (error) throw error;
 
       toast.success('User updated successfully');
-      
+
       // If the updated user is the current user, refresh their profile immediately
       if (user && editingUser.id === user.id) {
         await refreshProfile();
       }
-      
+
       setIsEditDialogOpen(false);
       setEditingUser(null);
       if (propOnRefresh) {
@@ -258,7 +258,7 @@ export const UserManagement = ({ shops: propShops, profiles: propProfiles, onRef
                 Update user information and assignments
               </DialogDescription>
             </DialogHeader>
-            
+
             {editingUser && (
               <EditUserForm
                 user={editingUser}
@@ -320,13 +320,14 @@ const EditUserForm = ({ user, shops, categories, sizes, onSave, onCancel }: Edit
         <Label htmlFor="role">Role</Label>
         <Select
           value={formData.role}
-          onValueChange={(value: 'admin' | 'user') => setFormData({ ...formData, role: value })}
+          onValueChange={(value: 'admin' | 'user' | 'manager') => setFormData({ ...formData, role: value })}
         >
           <SelectTrigger>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="user">User</SelectItem>
+            <SelectItem value="manager">Manager</SelectItem>
             <SelectItem value="admin">Admin</SelectItem>
           </SelectContent>
         </Select>
@@ -396,9 +397,9 @@ const EditUserForm = ({ user, shops, categories, sizes, onSave, onCancel }: Edit
         <Button type="submit" className="flex-1">
           Save Changes
         </Button>
-        <Button 
-          type="button" 
-          variant="outline" 
+        <Button
+          type="button"
+          variant="outline"
           className="flex-1"
           onClick={onCancel}
         >

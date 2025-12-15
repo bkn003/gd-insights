@@ -57,7 +57,7 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
           {isPlaying ? (
             <Pause className="h-3.5 w-3.5 text-primary" />
           ) : (
-            <Volume2 className="h-3.5 w-3.5 text-primary" />
+            <Play className="h-3.5 w-3.5 text-primary fill-current" />
           )}
         </Button>
       </>
@@ -72,7 +72,7 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
         onTimeUpdate={handleTimeUpdate}
         onEnded={handleEnded}
       />
-      
+
       <Button
         type="button"
         variant="ghost"
@@ -86,16 +86,16 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
           <Play className="h-4 w-4 text-primary" />
         )}
       </Button>
-      
+
       <div className="flex-1 min-w-[60px]">
         <div className="h-1.5 bg-primary/20 rounded-full overflow-hidden">
-          <div 
+          <div
             className="h-full bg-primary transition-all duration-100"
             style={{ width: `${progress}%` }}
           />
         </div>
       </div>
-      
+
       <Volume2 className="h-4 w-4 text-primary/60 shrink-0" />
     </div>
   );

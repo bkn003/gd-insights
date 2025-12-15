@@ -43,7 +43,7 @@ type Size = Database['public']['Tables']['sizes']['Row'];
 type CustomerType = Database['public']['Tables']['customer_types']['Row'];
 
 export const ReportsPanel = memo(() => {
-  const { isAdmin } = useAuth();
+  const { isAdmin, isManager, userShopId } = useAuth();
   const [loading, setLoading] = useState(true);
   const [entries, setEntries] = useState<GoodsEntry[]>([]);
   const [filteredEntries, setFilteredEntries] = useState<GoodsEntry[]>([]);
@@ -51,7 +51,7 @@ export const ReportsPanel = memo(() => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [sizes, setSizes] = useState<Size[]>([]);
   const [customerTypes, setCustomerTypes] = useState<CustomerType[]>([]);
-  
+
   // Filter states - default to "today"
   const [selectedShop, setSelectedShop] = useState<string>('all');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -61,24 +61,25 @@ export const ReportsPanel = memo(() => {
   const [customDateFrom, setCustomDateFrom] = useState<Date>();
   const [customDateTo, setCustomDateTo] = useState<Date>();
   const [viewMode, setViewMode] = useState<'table' | 'card'>('table');
-  
+
   // Table column filters (Excel-like)
   const [tableShopFilters, setTableShopFilters] = useState<string[]>([]);
   const [tableCategoryFilters, setTableCategoryFilters] = useState<string[]>([]);
   const [tableSizeFilters, setTableSizeFilters] = useState<string[]>([]);
   const [tableCustomerTypeFilters, setTableCustomerTypeFilters] = useState<string[]>([]);
-  
+
   // Sorting state
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
-  
+
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
 
+  // Re-fetch data when Manager's shop ID becomes available
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [isManager, userShopId]);
 
   useEffect(() => {
     applyFilters();
@@ -87,13 +88,20 @@ export const ReportsPanel = memo(() => {
   const fetchData = async () => {
     try {
       setLoading(true);
-      console.log('Starting to fetch data...');
-      
+      console.log('Starting to fetch data...', { isManager, userShopId });
+
       // Fetch entries with images
-      const { data: entriesData, error: entriesError } = await supabase
+      let query = supabase
         .from('goods_damaged_entries')
         .select('*')
         .order('created_at', { ascending: false });
+
+      if (isManager && userShopId) {
+        console.log('Filtering by manager shop:', userShopId);
+        query = query.eq('shop_id', userShopId);
+      }
+
+      const { data: entriesData, error: entriesError } = await query;
 
       if (entriesError) {
         console.error('Error fetching entries:', entriesError);
@@ -200,7 +208,7 @@ export const ReportsPanel = memo(() => {
     if (dateFilter !== 'all') {
       const now = new Date();
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      
+
       switch (dateFilter) {
         case 'today':
           filtered = filtered.filter(entry => {
@@ -301,15 +309,15 @@ export const ReportsPanel = memo(() => {
       bySize,
       byCustomerType,
       byNotes,
-      firstDate: new Date(firstDate).toLocaleDateString('en-IN', { 
-        year: 'numeric', 
-        month: 'short', 
-        day: 'numeric' 
+      firstDate: new Date(firstDate).toLocaleDateString('en-IN', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
       }),
-      lastDate: new Date(lastDate).toLocaleDateString('en-IN', { 
-        year: 'numeric', 
-        month: 'short', 
-        day: 'numeric' 
+      lastDate: new Date(lastDate).toLocaleDateString('en-IN', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
       })
     };
   }, [filteredEntries]);
@@ -317,7 +325,7 @@ export const ReportsPanel = memo(() => {
   // Apply table column filters and sorting for table view
   const tableFilteredEntries = useMemo(() => {
     let result = filteredEntries;
-    
+
     if (tableShopFilters.length > 0) {
       result = result.filter(e => tableShopFilters.includes(e.shops.name));
     }
@@ -330,13 +338,13 @@ export const ReportsPanel = memo(() => {
     if (tableCustomerTypeFilters.length > 0) {
       result = result.filter(e => tableCustomerTypeFilters.includes(e.customer_types?.name || 'N/A'));
     }
-    
+
     // Apply sorting
     if (sortColumn) {
       result = [...result].sort((a, b) => {
         let aVal: string = '';
         let bVal: string = '';
-        
+
         switch (sortColumn) {
           case 'shop':
             aVal = a.shops.name;
@@ -363,12 +371,12 @@ export const ReportsPanel = memo(() => {
             bVal = b.created_at || '';
             break;
         }
-        
+
         const comparison = aVal.localeCompare(bVal);
         return sortDirection === 'asc' ? comparison : -comparison;
       });
     }
-    
+
     return result;
   }, [filteredEntries, tableShopFilters, tableCategoryFilters, tableSizeFilters, tableCustomerTypeFilters, sortColumn, sortDirection]);
 
@@ -400,7 +408,7 @@ export const ReportsPanel = memo(() => {
     if (sortColumn !== column) {
       return <ArrowUpDown className="h-3 w-3 ml-1 text-muted-foreground" />;
     }
-    return sortDirection === 'asc' 
+    return sortDirection === 'asc'
       ? <ArrowUp className="h-3 w-3 ml-1 text-primary" />
       : <ArrowDown className="h-3 w-3 ml-1 text-primary" />;
   };
@@ -424,23 +432,23 @@ export const ReportsPanel = memo(() => {
   const selectAllFilter = (values: string[], setFilters: React.Dispatch<React.SetStateAction<string[]>>) => {
     setFilters([...values]);
   };
-  
+
   const clearFilter = (setFilters: React.Dispatch<React.SetStateAction<string[]>>) => {
     setFilters([]);
   };
 
   // Column filter dropdown component - entire header clickable
-  const ColumnFilterDropdown = ({ 
-    title, 
-    values, 
-    selectedFilters, 
+  const ColumnFilterDropdown = ({
+    title,
+    values,
+    selectedFilters,
     setFilters,
     sortKey,
     showSort = true
-  }: { 
-    title: string; 
-    values: string[]; 
-    selectedFilters: string[]; 
+  }: {
+    title: string;
+    values: string[];
+    selectedFilters: string[];
     setFilters: React.Dispatch<React.SetStateAction<string[]>>;
     sortKey?: string;
     showSort?: boolean;
@@ -460,17 +468,17 @@ export const ReportsPanel = memo(() => {
       <PopoverContent className="w-48 p-2" align="start">
         <div className="space-y-2">
           <div className="flex gap-1 border-b pb-2">
-            <Button 
-              variant="ghost" 
-              size="sm" 
+            <Button
+              variant="ghost"
+              size="sm"
               className="h-6 text-xs flex-1"
               onClick={() => selectAllFilter(values, setFilters)}
             >
               Select All
             </Button>
-            <Button 
-              variant="ghost" 
-              size="sm" 
+            <Button
+              variant="ghost"
+              size="sm"
               className="h-6 text-xs flex-1"
               onClick={() => clearFilter(setFilters)}
             >
@@ -485,7 +493,7 @@ export const ReportsPanel = memo(() => {
                   className="flex items-center gap-2 px-1 py-1 hover:bg-muted rounded cursor-pointer"
                   onClick={() => toggleFilter(value, selectedFilters, setFilters)}
                 >
-                  <Checkbox 
+                  <Checkbox
                     checked={selectedFilters.includes(value)}
                     className="h-3.5 w-3.5"
                   />
@@ -517,7 +525,7 @@ export const ReportsPanel = memo(() => {
     }));
 
     const ws = XLSX.utils.json_to_sheet(exportData);
-    
+
     // Auto-fit columns
     const colWidths = [
       { wch: 6 },  // S.NO
@@ -532,7 +540,7 @@ export const ReportsPanel = memo(() => {
 
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'GD Reports');
-    
+
     const fileName = `gd-reports-table-${format(new Date(), 'yyyy-MM-dd-HHmm')}.xlsx`;
     XLSX.writeFile(wb, fileName);
     toast.success('Excel exported successfully');
@@ -546,10 +554,10 @@ export const ReportsPanel = memo(() => {
     }
 
     const doc = new jsPDF('l', 'mm', 'a4');
-    
+
     doc.setFontSize(16);
     doc.text('GD Reports', 14, 15);
-    
+
     doc.setFontSize(10);
     doc.setTextColor(100);
     doc.text(`Generated: ${format(new Date(), 'dd-MM-yyyy HH:mm')} | Total: ${tableFilteredEntries.length} entries`, 14, 22);
@@ -628,7 +636,7 @@ export const ReportsPanel = memo(() => {
 
     try {
       toast.info('Preparing Excel export with embedded image thumbnails...');
-      
+
       const wb = XLSX.utils.book_new();
 
       // Prepare data for export with embedded images
@@ -659,10 +667,10 @@ export const ReportsPanel = memo(() => {
                 }
                 return null;
               });
-              
+
               const imageData = await Promise.all(imagePromises);
               const validImages = imageData.filter(img => img !== null);
-              
+
               if (validImages.length > 0) {
                 // Create a cell with image thumbnails data
                 const imageInfo = validImages.map(img => `📸 ${img?.name || 'Image'}`).join(' | ');
@@ -676,7 +684,7 @@ export const ReportsPanel = memo(() => {
               console.error('Error processing images for entry:', entry.id, error);
             }
           }
-          
+
           return {
             ...baseData,
             Images: 'No images',
@@ -690,7 +698,7 @@ export const ReportsPanel = memo(() => {
         // Clean data for export (remove thumbnail data from sheet)
         const cleanData = data.map(({ ImageThumbnails, ...rest }) => rest);
         const ws = XLSX.utils.json_to_sheet(cleanData, { skipHeader: false });
-        
+
         // Enhanced styling for image cells
         const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
         for (let R = range.s.r + 1; R <= range.e.r; ++R) {
@@ -703,7 +711,7 @@ export const ReportsPanel = memo(() => {
             };
           }
         }
-        
+
         // Auto-width and formatting
         const colWidths = [
           { wch: 18 }, // Date
@@ -716,11 +724,11 @@ export const ReportsPanel = memo(() => {
           { wch: 30 }  // Notes
         ];
         ws['!cols'] = colWidths;
-        
+
         // Set row heights for better display
         ws['!rows'] = [{ hpx: 25 }, ...data.map(() => ({ hpx: 45 }))];
         ws['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: 'A2', activePane: 'bottomLeft', state: 'frozen' };
-        
+
         return ws;
       };
 
@@ -748,7 +756,7 @@ export const ReportsPanel = memo(() => {
 
       const fileName = `gd_report_with_images_${format(new Date(), 'yyyyMMdd_HHmm')}.xlsx`;
       XLSX.writeFile(wb, fileName, { compression: true });
-      
+
       toast.success(`Excel report exported with embedded image thumbnails! ${filteredEntries.length} entries across multiple sheets`);
     } catch (error) {
       console.error('Error exporting Excel:', error);
@@ -764,9 +772,9 @@ export const ReportsPanel = memo(() => {
 
     try {
       toast.info('Generating advanced Excel export with images...');
-      
+
       const { data, error } = await supabase.functions.invoke('export-excel-with-images', {
-        body: { 
+        body: {
           entries: filteredEntries.map(entry => ({
             ...entry,
             // Include only necessary data to reduce payload size
@@ -792,7 +800,7 @@ export const ReportsPanel = memo(() => {
     } catch (error) {
       console.error('Error with advanced export:', error);
       toast.error('Failed to generate advanced export. Using fallback method...');
-      
+
       // Fallback to existing Excel export
       exportExcelMulti();
     }
@@ -806,7 +814,7 @@ export const ReportsPanel = memo(() => {
 
     try {
       console.log('Starting multi-sheet PDF export...');
-      
+
       // Wait for fonts to be ready
       await (document as any).fonts?.ready;
 
@@ -896,7 +904,7 @@ export const ReportsPanel = memo(() => {
           head: [sheetData[0] as string[]],
           body: sheetData.slice(1) as string[][],
           startY: 35,
-          styles: { 
+          styles: {
             fontSize: 9,
             cellPadding: 3,
             overflow: 'linebreak',
@@ -905,7 +913,7 @@ export const ReportsPanel = memo(() => {
             valign: 'top',
             fontStyle: 'normal'
           },
-          headStyles: { 
+          headStyles: {
             fillColor: [41, 128, 185],
             fontStyle: 'bold',
             textColor: [255, 255, 255],
@@ -926,7 +934,7 @@ export const ReportsPanel = memo(() => {
       // Step 3: Save final PDF
       const fileName = `gd_report_multisheet_${format(new Date(), 'yyyy-MM-dd')}.pdf`;
       doc.save(fileName);
-      
+
       console.log('Multi-sheet PDF saved successfully');
       toast.success(`PDF report exported successfully! ${filteredEntries.length} entries across ${wb.SheetNames.length} sheets`);
     } catch (error) {
@@ -1302,37 +1310,37 @@ export const ReportsPanel = memo(() => {
                       <TableHead className="w-14 text-center font-semibold text-primary whitespace-nowrap">S.NO</TableHead>
                       <TableHead className="w-16 text-center font-semibold text-primary whitespace-nowrap">IMAGE</TableHead>
                       <TableHead className="font-semibold text-primary whitespace-nowrap min-w-[100px]">
-                        <ColumnFilterDropdown 
-                          title="SHOP" 
-                          values={uniqueShopNames} 
-                          selectedFilters={tableShopFilters} 
+                        <ColumnFilterDropdown
+                          title="SHOP"
+                          values={uniqueShopNames}
+                          selectedFilters={tableShopFilters}
                           setFilters={setTableShopFilters}
                           sortKey="shop"
                         />
                       </TableHead>
                       <TableHead className="font-semibold text-primary whitespace-nowrap min-w-[100px]">
-                        <ColumnFilterDropdown 
-                          title="CATEGORY" 
-                          values={uniqueCategoryNames} 
-                          selectedFilters={tableCategoryFilters} 
+                        <ColumnFilterDropdown
+                          title="CATEGORY"
+                          values={uniqueCategoryNames}
+                          selectedFilters={tableCategoryFilters}
                           setFilters={setTableCategoryFilters}
                           sortKey="category"
                         />
                       </TableHead>
                       <TableHead className="font-semibold text-primary whitespace-nowrap min-w-[80px]">
-                        <ColumnFilterDropdown 
-                          title="SIZE" 
-                          values={uniqueSizeNames} 
-                          selectedFilters={tableSizeFilters} 
+                        <ColumnFilterDropdown
+                          title="SIZE"
+                          values={uniqueSizeNames}
+                          selectedFilters={tableSizeFilters}
                           setFilters={setTableSizeFilters}
                           sortKey="size"
                         />
                       </TableHead>
                       <TableHead className="font-semibold text-primary whitespace-nowrap min-w-[130px]">
-                        <ColumnFilterDropdown 
-                          title="CUSTOMER TYPE" 
-                          values={uniqueCustomerTypeNames} 
-                          selectedFilters={tableCustomerTypeFilters} 
+                        <ColumnFilterDropdown
+                          title="CUSTOMER TYPE"
+                          values={uniqueCustomerTypeNames}
+                          selectedFilters={tableCustomerTypeFilters}
                           setFilters={setTableCustomerTypeFilters}
                           sortKey="customerType"
                         />
@@ -1343,8 +1351,8 @@ export const ReportsPanel = memo(() => {
                           {getSortIcon('notes')}
                         </div>
                       </TableHead>
-                      <TableHead className="w-12 text-center font-semibold text-primary whitespace-nowrap">
-                        <Volume2 className="h-4 w-4 mx-auto" />
+                      <TableHead className="min-w-[200px] text-center font-semibold text-primary whitespace-nowrap">
+                        VOICE
                       </TableHead>
                       <TableHead className="font-semibold text-primary whitespace-nowrap min-w-[140px] cursor-pointer" onClick={() => handleSort('date')}>
                         <div className="flex items-center">
@@ -1383,7 +1391,7 @@ export const ReportsPanel = memo(() => {
                   </TableBody>
                 </Table>
               </div>
-              
+
               {/* Pagination Controls */}
               {tableFilteredEntries.length > 0 && (
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 pt-4 border-t">
@@ -1401,7 +1409,7 @@ export const ReportsPanel = memo(() => {
                     </Select>
                     <span>per page</span>
                   </div>
-                  
+
                   <div className="flex items-center gap-2">
                     <span className="text-sm text-muted-foreground">
                       {(currentPage - 1) * pageSize + 1}-{Math.min(currentPage * pageSize, tableFilteredEntries.length)} of {tableFilteredEntries.length}

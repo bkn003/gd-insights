@@ -90,7 +90,7 @@ export interface Database {
           id: string;
           name: string;
           user_id: string;
-          role: 'admin' | 'user';
+          role: 'admin' | 'user' | 'manager';
           shop_id: string | null;
           default_category_id: string | null;
           default_size_id: string | null;
@@ -102,7 +102,7 @@ export interface Database {
           id: string;
           name: string;
           user_id: string;
-          role?: 'admin' | 'user';
+          role?: 'admin' | 'user' | 'manager';
           shop_id?: string | null;
           default_category_id?: string | null;
           default_size_id?: string | null;
@@ -114,7 +114,7 @@ export interface Database {
           id?: string;
           name?: string;
           user_id?: string;
-          role?: 'admin' | 'user';
+          role?: 'admin' | 'user' | 'manager';
           shop_id?: string | null;
           default_category_id?: string | null;
           default_size_id?: string | null;

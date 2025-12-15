@@ -47,7 +47,7 @@ export const useAuth = () => {
       // Check cache first
       const cachedProfileStr = localStorage.getItem(PROFILE_CACHE_KEY);
       const now = Date.now();
-      
+
       if (cachedProfileStr) {
         const cachedProfile = JSON.parse(cachedProfileStr);
         if (now - cachedProfile.lastFetched < CACHE_DURATION && cachedProfile.id === userId) {
@@ -64,21 +64,21 @@ export const useAuth = () => {
         .single();
 
       if (error) throw error;
-      
+
       // Check if profile is soft-deleted
       if (data.deleted_at) {
         console.log('User profile is soft-deleted, signing out...');
         await signOut();
         return;
       }
-      
+
       // Cache the profile
       localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({
         data,
         lastFetched: now,
         id: userId
       }));
-      
+
       setProfile(data as Profile);
     } catch (error) {
       console.error('Error fetching profile:', error);
@@ -91,7 +91,7 @@ export const useAuth = () => {
   // Check user status less frequently - only every 5 minutes
   const checkUserStatus = async () => {
     if (!user) return;
-    
+
     try {
       const { data, error } = await supabase
         .from('profiles')
@@ -165,5 +165,7 @@ export const useAuth = () => {
     refreshProfile,
     checkUserStatus,
     isAdmin: profile?.role === 'admin',
+    isManager: profile?.role === 'manager',
+    userShopId: profile?.shop_id,
   };
 };

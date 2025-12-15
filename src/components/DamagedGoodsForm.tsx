@@ -15,6 +15,7 @@ import { VoiceMicButton } from '@/components/VoiceMicButton';
 import { VoiceNoteRecorder } from '@/components/VoiceNoteRecorder';
 import { toast } from 'sonner';
 import { Database } from '@/types/database';
+import { sanitizeNotes, isValidUUID } from '@/utils/security';
 type CustomerType = Database['public']['Tables']['customer_types']['Row'];
 export const DamagedGoodsForm = () => {
   const {
@@ -111,7 +112,7 @@ export const DamagedGoodsForm = () => {
 
   const uploadVoiceNote = async (entryId: string): Promise<string | null> => {
     if (!voiceNoteFile) return null;
-    
+
     const fileName = `${entryId}/${Date.now()}-${voiceNoteFile.name}`;
     const { data, error } = await supabase.storage
       .from('gd-voice-notes')
@@ -119,34 +120,42 @@ export const DamagedGoodsForm = () => {
         cacheControl: '3600',
         upsert: false
       });
-    
+
     if (error) throw error;
-    
+
     const { data: { publicUrl } } = supabase.storage
       .from('gd-voice-notes')
       .getPublicUrl(data.path);
-    
+
     return publicUrl;
   };
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!profile) return;
-    
+
     // Validation: Notes OR Voice Note is required
     const hasNotes = formData.notes.trim().length > 0;
     const hasVoiceNote = voiceNoteFile !== null;
-    
+
     if (formData.category_id === 'none' || formData.size_id === 'none' || formData.shop_id === 'none' || !formData.customer_type_id) {
       toast.error('Please fill in all required fields including customer type');
       return;
     }
-    
+
+    // Validate UUIDs to prevent injection
+    if (!isValidUUID(formData.category_id) || !isValidUUID(formData.size_id) || !isValidUUID(formData.shop_id) || (formData.customer_type_id && !isValidUUID(formData.customer_type_id))) {
+      toast.error('Invalid form data. Please refresh and try again.');
+      return;
+    }
+
     if (!hasNotes && !hasVoiceNote) {
       toast.error('Please provide either Notes or Voice Note');
       return;
     }
-    
+
     setLoading(true);
+
+    const sanitizedNotes = sanitizeNotes(formData.notes.trim(), 1000);
 
     const entryData = {
       category_id: formData.category_id,
@@ -155,7 +164,7 @@ export const DamagedGoodsForm = () => {
       customer_type_id: formData.customer_type_id,
       employee_id: profile.id,
       employee_name: profile.name,
-      notes: formData.notes.trim() || 'Voice note attached'
+      notes: sanitizedNotes || 'Voice note attached'
     };
 
     try {
@@ -209,11 +218,11 @@ export const DamagedGoodsForm = () => {
       if (selectedImages.length > 0) {
         await uploadImages(createdEntry.id);
       }
-      
+
       const successParts = [];
       if (selectedImages.length > 0) successParts.push(`${selectedImages.length} image(s)`);
       if (voiceNoteUrl) successParts.push('voice note');
-      
+
       if (successParts.length > 0) {
         toast.success(`GD entry created with ${successParts.join(' and ')}!`);
       } else {
@@ -265,120 +274,120 @@ export const DamagedGoodsForm = () => {
     return <div className="flex justify-center items-center h-64">Loading form data...</div>;
   }
   return <Card className="w-full max-w-2xl mx-auto">
-      <CardHeader>
-        <CardTitle className="flex items-center justify-between">
-          <span>Report GD</span>
-          <div className="flex items-center gap-2 text-sm font-normal">
-            {!isOnline && (
-              <span className="text-orange-500 flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse"></span>
-                Offline Mode
-              </span>
-            )}
-            {pendingCount > 0 && (
-              <span className="text-blue-500">
-                {pendingCount} pending
-              </span>
-            )}
+    <CardHeader>
+      <CardTitle className="flex items-center justify-between">
+        <span>Report GD</span>
+        <div className="flex items-center gap-2 text-sm font-normal">
+          {!isOnline && (
+            <span className="text-orange-500 flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse"></span>
+              Offline Mode
+            </span>
+          )}
+          {pendingCount > 0 && (
+            <span className="text-blue-500">
+              {pendingCount} pending
+            </span>
+          )}
+        </div>
+      </CardTitle>
+      <CardDescription>
+        Fill out this form to report GD in your store
+      </CardDescription>
+    </CardHeader>
+    <CardContent>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="category">Category *</Label>
+            <Select value={formData.category_id} onValueChange={value => handleInputChange('category_id', value)} required>
+              <SelectTrigger>
+                <SelectValue placeholder="Select a category" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Select a category</SelectItem>
+                {categories.map(category => <SelectItem key={category.id} value={category.id}>
+                  {category.name}
+                </SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
-        </CardTitle>
-        <CardDescription>
-          Fill out this form to report GD in your store
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="category">Category *</Label>
-              <Select value={formData.category_id} onValueChange={value => handleInputChange('category_id', value)} required>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a category" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Select a category</SelectItem>
-                  {categories.map(category => <SelectItem key={category.id} value={category.id}>
-                      {category.name}
-                    </SelectItem>)}
-                </SelectContent>
-              </Select>
+
+          <div className="space-y-2">
+            <Label htmlFor="size">Size *</Label>
+            <Select value={formData.size_id} onValueChange={value => handleInputChange('size_id', value)} required>
+              <SelectTrigger>
+                <SelectValue placeholder="Select a size" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Select a size</SelectItem>
+                {sizes.map(size => <SelectItem key={size.id} value={size.id}>
+                  {size.size}
+                </SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="shop">Shop *</Label>
+          <Input value={userShop?.name || (profile?.shop_id ? 'Loading shop...' : 'No shop assigned')} disabled className="bg-gray-100 cursor-not-allowed" />
+          <p className="text-sm text-muted-foreground">
+            Shop is automatically assigned based on your profile
+          </p>
+        </div>
+
+        <div className="space-y-3">
+          <Label>Type of Customer *</Label>
+          <RadioGroup value={formData.customer_type_id} onValueChange={value => handleInputChange('customer_type_id', value)} required>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {customerTypes.map(type => <div key={type.id} className="flex items-center space-x-2 border rounded-md p-3 hover:bg-accent cursor-pointer">
+                <RadioGroupItem value={type.id} id={type.id} />
+                <Label htmlFor={type.id} className="cursor-pointer flex-1">{type.name}</Label>
+              </div>)}
             </div>
+          </RadioGroup>
+          {customerTypes.length === 0 && <p className="text-sm text-muted-foreground">No customer types available. Please contact admin.</p>}
+        </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="size">Size *</Label>
-              <Select value={formData.size_id} onValueChange={value => handleInputChange('size_id', value)} required>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a size" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Select a size</SelectItem>
-                  {sizes.map(size => <SelectItem key={size.id} value={size.id}>
-                      {size.size}
-                    </SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
+        <div className="space-y-2">
+          <Label htmlFor="notes">Notes {!voiceNoteFile && '*'}</Label>
+          <div className="flex gap-2 items-start">
+            <Textarea
+              id="notes"
+              placeholder="Describe additional details"
+              value={formData.notes}
+              onChange={e => handleInputChange('notes', e.target.value)}
+              rows={4}
+              autoFocus
+              className="flex-1"
+            />
+            <VoiceMicButton
+              language="ta-IN"
+              mode="append"
+              value={formData.notes}
+              onChange={(newValue) => handleInputChange('notes', newValue)}
+            />
           </div>
+          <p className="text-sm text-muted-foreground">Use mic for Tamil voice input. {voiceNoteFile ? 'Voice note attached - notes optional.' : 'Either Notes or Voice Note is required.'}</p>
+        </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="shop">Shop *</Label>
-            <Input value={userShop?.name || (profile?.shop_id ? 'Loading shop...' : 'No shop assigned')} disabled className="bg-gray-100 cursor-not-allowed" />
-            <p className="text-sm text-muted-foreground">
-              Shop is automatically assigned based on your profile
-            </p>
-          </div>
+        <div className="space-y-2">
+          <Label>Voice Note {!formData.notes.trim() && '*'}</Label>
+          <VoiceNoteRecorder onVoiceNoteChange={setVoiceNoteFile} />
+          <p className="text-sm text-muted-foreground">Record a voice message instead of typing notes.</p>
+        </div>
 
-          <div className="space-y-3">
-            <Label>Type of Customer *</Label>
-            <RadioGroup value={formData.customer_type_id} onValueChange={value => handleInputChange('customer_type_id', value)} required>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {customerTypes.map(type => <div key={type.id} className="flex items-center space-x-2 border rounded-md p-3 hover:bg-accent cursor-pointer">
-                    <RadioGroupItem value={type.id} id={type.id} />
-                    <Label htmlFor={type.id} className="cursor-pointer flex-1">{type.name}</Label>
-                  </div>)}
-              </div>
-            </RadioGroup>
-            {customerTypes.length === 0 && <p className="text-sm text-muted-foreground">No customer types available. Please contact admin.</p>}
-          </div>
+        <div className="space-y-2">
+          <Label>Images (Optional)</Label>
+          <WhatsAppImageUpload onImagesChange={setSelectedImages} maxImages={10} />
+          <p className="text-sm text-muted-foreground">Add photos to help document the damage. Each image will be compressed to ≤50KB automatically.</p>
+        </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="notes">Notes {!voiceNoteFile && '*'}</Label>
-            <div className="flex gap-2 items-start">
-              <Textarea 
-                id="notes" 
-                placeholder="Describe additional details" 
-                value={formData.notes} 
-                onChange={e => handleInputChange('notes', e.target.value)} 
-                rows={4} 
-                autoFocus 
-                className="flex-1"
-              />
-              <VoiceMicButton
-                language="ta-IN"
-                mode="append"
-                value={formData.notes}
-                onChange={(newValue) => handleInputChange('notes', newValue)}
-              />
-            </div>
-            <p className="text-sm text-muted-foreground">Use mic for Tamil voice input. {voiceNoteFile ? 'Voice note attached - notes optional.' : 'Either Notes or Voice Note is required.'}</p>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Voice Note {!formData.notes.trim() && '*'}</Label>
-            <VoiceNoteRecorder onVoiceNoteChange={setVoiceNoteFile} />
-            <p className="text-sm text-muted-foreground">Record a voice message instead of typing notes.</p>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Images (Optional)</Label>
-            <WhatsAppImageUpload onImagesChange={setSelectedImages} maxImages={10} />
-            <p className="text-sm text-muted-foreground">Add photos to help document the damage. Each image will be compressed to ≤50KB automatically.</p>
-          </div>
-
-          <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? 'Submitting...' : 'Submit Report'}
-          </Button>
-        </form>
-      </CardContent>
-    </Card>;
+        <Button type="submit" className="w-full" disabled={loading}>
+          {loading ? 'Submitting...' : 'Submit Report'}
+        </Button>
+      </form>
+    </CardContent>
+  </Card>;
 };

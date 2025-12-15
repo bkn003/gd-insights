@@ -9,7 +9,7 @@ interface CachedData {
   lastFetched: number;
 }
 
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+const CACHE_DURATION = 15 * 60 * 1000; // 15 minutes
 const CACHE_KEY = 'gd_app_data';
 
 export const useCachedData = () => {
@@ -27,7 +27,7 @@ export const useCachedData = () => {
       // Check cache first
       const cachedDataStr = localStorage.getItem(CACHE_KEY);
       const now = Date.now();
-      
+
       if (cachedDataStr) {
         const cachedData: CachedData = JSON.parse(cachedDataStr);
         if (now - cachedData.lastFetched < CACHE_DURATION) {
@@ -59,7 +59,7 @@ export const useCachedData = () => {
 
       // Cache the data
       localStorage.setItem(CACHE_KEY, JSON.stringify(newData));
-      
+
       setCategories(categoriesRes.data);
       setSizes(sizesRes.data);
       setShops(shopsRes.data);

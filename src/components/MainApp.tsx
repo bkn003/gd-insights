@@ -1,32 +1,39 @@
 
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { Layout } from '@/components/Layout';
-import { Dashboard } from '@/components/Dashboard';
 import { DamagedGoodsForm } from '@/components/DamagedGoodsForm';
-import { AdminPanel } from '@/components/AdminPanel';
-import { ReportsPanel } from '@/components/ReportsPanel';
-import { UserProfile } from '@/components/UserProfile';
 import { MobileBottomNav } from '@/components/MobileBottomNav';
 import { PWAInstallPrompt } from '@/components/PWAInstallPrompt';
 import { Button } from '@/components/ui/button';
 import { BarChart3, Plus, Settings, FileText, User } from 'lucide-react';
 
+// Lazy load heavy components
+const Dashboard = React.lazy(() => import('@/components/Dashboard').then(m => ({ default: m.Dashboard })));
+const ReportsPanel = React.lazy(() => import('@/components/ReportsPanel').then(m => ({ default: m.ReportsPanel })));
+const AdminPanel = React.lazy(() => import('@/components/AdminPanel').then(m => ({ default: m.AdminPanel })));
+const UserProfile = React.lazy(() => import('@/components/UserProfile').then(m => ({ default: m.UserProfile })));
+
 type ActiveTab = 'gd' | 'dashboard' | 'admin' | 'reports' | 'profile';
 
 export const MainApp = () => {
-  const { isAdmin, profile, user, checkUserStatus } = useAuth();
+  const { isAdmin, isManager, profile, user, checkUserStatus } = useAuth();
   const { permission } = usePushNotifications(); // Initialize push notifications
-  const [activeTab, setActiveTab] = useState<ActiveTab>(isAdmin ? 'dashboard' : 'gd');
+  const [activeTab, setActiveTab] = useState<ActiveTab>((isAdmin || isManager) ? 'dashboard' : 'gd');
   const notesInputRef = useRef<HTMLTextAreaElement>(null);
 
   // Update active tab when user role changes
   useEffect(() => {
-    if (!isAdmin && activeTab !== 'gd') {
+    // Only regular users (not admin or manager) should be forced to GD tab
+    if (!isAdmin && !isManager && activeTab !== 'gd') {
       setActiveTab('gd');
     }
-  }, [isAdmin, activeTab]);
+    // Managers should not access admin tab
+    if (isManager && !isAdmin && activeTab === 'admin') {
+      setActiveTab('dashboard');
+    }
+  }, [isAdmin, isManager, activeTab]);
 
   // Check user status less frequently - every 5 minutes instead of 30 seconds
   useEffect(() => {
@@ -52,18 +59,32 @@ export const MainApp = () => {
     }
   }, [activeTab]);
 
+  const LoadingSpinner = () => (
+    <div className="flex justify-center items-center h-64">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+    </div>
+  );
+
   const renderContent = () => {
     switch (activeTab) {
       case 'gd':
         return <DamagedGoodsForm />;
       case 'dashboard':
-        return isAdmin ? <Dashboard /> : <div className="text-center text-muted-foreground">Access denied</div>;
+        return (isAdmin || isManager) ? (
+          <Suspense fallback={<LoadingSpinner />}><Dashboard /></Suspense>
+        ) : <div className="text-center text-muted-foreground">Access denied</div>;
       case 'admin':
-        return isAdmin ? <AdminPanel /> : <div className="text-center text-muted-foreground">Access denied</div>;
+        return isAdmin ? (
+          <Suspense fallback={<LoadingSpinner />}><AdminPanel /></Suspense>
+        ) : <div className="text-center text-muted-foreground">Access denied</div>;
       case 'reports':
-        return isAdmin ? <ReportsPanel /> : <div className="text-center text-muted-foreground">Access denied</div>;
+        return (isAdmin || isManager) ? (
+          <Suspense fallback={<LoadingSpinner />}><ReportsPanel /></Suspense>
+        ) : <div className="text-center text-muted-foreground">Access denied</div>;
       case 'profile':
-        return isAdmin ? <UserProfile /> : <div className="text-center text-muted-foreground">Access denied</div>;
+        return (isAdmin || isManager) ? (
+          <Suspense fallback={<LoadingSpinner />}><UserProfile /></Suspense>
+        ) : <div className="text-center text-muted-foreground">Access denied</div>;
       default:
         return <DamagedGoodsForm />;
     }
@@ -89,7 +110,7 @@ export const MainApp = () => {
               GD
             </Button>
             {/* Only show Profile button for admins */}
-            {isAdmin && (
+            {(isAdmin || isManager) && (
               <Button
                 variant={activeTab === 'profile' ? 'default' : 'ghost'}
                 onClick={() => setActiveTab('profile')}
@@ -99,7 +120,7 @@ export const MainApp = () => {
                 Profile
               </Button>
             )}
-            {isAdmin && (
+            {(isAdmin || isManager) && (
               <Button
                 variant={activeTab === 'dashboard' ? 'default' : 'ghost'}
                 onClick={() => setActiveTab('dashboard')}
@@ -109,7 +130,7 @@ export const MainApp = () => {
                 Dashboard
               </Button>
             )}
-            {isAdmin && (
+            {(isAdmin || isManager) && (
               <Button
                 variant={activeTab === 'reports' ? 'default' : 'ghost'}
                 onClick={() => setActiveTab('reports')}
@@ -137,10 +158,11 @@ export const MainApp = () => {
         </div>
 
         {/* Mobile Bottom Navigation */}
-        <MobileBottomNav 
-          activeTab={activeTab} 
-          setActiveTab={setActiveTab} 
-          isAdmin={isAdmin} 
+        <MobileBottomNav
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          isAdmin={isAdmin}
+          isManager={isManager}
         />
       </Layout>
     </>

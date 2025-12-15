@@ -16,6 +16,8 @@ import { format } from 'date-fns';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { ImageDisplay } from './ImageDisplay';
+import { VoiceNotePlayer } from './VoiceNotePlayer';
 
 interface GDEntry {
   id: string;
@@ -29,11 +31,13 @@ interface GDEntry {
   categories: { name: string } | null;
   sizes: { size: string } | null;
   customer_types: { name: string } | null;
+  voice_note_url?: string | null;
+  gd_entry_images?: Array<{ id: string; image_url: string; image_name?: string }>;
 }
 
 export const Dashboard = () => {
-  const { profile, isAdmin } = useAuth();
-  
+  const { profile, isAdmin, isManager, userShopId } = useAuth();
+
   // Filter states
   const [selectedShop, setSelectedShop] = useState<string>('all');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -43,10 +47,22 @@ export const Dashboard = () => {
   const [customDateTo, setCustomDateTo] = useState<Date>();
   const [showFilters, setShowFilters] = useState(false);
   const [showComparison, setShowComparison] = useState(false);
-  
+
   // Modal state
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [modalFilter, setModalFilter] = useState<{ type: 'shop' | 'category' | 'size' | 'customer_type'; value: string }>({ type: 'shop', value: '' });
+
+  // Effect to force shop selection for manager
+  useEffect(() => {
+    console.log('Dashboard Manager check:', { isManager, userShopId, selectedShop });
+    if (isManager && userShopId) {
+      // Always force manager to their shop
+      if (selectedShop === 'all' || selectedShop !== userShopId) {
+        console.log('Setting manager shop to:', userShopId);
+        setSelectedShop(userShopId);
+      }
+    }
+  }, [isManager, userShopId]);
 
   // Fetch master data (shops, categories, customer types)
   const { data: masterData } = useQuery({
@@ -69,7 +85,7 @@ export const Dashboard = () => {
 
   // Fetch all GD entries
   const { data: allEntries, isLoading, refetch } = useQuery<GDEntry[]>({
-    queryKey: ['dashboard-entries'],
+    queryKey: ['dashboard-entries', userShopId],
     queryFn: async () => {
       console.log('Fetching dashboard entries...');
       const { data, error } = await supabase
@@ -81,11 +97,14 @@ export const Dashboard = () => {
           category_id,
           size_id,
           customer_type_id,
+          customer_type_id,
           notes,
+          voice_note_url,
           shops!fk_goods_damaged_entries_shop(name),
           categories!fk_goods_damaged_entries_category(name),
           sizes!fk_goods_damaged_entries_size(size),
-          customer_types(name)
+          customer_types(name),
+          gd_entry_images(id, image_url, image_name)
         `)
         .order('created_at', { ascending: false });
 
@@ -97,7 +116,7 @@ export const Dashboard = () => {
       console.log('Fetched entries:', data?.length || 0);
       return data as GDEntry[];
     },
-    enabled: !!profile && isAdmin,
+    enabled: !!profile && (isAdmin || isManager),
     staleTime: 1000 * 60,
     refetchInterval: 1000 * 60 * 5,
   });
@@ -132,7 +151,7 @@ export const Dashboard = () => {
     const todayStart = new Date(now.setHours(0, 0, 0, 0));
     const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    
+
     // Previous periods
     const yesterdayStart = new Date(todayStart.getTime() - 24 * 60 * 60 * 1000);
     const twoWeeksAgo = new Date(weekAgo.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -142,17 +161,17 @@ export const Dashboard = () => {
     const today = filtered.filter(e => new Date(e.created_at) >= todayStart).length;
     const thisWeek = filtered.filter(e => new Date(e.created_at) >= weekAgo).length;
     const thisMonth = filtered.filter(e => new Date(e.created_at) >= monthStart).length;
-    
+
     const prevToday = filtered.filter(e => {
       const d = new Date(e.created_at);
       return d >= yesterdayStart && d < todayStart;
     }).length;
-    
+
     const prevWeek = filtered.filter(e => {
       const d = new Date(e.created_at);
       return d >= twoWeeksAgo && d < weekAgo;
     }).length;
-    
+
     const prevMonth = filtered.filter(e => {
       const d = new Date(e.created_at);
       return d >= prevMonthStart && d < monthStart;
@@ -168,10 +187,10 @@ export const Dashboard = () => {
     // - "all_time": show all filtered entries
     // - Custom dates set: show filtered entries
     // - Otherwise (default "today"): show only today's entries
-    const breakdownEntries = dateRangePreset === 'all_time' 
-      ? filtered 
-      : (customDateFrom || customDateTo) 
-        ? filtered 
+    const breakdownEntries = dateRangePreset === 'all_time'
+      ? filtered
+      : (customDateFrom || customDateTo)
+        ? filtered
         : filtered.filter(e => new Date(e.created_at) >= todayStart);
 
     breakdownEntries.forEach(entry => {
@@ -239,7 +258,7 @@ export const Dashboard = () => {
   const handleDateRangePresetChange = (value: string) => {
     setDateRangePreset(value);
     const now = new Date();
-    
+
     switch (value) {
       case 'today':
         setCustomDateFrom(new Date(now.setHours(0, 0, 0, 0)));
@@ -275,7 +294,7 @@ export const Dashboard = () => {
     }
   };
 
-  const hasActiveFilters = selectedShop !== 'all' || selectedCategory !== 'all' || 
+  const hasActiveFilters = selectedShop !== 'all' || selectedCategory !== 'all' ||
     selectedCustomerType !== 'all' || dateRangePreset !== 'today';
 
   const calculateChange = (current: number, previous: number) => {
@@ -289,7 +308,7 @@ export const Dashboard = () => {
 
     // Use date filters based on dateRangePreset
     let dateFilteredEntries = allEntries;
-    
+
     if (dateRangePreset === 'all_time') {
       // Show all entries for All Time
       dateFilteredEntries = allEntries;
@@ -355,7 +374,7 @@ export const Dashboard = () => {
     }));
 
     const ws = XLSX.utils.json_to_sheet(data);
-    
+
     // Auto-fit columns
     const colWidths = [
       { wch: 6 },  // S.NO
@@ -370,7 +389,7 @@ export const Dashboard = () => {
 
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'GD Entries');
-    
+
     const fileName = `GD_${modalFilter.type}_${modalFilter.value}_${format(new Date(), 'yyyy-MM-dd')}.xlsx`;
     XLSX.writeFile(wb, fileName);
   };
@@ -378,18 +397,18 @@ export const Dashboard = () => {
   // Export to PDF
   const exportToPDF = () => {
     const doc = new jsPDF();
-    
+
     // Add title
     doc.setFontSize(16);
     doc.text(`GD Report: ${modalFilter.value}`, 14, 15);
-    
+
     // Add subtitle with date range
     doc.setFontSize(10);
-    const dateRangeText = (customDateFrom || customDateTo) 
+    const dateRangeText = (customDateFrom || customDateTo)
       ? `${customDateFrom ? format(customDateFrom, 'PP') : ''} - ${customDateTo ? format(customDateTo, 'PP') : ''}`
       : "Today's entries";
     doc.text(dateRangeText, 14, 22);
-    
+
     // Add table
     const tableData = getModalEntries.map((entry, idx) => [
       idx + 1,
@@ -419,19 +438,19 @@ export const Dashboard = () => {
       },
       margin: { top: 28 }
     });
-    
+
     const fileName = `GD_${modalFilter.type}_${modalFilter.value}_${format(new Date(), 'yyyy-MM-dd')}.pdf`;
     doc.save(fileName);
   };
 
-  if (!isAdmin) {
+  if (!isAdmin && !isManager) {
     return (
       <div className="flex flex-col items-center justify-center h-[70vh] gap-6 px-4">
         <Package className="h-24 w-24 text-muted-foreground/20" />
         <div className="text-center space-y-2">
           <h2 className="text-2xl font-bold text-foreground">Dashboard Access</h2>
           <p className="text-muted-foreground max-w-md">
-            Dashboard is only available for admin users.
+            Dashboard is only available for admin and manager users.
           </p>
         </div>
       </div>
@@ -531,7 +550,11 @@ export const Dashboard = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                   <div className="space-y-2">
                     <Label>Shop</Label>
-                    <Select value={selectedShop} onValueChange={setSelectedShop}>
+                    <Select
+                      value={selectedShop}
+                      onValueChange={setSelectedShop}
+                      disabled={isManager}
+                    >
                       <SelectTrigger>
                         <SelectValue placeholder="All Shops" />
                       </SelectTrigger>
@@ -736,8 +759,8 @@ export const Dashboard = () => {
                   Object.entries(summary.byShop)
                     .sort(([, a], [, b]) => b - a)
                     .map(([name, count], idx) => (
-                      <div 
-                        key={name} 
+                      <div
+                        key={name}
                         onClick={() => handleItemClick('shop', name)}
                         className="flex justify-between items-center p-3 rounded-lg bg-card hover:bg-muted transition-all duration-200 border border-border hover:border-primary/40 cursor-pointer active:scale-[0.98]"
                       >
@@ -767,8 +790,8 @@ export const Dashboard = () => {
                   Object.entries(summary.byCategory)
                     .sort(([, a], [, b]) => b - a)
                     .map(([name, count], idx) => (
-                      <div 
-                        key={name} 
+                      <div
+                        key={name}
                         onClick={() => handleItemClick('category', name)}
                         className="flex justify-between items-center p-3 rounded-lg bg-card hover:bg-muted transition-all duration-200 border border-border hover:border-primary/40 cursor-pointer active:scale-[0.98]"
                       >
@@ -798,8 +821,8 @@ export const Dashboard = () => {
                   Object.entries(summary.bySize)
                     .sort(([, a], [, b]) => b - a)
                     .map(([name, count], idx) => (
-                      <div 
-                        key={name} 
+                      <div
+                        key={name}
                         onClick={() => handleItemClick('size', name)}
                         className="flex justify-between items-center p-3 rounded-lg bg-card hover:bg-muted transition-all duration-200 border border-border hover:border-primary/40 cursor-pointer active:scale-[0.98]"
                       >
@@ -829,8 +852,8 @@ export const Dashboard = () => {
                   Object.entries(summary.byCustomerType)
                     .sort(([, a], [, b]) => b - a)
                     .map(([name, count], idx) => (
-                      <div 
-                        key={name} 
+                      <div
+                        key={name}
                         onClick={() => handleItemClick('customer_type', name)}
                         className="flex justify-between items-center p-3 rounded-lg bg-card hover:bg-muted transition-all duration-200 border border-border hover:border-primary/40 cursor-pointer active:scale-[0.98]"
                       >
@@ -874,9 +897,9 @@ export const Dashboard = () => {
                     </DialogDescription>
                   </div>
                   <div className="flex gap-2">
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
+                    <Button
+                      variant="outline"
+                      size="sm"
                       onClick={exportToExcel}
                       className="gap-2"
                       disabled={getModalEntries.length === 0}
@@ -884,9 +907,9 @@ export const Dashboard = () => {
                       <FileSpreadsheet className="h-4 w-4" />
                       <span className="hidden sm:inline">Excel</span>
                     </Button>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
+                    <Button
+                      variant="outline"
+                      size="sm"
                       onClick={exportToPDF}
                       className="gap-2"
                       disabled={getModalEntries.length === 0}
@@ -897,7 +920,7 @@ export const Dashboard = () => {
                   </div>
                 </div>
               </DialogHeader>
-              
+
               <ScrollArea className="flex-1 -mx-6 px-6">
                 <div className="overflow-x-auto">
                   <Table>
@@ -908,6 +931,8 @@ export const Dashboard = () => {
                         <TableHead className="min-w-[100px] text-xs md:text-sm">CATEGORY</TableHead>
                         <TableHead className="w-16 text-xs md:text-sm">SIZE</TableHead>
                         <TableHead className="min-w-[120px] text-xs md:text-sm">CUSTOMER TYPE</TableHead>
+                        <TableHead className="w-16 text-xs md:text-sm">IMAGE</TableHead>
+                        <TableHead className="min-w-[200px] text-xs md:text-sm">VOICE</TableHead>
                         <TableHead className="min-w-[150px] text-xs md:text-sm">NOTES</TableHead>
                         <TableHead className="min-w-[140px] text-xs md:text-sm">DATE AND TIME</TableHead>
                       </TableRow>
@@ -921,6 +946,19 @@ export const Dashboard = () => {
                             <TableCell className="text-xs md:text-sm">{entry.categories?.name || 'N/A'}</TableCell>
                             <TableCell className="text-xs md:text-sm">{entry.sizes?.size || 'N/A'}</TableCell>
                             <TableCell className="text-xs md:text-sm">{entry.customer_types?.name || 'N/A'}</TableCell>
+                            <TableCell className="text-xs md:text-sm">
+                              {entry.gd_entry_images && entry.gd_entry_images.length > 0 && (
+                                <ImageDisplay images={entry.gd_entry_images} />
+                              )}
+                            </TableCell>
+                            <TableCell className="text-xs md:text-sm">
+                              {entry.voice_note_url && (
+                                <VoiceNotePlayer
+                                  voiceNoteUrl={entry.voice_note_url}
+                                  compact={true}
+                                />
+                              )}
+                            </TableCell>
                             <TableCell className="text-xs md:text-sm max-w-[200px] truncate" title={entry.notes}>
                               {entry.notes}
                             </TableCell>

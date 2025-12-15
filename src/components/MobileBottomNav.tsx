@@ -8,9 +8,10 @@ interface MobileBottomNavProps {
   activeTab: ActiveTab;
   setActiveTab: (tab: ActiveTab) => void;
   isAdmin: boolean;
+  isManager?: boolean;
 }
 
-export const MobileBottomNav = ({ activeTab, setActiveTab, isAdmin }: MobileBottomNavProps) => {
+export const MobileBottomNav = ({ activeTab, setActiveTab, isAdmin, isManager }: MobileBottomNavProps) => {
   return (
     <div className="md:hidden fixed bottom-0 left-0 right-0 bg-background border-t border-border">
       <div className="flex justify-around items-center py-2 px-4">
@@ -23,9 +24,9 @@ export const MobileBottomNav = ({ activeTab, setActiveTab, isAdmin }: MobileBott
           <Plus className="h-4 w-4" />
           <span className="text-xs">GD</span>
         </Button>
-        
-        {/* Only show Profile button for admins */}
-        {isAdmin && (
+
+        {/* Only show Profile button for admins and managers */}
+        {(isAdmin || isManager) && (
           <Button
             variant={activeTab === 'profile' ? 'default' : 'ghost'}
             onClick={() => setActiveTab('profile')}
@@ -37,7 +38,7 @@ export const MobileBottomNav = ({ activeTab, setActiveTab, isAdmin }: MobileBott
           </Button>
         )}
 
-        {isAdmin && (
+        {(isAdmin || isManager) && (
           <Button
             variant={activeTab === 'dashboard' ? 'default' : 'ghost'}
             onClick={() => setActiveTab('dashboard')}
@@ -49,7 +50,7 @@ export const MobileBottomNav = ({ activeTab, setActiveTab, isAdmin }: MobileBott
           </Button>
         )}
 
-        {isAdmin && (
+        {(isAdmin || isManager) && (
           <Button
             variant={activeTab === 'reports' ? 'default' : 'ghost'}
             onClick={() => setActiveTab('reports')}
