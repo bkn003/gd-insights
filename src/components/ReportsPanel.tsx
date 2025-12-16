@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useOfflineSync } from '@/hooks/useOfflineSync';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -42,8 +43,9 @@ type Category = Database['public']['Tables']['categories']['Row'];
 type Size = Database['public']['Tables']['sizes']['Row'];
 type CustomerType = Database['public']['Tables']['customer_types']['Row'];
 
-export const ReportsPanel = memo(() => {
-  const { isAdmin, isManager, userShopId } = useAuth();
+export const ReportsPanel = () => {
+  const { profile, isAdmin, isManager, userShopId } = useAuth();
+  const { isOnline, pendingCount } = useOfflineSync();
   const [loading, setLoading] = useState(true);
   const [entries, setEntries] = useState<GoodsEntry[]>([]);
   const [filteredEntries, setFilteredEntries] = useState<GoodsEntry[]>([]);
@@ -110,18 +112,28 @@ export const ReportsPanel = memo(() => {
 
       console.log('Fetched entries:', entriesData);
 
-      // Fetch images for all entries
-      const { data: imagesData, error: imagesError } = await supabase
-        .from('gd_entry_images')
-        .select('*')
-        .order('created_at', { ascending: true });
+      // Get entry IDs to filter images
+      const entryIds = entriesData.map(e => e.id);
 
-      if (imagesError) {
-        console.error('Error fetching images:', imagesError);
-        throw imagesError;
+      // Fetch images only for the entries we have access to
+      let imagesData: any[] = [];
+      if (entryIds.length > 0) {
+        const { data: imgData, error: imagesError } = await supabase
+          .from('gd_entry_images')
+          .select('*')
+          .in('gd_entry_id', entryIds)
+          .order('created_at', { ascending: true });
+
+        if (imagesError) {
+          console.error('Error fetching images:', imagesError);
+          // Don't throw - just log and continue with empty images
+        } else {
+          imagesData = imgData || [];
+        }
       }
 
-      console.log('Fetched images:', imagesData);
+      console.log('Fetched images for entries:', imagesData);
+
 
       // Fetch related data separately
       const [shopsRes, categoriesRes, sizesRes, customerTypesRes] = await Promise.all([
@@ -960,14 +972,47 @@ export const ReportsPanel = memo(() => {
   return (
     <div className="space-y-6 w-full min-w-0">
       <Card className="w-full">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
-            <Filter className="h-4 w-4 sm:h-5 sm:w-5" />
-            Filters & Export
-          </CardTitle>
-          <CardDescription className="text-sm">
-            Filter and export GD reports
-          </CardDescription>
+        {/* Header content was already replaced correctly above, just need to ensure surrounding structure is valid */}
+        {/* ... checking previous edit ... */}
+        {/* The previous edit seems to have replaced CardHeader content but maybe messed up braces if not careful */}
+        {/* Re-applying the header section cleanly to be safe */}
+        <CardHeader className="rounded-t-2xl border-b bg-gradient-to-r from-background to-muted/20">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="space-y-1.5">
+              <CardTitle className="text-2xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary/80 flex items-center gap-2">
+                GD Reports
+                {!isOnline && (
+                  <span className="text-xs font-normal text-orange-500 bg-orange-50 px-2 py-0.5 rounded-full border border-orange-100 flex items-center gap-1.5 shadow-sm">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-orange-500"></span>
+                    </span>
+                    Offline Mode
+                  </span>
+                )}
+                {pendingCount > 0 && (
+                  <span className="text-xs font-normal text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100 shadow-sm">
+                    {pendingCount} pending
+                  </span>
+                )}
+              </CardTitle>
+              <CardDescription className="text-muted-foreground/90">
+                Generated report for {entries.length} goods damaged entries
+              </CardDescription>
+            </div>
+
+            <div className="flex items-center gap-2.5">
+              {/* Re-adding export buttons if they were lost or just ensuring closure */}
+              <Button onClick={() => exportToExcel(filteredEntries)} variant="outline" size="sm" className="h-9 gap-2">
+                <FileSpreadsheet className="h-4 w-4" />
+                <span className="hidden sm:inline">Excel</span>
+              </Button>
+              <Button onClick={() => exportToPDF(filteredEntries)} variant="outline" size="sm" className="h-9 gap-2">
+                <FileText className="h-4 w-4" />
+                <span className="hidden sm:inline">PDF</span>
+              </Button>
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Mobile-friendly grid layout */}
@@ -1308,7 +1353,6 @@ export const ReportsPanel = memo(() => {
                   <TableHeader>
                     <TableRow className="bg-muted/50">
                       <TableHead className="w-14 text-center font-semibold text-primary whitespace-nowrap">S.NO</TableHead>
-                      <TableHead className="w-16 text-center font-semibold text-primary whitespace-nowrap">IMAGE</TableHead>
                       <TableHead className="font-semibold text-primary whitespace-nowrap min-w-[100px]">
                         <ColumnFilterDropdown
                           title="SHOP"
@@ -1351,6 +1395,9 @@ export const ReportsPanel = memo(() => {
                           {getSortIcon('notes')}
                         </div>
                       </TableHead>
+                      <TableHead className="w-16 text-center font-semibold text-primary whitespace-nowrap">
+                        IMAGE
+                      </TableHead>
                       <TableHead className="min-w-[200px] text-center font-semibold text-primary whitespace-nowrap">
                         VOICE
                       </TableHead>
@@ -1366,15 +1413,17 @@ export const ReportsPanel = memo(() => {
                     {paginatedEntries.map((entry, index) => (
                       <TableRow key={entry.id} className="hover:bg-muted/30">
                         <TableCell className="text-center font-medium">{(currentPage - 1) * pageSize + index + 1}</TableCell>
-                        <TableCell className="text-center">
-                          <ImageThumbnail images={entry.gd_entry_images} maxDisplay={1} />
-                        </TableCell>
-                        <TableCell className="font-medium whitespace-nowrap">{entry.shops.name}</TableCell>
-                        <TableCell className="whitespace-nowrap">{entry.categories.name}</TableCell>
+                        <TableCell className="font-medium whitespace-nowrap text-center">{entry.shops.name}</TableCell>
+                        <TableCell className="whitespace-nowrap text-center">{entry.categories.name}</TableCell>
                         <TableCell className="text-center whitespace-nowrap">{entry.sizes.size}</TableCell>
-                        <TableCell className="whitespace-nowrap">{entry.customer_types?.name || 'N/A'}</TableCell>
+                        <TableCell className="whitespace-nowrap text-center">{entry.customer_types?.name || 'N/A'}</TableCell>
                         <TableCell className="max-w-[200px] truncate" title={entry.notes}>
                           {entry.notes}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {entry.gd_entry_images && entry.gd_entry_images.length > 0 && (
+                            <ImageDisplay images={entry.gd_entry_images} />
+                          )}
                         </TableCell>
                         <TableCell className="text-center">
                           {entry.voice_note_url ? (
@@ -1383,7 +1432,7 @@ export const ReportsPanel = memo(() => {
                             <span className="text-muted-foreground text-xs">-</span>
                           )}
                         </TableCell>
-                        <TableCell className="text-muted-foreground whitespace-nowrap">
+                        <TableCell className="text-muted-foreground whitespace-nowrap text-center">
                           {formatDateTime(entry.created_at!)}
                         </TableCell>
                       </TableRow>
@@ -1507,4 +1556,4 @@ export const ReportsPanel = memo(() => {
       </Card>
     </div>
   );
-});
+};

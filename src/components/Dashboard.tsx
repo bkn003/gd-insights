@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/hooks/useAuth';
+import { useOfflineSync } from '@/hooks/useOfflineSync';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -37,6 +38,7 @@ interface GDEntry {
 
 export const Dashboard = () => {
   const { profile, isAdmin, isManager, userShopId } = useAuth();
+  const { isOnline, pendingCount } = useOfflineSync();
 
   // Filter states
   const [selectedShop, setSelectedShop] = useState<string>('all');
@@ -88,7 +90,9 @@ export const Dashboard = () => {
     queryKey: ['dashboard-entries', userShopId],
     queryFn: async () => {
       console.log('Fetching dashboard entries...');
-      const { data, error } = await supabase
+
+      // Fetch entries without images first
+      const { data: entriesData, error: entriesError } = await supabase
         .from('goods_damaged_entries')
         .select(`
           id,
@@ -97,29 +101,54 @@ export const Dashboard = () => {
           category_id,
           size_id,
           customer_type_id,
-          customer_type_id,
           notes,
           voice_note_url,
           shops!fk_goods_damaged_entries_shop(name),
           categories!fk_goods_damaged_entries_category(name),
           sizes!fk_goods_damaged_entries_size(size),
-          customer_types(name),
-          gd_entry_images(id, image_url, image_name)
+          customer_types(name)
         `)
         .order('created_at', { ascending: false });
 
-      if (error) {
-        console.error('Dashboard fetch error:', error);
-        throw error;
+      if (entriesError) {
+        console.error('Dashboard fetch error:', entriesError);
+        throw entriesError;
       }
 
-      console.log('Fetched entries:', data?.length || 0);
-      return data as GDEntry[];
+      // Fetch images separately for reliability
+      const entryIds = entriesData?.map(e => e.id) || [];
+      let imagesData: any[] = [];
+
+      if (entryIds.length > 0) {
+        const { data: imgData, error: imagesError } = await supabase
+          .from('gd_entry_images')
+          .select('id, gd_entry_id, image_url, image_name')
+          .in('gd_entry_id', entryIds)
+          .order('created_at', { ascending: true });
+
+        if (imagesError) {
+          console.error('Dashboard images fetch error:', imagesError);
+          // Continue without images rather than failing
+        } else {
+          imagesData = imgData || [];
+        }
+      }
+
+      console.log('Fetched entries:', entriesData?.length || 0, 'images:', imagesData.length);
+
+      // Join images to entries
+      const entriesWithImages = entriesData?.map(entry => ({
+        ...entry,
+        gd_entry_images: imagesData.filter(img => img.gd_entry_id === entry.id)
+      })) || [];
+
+      return entriesWithImages as GDEntry[];
     },
     enabled: !!profile && (isAdmin || isManager),
     staleTime: 1000 * 60,
     refetchInterval: 1000 * 60 * 5,
   });
+
 
   // Calculate summary from filtered entries
   const summary = useMemo(() => {
@@ -926,35 +955,31 @@ export const Dashboard = () => {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="w-12 text-xs md:text-sm">S.NO</TableHead>
-                        <TableHead className="min-w-[100px] text-xs md:text-sm">SHOP</TableHead>
-                        <TableHead className="min-w-[100px] text-xs md:text-sm">CATEGORY</TableHead>
-                        <TableHead className="w-16 text-xs md:text-sm">SIZE</TableHead>
-                        <TableHead className="min-w-[120px] text-xs md:text-sm">CUSTOMER TYPE</TableHead>
-                        <TableHead className="w-16 text-xs md:text-sm">IMAGE</TableHead>
-                        <TableHead className="min-w-[200px] text-xs md:text-sm">VOICE</TableHead>
-                        <TableHead className="min-w-[150px] text-xs md:text-sm">NOTES</TableHead>
-                        <TableHead className="min-w-[140px] text-xs md:text-sm">DATE AND TIME</TableHead>
+                        <TableHead className="w-12 text-xs md:text-sm text-center">S.NO</TableHead>
+                        <TableHead className="min-w-[100px] text-xs md:text-sm text-center">SHOP</TableHead>
+                        <TableHead className="min-w-[100px] text-xs md:text-sm text-center">CATEGORY</TableHead>
+                        <TableHead className="w-16 text-xs md:text-sm text-center">SIZE</TableHead>
+                        <TableHead className="min-w-[120px] text-xs md:text-sm text-center">CUSTOMER TYPE</TableHead>
+                        <TableHead className="min-w-[200px] text-xs md:text-sm text-center">VOICE</TableHead>
+                        <TableHead className="min-w-[150px] text-xs md:text-sm text-center">NOTES</TableHead>
+                        <TableHead className="w-16 text-xs md:text-sm text-center">IMAGE</TableHead>
+                        <TableHead className="min-w-[140px] text-xs md:text-sm text-center">DATE AND TIME</TableHead>
                       </TableRow>
                     </TableHeader>
+
                     <TableBody>
                       {getModalEntries.length > 0 ? (
                         getModalEntries.map((entry, idx) => (
                           <TableRow key={entry.id}>
                             <TableCell className="font-medium text-xs md:text-sm">{idx + 1}</TableCell>
-                            <TableCell className="text-xs md:text-sm">{entry.shops?.name || 'N/A'}</TableCell>
-                            <TableCell className="text-xs md:text-sm">{entry.categories?.name || 'N/A'}</TableCell>
-                            <TableCell className="text-xs md:text-sm">{entry.sizes?.size || 'N/A'}</TableCell>
-                            <TableCell className="text-xs md:text-sm">{entry.customer_types?.name || 'N/A'}</TableCell>
-                            <TableCell className="text-xs md:text-sm">
-                              {entry.gd_entry_images && entry.gd_entry_images.length > 0 && (
-                                <ImageDisplay images={entry.gd_entry_images} />
-                              )}
-                            </TableCell>
-                            <TableCell className="text-xs md:text-sm">
+                            <TableCell className="text-xs md:text-sm text-center">{entry.shops?.name || 'N/A'}</TableCell>
+                            <TableCell className="text-xs md:text-sm text-center">{entry.categories?.name || 'N/A'}</TableCell>
+                            <TableCell className="text-xs md:text-sm text-center">{entry.sizes?.size || 'N/A'}</TableCell>
+                            <TableCell className="text-xs md:text-sm text-center">{entry.customer_types?.name || 'N/A'}</TableCell>
+                            <TableCell className="text-xs md:text-sm text-center">
                               {entry.voice_note_url && (
                                 <VoiceNotePlayer
-                                  voiceNoteUrl={entry.voice_note_url}
+                                  voiceUrl={entry.voice_note_url}
                                   compact={true}
                                 />
                               )}
@@ -962,7 +987,12 @@ export const Dashboard = () => {
                             <TableCell className="text-xs md:text-sm max-w-[200px] truncate" title={entry.notes}>
                               {entry.notes}
                             </TableCell>
-                            <TableCell className="text-xs md:text-sm whitespace-nowrap">
+                            <TableCell className="text-xs md:text-sm text-center">
+                              {entry.gd_entry_images && entry.gd_entry_images.length > 0 && (
+                                <ImageDisplay images={entry.gd_entry_images} />
+                              )}
+                            </TableCell>
+                            <TableCell className="text-xs md:text-sm whitespace-nowrap text-center">
                               {formatDateTime(entry.created_at)}
                             </TableCell>
                           </TableRow>
