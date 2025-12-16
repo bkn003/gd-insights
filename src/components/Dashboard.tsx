@@ -19,6 +19,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ImageDisplay } from './ImageDisplay';
 import { VoiceNotePlayer } from './VoiceNotePlayer';
+import { NoteViewerModal } from './NoteViewerModal';
 
 interface GDEntry {
   id: string;
@@ -984,8 +985,12 @@ export const Dashboard = () => {
                                 />
                               )}
                             </TableCell>
-                            <TableCell className="text-xs md:text-sm max-w-[200px] truncate" title={entry.notes}>
-                              {entry.notes}
+                            <TableCell className="text-xs md:text-sm max-w-[200px]">
+                              {entry.notes ? (
+                                <NoteViewerModal notes={entry.notes} />
+                              ) : (
+                                <span className="text-muted-foreground text-xs">-</span>
+                              )}
                             </TableCell>
                             <TableCell className="text-xs md:text-sm text-center">
                               {entry.gd_entry_images && entry.gd_entry_images.length > 0 && (

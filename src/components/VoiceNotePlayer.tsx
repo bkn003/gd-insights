@@ -84,9 +84,18 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
 
   const handleEnded = () => {
     setIsPlaying(false);
-    setCurrentTime(0);
+    setCurrentTime(duration); // Set to end position first for visual feedback
     if (audioRef.current) {
       audioRef.current.currentTime = 0;
+    }
+    // Reset after a brief moment so user sees the bar reach the end
+    setTimeout(() => setCurrentTime(0), 100);
+  };
+
+  // Native timeupdate event for reliable seek bar sync
+  const handleTimeUpdate = () => {
+    if (audioRef.current && !isDragging) {
+      setCurrentTime(audioRef.current.currentTime);
     }
   };
 
@@ -147,6 +156,7 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
           preload="metadata"
           onLoadedMetadata={handleLoadedMetadata}
           onEnded={handleEnded}
+          onTimeUpdate={handleTimeUpdate}
         />
 
         {/* Play/Pause Button */}
@@ -227,6 +237,7 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
         preload="metadata"
         onLoadedMetadata={handleLoadedMetadata}
         onEnded={handleEnded}
+        onTimeUpdate={handleTimeUpdate}
       />
 
       {/* Play/Pause Button */}

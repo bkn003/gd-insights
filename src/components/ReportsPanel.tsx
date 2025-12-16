@@ -16,6 +16,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { ImageDisplay } from '@/components/ImageDisplay';
 import { ImageThumbnail } from '@/components/ImageThumbnail';
 import { VoiceNotePlayer } from '@/components/VoiceNotePlayer';
+import { NoteViewerModal } from '@/components/NoteViewerModal';
 import { toast } from 'sonner';
 import { Download, Filter, Calendar as CalendarIcon, FileText, Image, BarChart3, List, LayoutGrid, ChevronDown, Check, ArrowUpDown, ArrowUp, ArrowDown, FileSpreadsheet, Volume2 } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -1417,8 +1418,12 @@ export const ReportsPanel = () => {
                         <TableCell className="whitespace-nowrap text-center">{entry.categories.name}</TableCell>
                         <TableCell className="text-center whitespace-nowrap">{entry.sizes.size}</TableCell>
                         <TableCell className="whitespace-nowrap text-center">{entry.customer_types?.name || 'N/A'}</TableCell>
-                        <TableCell className="max-w-[200px] truncate" title={entry.notes}>
-                          {entry.notes}
+                        <TableCell className="max-w-[200px]">
+                          {entry.notes ? (
+                            <NoteViewerModal notes={entry.notes} />
+                          ) : (
+                            <span className="text-muted-foreground text-xs">-</span>
+                          )}
                         </TableCell>
                         <TableCell className="text-center">
                           {entry.gd_entry_images && entry.gd_entry_images.length > 0 && (
