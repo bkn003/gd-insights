@@ -18,8 +18,9 @@ import { ImageThumbnail } from '@/components/ImageThumbnail';
 import { VoiceNotePlayer } from '@/components/VoiceNotePlayer';
 import { NoteViewerModal } from '@/components/NoteViewerModal';
 import { toast } from 'sonner';
-import { Download, Filter, Calendar as CalendarIcon, FileText, Image, BarChart3, List, LayoutGrid, ChevronDown, Check, ArrowUpDown, ArrowUp, ArrowDown, FileSpreadsheet, Volume2 } from 'lucide-react';
+import { Download, Filter, Calendar as CalendarIcon, FileText, Image, BarChart3, List, LayoutGrid, ChevronDown, Check, ArrowUpDown, ArrowUp, ArrowDown, FileSpreadsheet, Volume2, Trash2, AlertTriangle } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { format } from 'date-fns';
 import { Database } from '@/types/database';
 import * as XLSX from 'xlsx';
@@ -78,6 +79,10 @@ export const ReportsPanel = () => {
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
+
+  // Bulk delete state (admin only)
+  const [selectedEntries, setSelectedEntries] = useState<Set<string>>(new Set());
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Re-fetch data when Manager's shop ID becomes available
   useEffect(() => {
@@ -519,6 +524,72 @@ export const ReportsPanel = () => {
       </PopoverContent>
     </Popover>
   );
+
+  // Bulk delete functions (admin only)
+  const toggleSelectEntry = (entryId: string) => {
+    setSelectedEntries(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(entryId)) {
+        newSet.delete(entryId);
+      } else {
+        newSet.add(entryId);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedEntries.size === paginatedEntries.length) {
+      setSelectedEntries(new Set());
+    } else {
+      setSelectedEntries(new Set(paginatedEntries.map(e => e.id)));
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedEntries.size === 0) return;
+    
+    setIsDeleting(true);
+    try {
+      const idsToDelete = Array.from(selectedEntries);
+      
+      // Delete associated images from storage first
+      for (const id of idsToDelete) {
+        const entry = entries.find(e => e.id === id);
+        if (entry?.gd_entry_images?.length) {
+          for (const img of entry.gd_entry_images) {
+            const path = img.image_url.split('/gd-entry-images/')[1];
+            if (path) {
+              await supabase.storage.from('gd-entry-images').remove([path]);
+            }
+          }
+        }
+        if (entry?.voice_note_url) {
+          const voicePath = entry.voice_note_url.split('/gd-voice-notes/')[1];
+          if (voicePath) {
+            await supabase.storage.from('gd-voice-notes').remove([voicePath]);
+          }
+        }
+      }
+
+      // Delete image records
+      await supabase.from('gd_entry_images').delete().in('gd_entry_id', idsToDelete);
+
+      // Delete entries
+      const { error } = await supabase.from('goods_damaged_entries').delete().in('id', idsToDelete);
+      
+      if (error) throw error;
+
+      toast.success(`Deleted ${idsToDelete.length} entries`);
+      setSelectedEntries(new Set());
+      fetchData();
+    } catch (error: any) {
+      console.error('Bulk delete error:', error);
+      toast.error(error.message || 'Failed to delete entries');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   // Export table data to Excel
   const exportTableExcel = () => {
@@ -1004,11 +1075,11 @@ export const ReportsPanel = () => {
 
             <div className="flex items-center gap-2.5">
               {/* Re-adding export buttons if they were lost or just ensuring closure */}
-              <Button onClick={() => exportToExcel(filteredEntries)} variant="outline" size="sm" className="h-9 gap-2">
+              <Button onClick={exportTableExcel} variant="outline" size="sm" className="h-9 gap-2">
                 <FileSpreadsheet className="h-4 w-4" />
                 <span className="hidden sm:inline">Excel</span>
               </Button>
-              <Button onClick={() => exportToPDF(filteredEntries)} variant="outline" size="sm" className="h-9 gap-2">
+              <Button onClick={exportTablePDF} variant="outline" size="sm" className="h-9 gap-2">
                 <FileText className="h-4 w-4" />
                 <span className="hidden sm:inline">PDF</span>
               </Button>
@@ -1197,6 +1268,34 @@ export const ReportsPanel = () => {
               </CardDescription>
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              {/* Bulk Delete Button - Admin only */}
+              {isAdmin && selectedEntries.size > 0 && (
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive" size="sm" className="gap-1" disabled={isDeleting}>
+                      <Trash2 className="h-4 w-4" />
+                      Delete ({selectedEntries.size})
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle className="flex items-center gap-2">
+                        <AlertTriangle className="h-5 w-5 text-destructive" />
+                        Delete {selectedEntries.size} Entries?
+                      </AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This will permanently delete the selected entries along with their images and voice notes. This action cannot be undone.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleBulkDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                        {isDeleting ? 'Deleting...' : 'Delete'}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              )}
               {/* Table Export Buttons - only show in table view */}
               {viewMode === 'table' && (
                 <>
@@ -1353,6 +1452,14 @@ export const ReportsPanel = () => {
                 <Table className="min-w-[1100px]">
                   <TableHeader>
                     <TableRow className="bg-muted/50">
+                      {isAdmin && (
+                        <TableHead className="w-10 text-center">
+                          <Checkbox
+                            checked={selectedEntries.size === paginatedEntries.length && paginatedEntries.length > 0}
+                            onCheckedChange={toggleSelectAll}
+                          />
+                        </TableHead>
+                      )}
                       <TableHead className="w-14 text-center font-semibold text-primary whitespace-nowrap">S.NO</TableHead>
                       <TableHead className="font-semibold text-primary whitespace-nowrap min-w-[100px]">
                         <ColumnFilterDropdown
@@ -1412,7 +1519,15 @@ export const ReportsPanel = () => {
                   </TableHeader>
                   <TableBody>
                     {paginatedEntries.map((entry, index) => (
-                      <TableRow key={entry.id} className="hover:bg-muted/30">
+                      <TableRow key={entry.id} className={`hover:bg-muted/30 ${selectedEntries.has(entry.id) ? 'bg-primary/5' : ''}`}>
+                        {isAdmin && (
+                          <TableCell className="text-center">
+                            <Checkbox
+                              checked={selectedEntries.has(entry.id)}
+                              onCheckedChange={() => toggleSelectEntry(entry.id)}
+                            />
+                          </TableCell>
+                        )}
                         <TableCell className="text-center font-medium">{(currentPage - 1) * pageSize + index + 1}</TableCell>
                         <TableCell className="font-medium whitespace-nowrap text-center">{entry.shops.name}</TableCell>
                         <TableCell className="whitespace-nowrap text-center">{entry.categories.name}</TableCell>
