@@ -28,7 +28,7 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
   // Generate pseudo-waveform bars (consistent pattern per URL)
   const waveformBars = useMemo(() => {
     const bars: number[] = [];
-    const numBars = compact ? 30 : 45;
+    const numBars = compact ? 35 : 50;
     let hash = 0;
     for (let i = 0; i < voiceUrl.length; i++) {
       hash = ((hash << 5) - hash) + voiceUrl.charCodeAt(i);
@@ -36,7 +36,7 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
     }
     for (let i = 0; i < numBars; i++) {
       const seed = Math.abs(Math.sin(hash * (i + 1)) * 10000);
-      bars.push(0.25 + (seed % 75) / 100);
+      bars.push(0.2 + (seed % 80) / 100);
     }
     return bars;
   }, [voiceUrl, compact]);
@@ -84,12 +84,10 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
 
   const handleEnded = () => {
     setIsPlaying(false);
-    setCurrentTime(duration); // Set to end position first for visual feedback
     if (audioRef.current) {
       audioRef.current.currentTime = 0;
     }
-    // Reset after a brief moment so user sees the bar reach the end
-    setTimeout(() => setCurrentTime(0), 100);
+    setCurrentTime(0);
   };
 
   // Native timeupdate event for reliable seek bar sync
@@ -149,7 +147,7 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
   // Compact mode for table cells (like WhatsApp)
   if (compact) {
     return (
-      <div className="flex items-center gap-2 min-w-[150px] max-w-[200px] mx-auto">
+      <div className="flex items-center gap-2 min-w-[160px] max-w-[220px] mx-auto bg-muted/40 rounded-full px-1.5 py-1">
         <audio
           ref={audioRef}
           src={voiceUrl}
@@ -165,38 +163,39 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
           variant="ghost"
           size="icon"
           onClick={togglePlay}
-          className="h-7 w-7 shrink-0 text-primary hover:text-primary hover:bg-primary/10 rounded-full"
+          className="h-8 w-8 shrink-0 rounded-full bg-primary text-primary-foreground hover:bg-primary/90"
         >
           {isPlaying ? (
-            <Pause className="h-4 w-4 fill-current" />
+            <Pause className="h-3.5 w-3.5 fill-current" />
           ) : (
-            <Play className="h-4 w-4 fill-current ml-0.5" />
+            <Play className="h-3.5 w-3.5 fill-current ml-0.5" />
           )}
         </Button>
 
         {/* Waveform with Seek Bar */}
         <div
           ref={waveformRef}
-          className="flex-1 h-7 cursor-pointer relative select-none"
+          className="flex-1 h-8 cursor-pointer relative select-none overflow-hidden"
           onMouseDown={handlePointerDown}
           onTouchStart={handlePointerDown}
         >
           {/* Waveform Bars */}
-          <div className="absolute inset-0 flex items-center gap-[1px]">
+          <div className="absolute inset-0 flex items-center gap-px">
             {waveformBars.map((height, index) => {
               const barPercent = ((index + 0.5) / waveformBars.length) * 100;
               const isPlayed = barPercent <= progress;
               return (
                 <div
                   key={index}
-                  className="flex-1 rounded-full transition-colors duration-75"
+                  className="flex-1 rounded-full"
                   style={{
                     height: `${height * 100}%`,
                     minWidth: '2px',
                     maxWidth: '3px',
                     backgroundColor: isPlayed
                       ? 'hsl(var(--primary))'
-                      : 'hsl(var(--muted-foreground) / 0.35)'
+                      : 'hsl(var(--muted-foreground) / 0.3)',
+                    transition: 'background-color 0.1s ease'
                   }}
                 />
               );
@@ -205,24 +204,21 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
 
           {/* Seek Dot/Circle (WhatsApp style) */}
           <div
-            className="absolute top-1/2 z-20 pointer-events-none"
+            className="absolute top-1/2 z-20 pointer-events-none transition-[left] duration-75"
             style={{
               left: `${progress}%`,
               transform: 'translate(-50%, -50%)'
             }}
           >
             <div
-              className="w-3 h-3 rounded-full bg-primary shadow-md"
-              style={{
-                boxShadow: '0 1px 3px rgba(0,0,0,0.3)'
-              }}
+              className="w-3.5 h-3.5 rounded-full bg-primary shadow-md border-2 border-background"
             />
           </div>
         </div>
 
         {/* Time display */}
-        <span className="text-xs text-muted-foreground tabular-nums min-w-[28px] text-right">
-          {formatTime(currentTime)}
+        <span className="text-[10px] text-muted-foreground tabular-nums min-w-[28px] text-right pr-1">
+          {isPlaying || currentTime > 0 ? formatTime(currentTime) : formatTime(duration)}
         </span>
       </div>
     );
@@ -230,7 +226,7 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
 
   // Full mode for card view
   return (
-    <div className="flex items-center gap-3 p-3 bg-primary/5 rounded-xl border border-primary/10">
+    <div className="flex items-center gap-3 p-3 bg-muted/30 rounded-2xl border border-border/50">
       <audio
         ref={audioRef}
         src={voiceUrl}
@@ -246,7 +242,7 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
         variant="ghost"
         size="icon"
         onClick={togglePlay}
-        className="h-10 w-10 shrink-0 rounded-full bg-primary text-primary-foreground hover:bg-primary/90"
+        className="h-11 w-11 shrink-0 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 shadow-md"
       >
         {isPlaying ? (
           <Pause className="h-5 w-5 fill-current" />
@@ -258,7 +254,7 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
       {/* Waveform with Seek Bar */}
       <div
         ref={waveformRef}
-        className="flex-1 h-10 cursor-pointer relative select-none"
+        className="flex-1 h-10 cursor-pointer relative select-none overflow-hidden"
         onMouseDown={handlePointerDown}
         onTouchStart={handlePointerDown}
       >
@@ -270,14 +266,15 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
             return (
               <div
                 key={index}
-                className="flex-1 rounded-full transition-colors duration-75"
+                className="flex-1 rounded-full"
                 style={{
                   height: `${height * 100}%`,
                   minWidth: '2px',
                   maxWidth: '4px',
                   backgroundColor: isPlayed
                     ? 'hsl(var(--primary))'
-                    : 'hsl(var(--muted-foreground) / 0.35)'
+                    : 'hsl(var(--muted-foreground) / 0.3)',
+                  transition: 'background-color 0.1s ease'
                 }}
               />
             );
@@ -286,25 +283,29 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
 
         {/* Seek Dot/Circle (WhatsApp style) */}
         <div
-          className="absolute top-1/2 z-20 pointer-events-none"
+          className="absolute top-1/2 z-20 pointer-events-none transition-[left] duration-75"
           style={{
             left: `${progress}%`,
             transform: 'translate(-50%, -50%)'
           }}
         >
           <div
-            className="w-4 h-4 rounded-full bg-primary shadow-lg ring-2 ring-white"
-            style={{
-              boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
-            }}
+            className="w-4 h-4 rounded-full bg-primary shadow-lg border-2 border-background"
           />
         </div>
       </div>
 
       {/* Time display */}
-      <span className="text-sm text-muted-foreground tabular-nums min-w-[36px] text-right font-medium">
-        {formatTime(currentTime)}
-      </span>
+      <div className="flex flex-col items-end min-w-[36px]">
+        <span className="text-sm text-foreground tabular-nums font-medium">
+          {isPlaying || currentTime > 0 ? formatTime(currentTime) : formatTime(duration)}
+        </span>
+        {duration > 0 && (isPlaying || currentTime > 0) && (
+          <span className="text-[10px] text-muted-foreground tabular-nums">
+            / {formatTime(duration)}
+          </span>
+        )}
+      </div>
     </div>
   );
 };
