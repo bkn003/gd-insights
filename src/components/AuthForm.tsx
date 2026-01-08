@@ -167,14 +167,12 @@ export const AuthForm = () => {
                 <div className="flex items-center justify-between">
                   <Label htmlFor="password">Password</Label>
                   {!isSignUp && (
-                    <Button
-                      type="button"
-                      variant="link"
-                      onClick={() => setIsForgotPassword(true)}
-                      className="text-xs px-0 h-auto"
+                    <a
+                      href="/reset-password"
+                      className="text-xs text-primary hover:underline"
                     >
                       Forgot password?
-                    </Button>
+                    </a>
                   )}
                 </div>
                 <PasswordInput

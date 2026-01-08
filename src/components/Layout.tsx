@@ -1,9 +1,9 @@
-
 import { ReactNode } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
-import { LogOut, Menu, Package, BarChart3, Settings } from 'lucide-react';
+import { LogOut, Package } from 'lucide-react';
 import { toast } from 'sonner';
+import { NotificationBell } from './NotificationBell';
 
 interface LayoutProps {
   children: ReactNode;
@@ -45,6 +45,10 @@ export const Layout = ({ children }: LayoutProps) => {
                   </span>
                 )}
               </div>
+              
+              {/* Real-time Notification Bell */}
+              <NotificationBell />
+              
               <Button
                 variant="outline"
                 size="sm"
