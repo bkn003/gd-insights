@@ -7,6 +7,8 @@ interface VoiceNotePlayerProps {
   compact?: boolean;
 }
 
+const PLAYBACK_SPEEDS = [0.5, 1, 1.5, 2];
+
 // Format seconds to M:SS
 const formatTime = (seconds: number): string => {
   if (isNaN(seconds) || !isFinite(seconds)) return '0:00';
@@ -20,6 +22,7 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
   const [duration, setDuration] = useState(0);
   const [isLoaded, setIsLoaded] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [playbackSpeed, setPlaybackSpeed] = useState(1);
   
   // Use ref for immediate progress updates (no re-render delay)
   const [progressPercent, setProgressPercent] = useState(0);
@@ -76,6 +79,19 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
     };
   }, [isPlaying, isDragging, updateProgressFrame]);
 
+  // Update playback speed when changed
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.playbackRate = playbackSpeed;
+    }
+  }, [playbackSpeed]);
+
+  const cyclePlaybackSpeed = () => {
+    const currentIndex = PLAYBACK_SPEEDS.indexOf(playbackSpeed);
+    const nextIndex = (currentIndex + 1) % PLAYBACK_SPEEDS.length;
+    setPlaybackSpeed(PLAYBACK_SPEEDS[nextIndex]);
+  };
+
   const togglePlay = () => {
     if (audioRef.current) {
       if (isPlaying) {
@@ -95,6 +111,7 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
     if (audioRef.current) {
       setDuration(audioRef.current.duration);
       setIsLoaded(true);
+      audioRef.current.playbackRate = playbackSpeed;
     }
   };
 
@@ -119,22 +136,33 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
     return position * duration;
   }, [compact, duration]);
 
-  // Seek to position
-  const seekTo = (newTime: number) => {
+  // Seek to position and update UI immediately
+  const seekTo = useCallback((newTime: number) => {
     if (audioRef.current && duration > 0) {
-      audioRef.current.currentTime = newTime;
-      const percent = (newTime / duration) * 100;
+      const clampedTime = Math.max(0, Math.min(newTime, duration));
+      audioRef.current.currentTime = clampedTime;
+      const percent = (clampedTime / duration) * 100;
       setProgressPercent(percent);
-      setDisplayTime(newTime);
+      setDisplayTime(clampedTime);
     }
+  }, [duration]);
+
+  // Handle click on waveform to seek (single click without drag)
+  const handleWaveformClick = (e: React.MouseEvent) => {
+    if (!isLoaded || !duration) return;
+    const clientX = e.clientX;
+    const newTime = getTimeFromPosition(clientX);
+    seekTo(newTime);
   };
 
-  // Mouse/Touch handlers for seeking
+  // Mouse/Touch handlers for drag seeking
   const handlePointerDown = (e: React.MouseEvent | React.TouchEvent) => {
-    if (!isLoaded) return;
+    if (!isLoaded || !duration) return;
+    e.preventDefault();
     setIsDragging(true);
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-    seekTo(getTimeFromPosition(clientX));
+    const newTime = getTimeFromPosition(clientX);
+    seekTo(newTime);
   };
 
   useEffect(() => {
@@ -165,12 +193,12 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
       window.removeEventListener('touchmove', handleMove);
       window.removeEventListener('touchend', handleUp);
     };
-  }, [isDragging, isPlaying, updateProgressFrame, getTimeFromPosition]);
+  }, [isDragging, isPlaying, updateProgressFrame, getTimeFromPosition, seekTo]);
 
   // Compact mode for table cells (like WhatsApp)
   if (compact) {
     return (
-      <div className="flex items-center gap-2 min-w-[160px] max-w-[220px] mx-auto bg-muted/40 rounded-full px-1.5 py-1">
+      <div className="flex items-center gap-1.5 min-w-[180px] max-w-[240px] mx-auto bg-muted/40 rounded-full px-1.5 py-1">
         <audio
           ref={audioRef}
           src={voiceUrl}
@@ -185,12 +213,12 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
           variant="ghost"
           size="icon"
           onClick={togglePlay}
-          className="h-8 w-8 shrink-0 rounded-full bg-primary text-primary-foreground hover:bg-primary/90"
+          className="h-7 w-7 shrink-0 rounded-full bg-primary text-primary-foreground hover:bg-primary/90"
         >
           {isPlaying ? (
-            <Pause className="h-3.5 w-3.5 fill-current" />
+            <Pause className="h-3 w-3 fill-current" />
           ) : (
-            <Play className="h-3.5 w-3.5 fill-current ml-0.5" />
+            <Play className="h-3 w-3 fill-current ml-0.5" />
           )}
         </Button>
 
@@ -198,11 +226,12 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
         <div
           ref={waveformCompactRef}
           className="flex-1 h-8 cursor-pointer relative select-none overflow-hidden touch-none"
+          onClick={handleWaveformClick}
           onMouseDown={handlePointerDown}
           onTouchStart={handlePointerDown}
         >
           {/* Waveform Bars */}
-          <div className="absolute inset-0 flex items-center gap-px">
+          <div className="absolute inset-0 flex items-center gap-px pointer-events-none">
             {waveformBars.map((height, index) => {
               const barPercent = ((index + 0.5) / waveformBars.length) * 100;
               const isPlayed = barPercent <= progressPercent;
@@ -233,15 +262,26 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
             }}
           >
             <div
-              className="w-3.5 h-3.5 rounded-full bg-primary shadow-md border-2 border-background"
+              className="w-3 h-3 rounded-full bg-primary shadow-md border-2 border-background"
             />
           </div>
         </div>
 
         {/* Time display */}
-        <span className="text-[10px] text-muted-foreground tabular-nums min-w-[28px] text-right pr-1">
+        <span className="text-[10px] text-muted-foreground tabular-nums min-w-[24px] text-right">
           {isPlaying || displayTime > 0 ? formatTime(displayTime) : formatTime(duration)}
         </span>
+
+        {/* Speed Control Button */}
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={cyclePlaybackSpeed}
+          className="h-5 px-1 text-[9px] font-medium text-muted-foreground hover:text-foreground shrink-0"
+        >
+          {playbackSpeed}x
+        </Button>
       </div>
     );
   }
@@ -276,11 +316,12 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
       <div
         ref={waveformRef}
         className="flex-1 h-10 cursor-pointer relative select-none overflow-hidden touch-none"
+        onClick={handleWaveformClick}
         onMouseDown={handlePointerDown}
         onTouchStart={handlePointerDown}
       >
         {/* Waveform Bars */}
-        <div className="absolute inset-0 flex items-center gap-[1px]">
+        <div className="absolute inset-0 flex items-center gap-[1px] pointer-events-none">
           {waveformBars.map((height, index) => {
             const barPercent = ((index + 0.5) / waveformBars.length) * 100;
             const isPlayed = barPercent <= progressPercent;
@@ -327,6 +368,17 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
           </span>
         )}
       </div>
+
+      {/* Speed Control Button */}
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={cyclePlaybackSpeed}
+        className="h-7 px-2 text-xs font-medium shrink-0"
+      >
+        {playbackSpeed}x
+      </Button>
     </div>
   );
 };
