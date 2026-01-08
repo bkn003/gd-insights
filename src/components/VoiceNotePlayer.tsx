@@ -27,6 +27,7 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
   
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const waveformRef = useRef<HTMLDivElement | null>(null);
+  const waveformCompactRef = useRef<HTMLDivElement | null>(null);
   const animationFrameRef = useRef<number | null>(null);
 
   // Generate pseudo-waveform bars (consistent pattern per URL)
@@ -110,12 +111,13 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
   };
 
   // Calculate new time from click/touch position
-  const getTimeFromPosition = (clientX: number): number => {
-    if (!waveformRef.current || !duration) return 0;
-    const rect = waveformRef.current.getBoundingClientRect();
+  const getTimeFromPosition = useCallback((clientX: number): number => {
+    const ref = compact ? waveformCompactRef.current : waveformRef.current;
+    if (!ref || !duration) return 0;
+    const rect = ref.getBoundingClientRect();
     const position = Math.max(0, Math.min((clientX - rect.left) / rect.width, 1));
     return position * duration;
-  };
+  }, [compact, duration]);
 
   // Seek to position
   const seekTo = (newTime: number) => {
@@ -139,6 +141,7 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
     if (!isDragging) return;
 
     const handleMove = (e: MouseEvent | TouchEvent) => {
+      e.preventDefault();
       const clientX = 'touches' in e ? e.touches[0].clientX : (e as MouseEvent).clientX;
       seekTo(getTimeFromPosition(clientX));
     };
@@ -153,7 +156,7 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
 
     window.addEventListener('mousemove', handleMove);
     window.addEventListener('mouseup', handleUp);
-    window.addEventListener('touchmove', handleMove);
+    window.addEventListener('touchmove', handleMove, { passive: false });
     window.addEventListener('touchend', handleUp);
 
     return () => {
@@ -162,7 +165,7 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
       window.removeEventListener('touchmove', handleMove);
       window.removeEventListener('touchend', handleUp);
     };
-  }, [isDragging, duration, isPlaying, updateProgressFrame]);
+  }, [isDragging, isPlaying, updateProgressFrame, getTimeFromPosition]);
 
   // Compact mode for table cells (like WhatsApp)
   if (compact) {
@@ -193,8 +196,8 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
 
         {/* Waveform with Seek Bar */}
         <div
-          ref={waveformRef}
-          className="flex-1 h-8 cursor-pointer relative select-none overflow-hidden"
+          ref={waveformCompactRef}
+          className="flex-1 h-8 cursor-pointer relative select-none overflow-hidden touch-none"
           onMouseDown={handlePointerDown}
           onTouchStart={handlePointerDown}
         >
@@ -272,7 +275,7 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
       {/* Waveform with Seek Bar */}
       <div
         ref={waveformRef}
-        className="flex-1 h-10 cursor-pointer relative select-none overflow-hidden"
+        className="flex-1 h-10 cursor-pointer relative select-none overflow-hidden touch-none"
         onMouseDown={handlePointerDown}
         onTouchStart={handlePointerDown}
       >
