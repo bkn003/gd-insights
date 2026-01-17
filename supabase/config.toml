@@ -5,3 +5,9 @@ verify_jwt = true
 
 [functions.transcribe-voice]
 verify_jwt = false
+
+[functions.send-gd-alert]
+verify_jwt = true
+
+[functions.check-gd-threshold]
+verify_jwt = false

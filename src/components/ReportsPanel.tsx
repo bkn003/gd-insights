@@ -18,7 +18,7 @@ import { ImageThumbnail } from '@/components/ImageThumbnail';
 import { VoiceNotePlayer } from '@/components/VoiceNotePlayer';
 import { NoteViewerModal } from '@/components/NoteViewerModal';
 import { toast } from 'sonner';
-import { Download, Filter, Calendar as CalendarIcon, FileText, Image, BarChart3, List, LayoutGrid, ChevronDown, Check, ArrowUpDown, ArrowUp, ArrowDown, FileSpreadsheet, Volume2, Trash2, AlertTriangle } from 'lucide-react';
+import { Download, Filter, Calendar as CalendarIcon, FileText, Image, BarChart3, List, LayoutGrid, ChevronDown, Check, ArrowUpDown, ArrowUp, ArrowDown, FileSpreadsheet, Volume2, Trash2, AlertTriangle, Mail, Loader2 } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { format } from 'date-fns';
@@ -848,6 +848,8 @@ export const ReportsPanel = () => {
     }
   };
 
+  const [isExportingWithImages, setIsExportingWithImages] = useState(false);
+
   const exportExcelAdvanced = async () => {
     if (filteredEntries.length === 0) {
       toast.error('No data to export');
@@ -855,13 +857,13 @@ export const ReportsPanel = () => {
     }
 
     try {
-      toast.info('Generating advanced Excel export with images...');
+      setIsExportingWithImages(true);
+      toast.info('Generating Excel with embedded images... This may take a moment.');
 
       const { data, error } = await supabase.functions.invoke('export-excel-with-images', {
         body: {
           entries: filteredEntries.map(entry => ({
             ...entry,
-            // Include only necessary data to reduce payload size
             gd_entry_images: entry.gd_entry_images.slice(0, 3)
           }))
         }
@@ -869,24 +871,62 @@ export const ReportsPanel = () => {
 
       if (error) throw error;
 
-      // Create download link for the CSV file
-      const blob = new Blob([data], { type: 'text/csv' });
+      // Handle the Excel blob response
+      let blob: Blob;
+      if (data instanceof Blob) {
+        blob = data;
+      } else if (data instanceof ArrayBuffer) {
+        blob = new Blob([data], { 
+          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+        });
+      } else {
+        // If it's a string or other format, try to convert
+        blob = new Blob([data], { 
+          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+        });
+      }
+
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `gd_report_enhanced_${format(new Date(), 'yyyy-MM-dd')}.csv`;
+      a.download = `gd_report_with_images_${format(new Date(), 'yyyy-MM-dd')}.xlsx`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
 
-      toast.success('Advanced Excel export completed! Images are referenced by URL.');
+      toast.success(`Excel exported with ${filteredEntries.length} entries and embedded images!`);
     } catch (error) {
       console.error('Error with advanced export:', error);
-      toast.error('Failed to generate advanced export. Using fallback method...');
-
-      // Fallback to existing Excel export
+      toast.error('Failed to export with images. Using fallback method...');
       exportExcelMulti();
+    } finally {
+      setIsExportingWithImages(false);
+    }
+  };
+
+  // Send GD alert manually
+  const sendGDAlert = async () => {
+    try {
+      toast.info('Checking thresholds and sending alerts...');
+      
+      const { data, error } = await supabase.functions.invoke('send-gd-alert', {
+        body: {
+          checkPeriod: 'daily',
+          threshold: 5
+        }
+      });
+
+      if (error) throw error;
+
+      if (data.alertShops?.length > 0) {
+        toast.success(`Alert sent for ${data.alertShops.length} shop(s) exceeding threshold`);
+      } else {
+        toast.info('No shops exceeded the threshold. No alerts sent.');
+      }
+    } catch (error: any) {
+      console.error('Error sending alert:', error);
+      toast.error(error.message || 'Failed to send alert');
     }
   };
 
@@ -1243,14 +1283,31 @@ export const ReportsPanel = () => {
               <Download className="h-4 w-4 flex-shrink-0" />
               <span className="truncate">Export Excel with Image Info ({filteredEntries.length})</span>
             </Button>
-            <Button onClick={exportExcelAdvanced} variant="secondary" className="flex items-center justify-center gap-2 w-full sm:w-auto">
-              <Image className="h-4 w-4 flex-shrink-0" />
-              <span className="truncate">Enhanced Export with Image URLs ({filteredEntries.length})</span>
+            <Button 
+              onClick={exportExcelAdvanced} 
+              variant="secondary" 
+              className="flex items-center justify-center gap-2 w-full sm:w-auto"
+              disabled={isExportingWithImages}
+            >
+              {isExportingWithImages ? (
+                <Loader2 className="h-4 w-4 flex-shrink-0 animate-spin" />
+              ) : (
+                <Image className="h-4 w-4 flex-shrink-0" />
+              )}
+              <span className="truncate">
+                {isExportingWithImages ? 'Exporting...' : `Excel with Embedded Images (${filteredEntries.length})`}
+              </span>
             </Button>
             <Button onClick={exportReportPDF} variant="outline" className="flex items-center justify-center gap-2 w-full sm:w-auto">
               <FileText className="h-4 w-4 flex-shrink-0" />
-              <span className="truncate">Export PDF (Multi-Sheet) ({filteredEntries.length})</span>
+              <span className="truncate">Export PDF ({filteredEntries.length})</span>
             </Button>
+            {isAdmin && (
+              <Button onClick={sendGDAlert} variant="outline" className="flex items-center justify-center gap-2 w-full sm:w-auto border-orange-200 text-orange-600 hover:bg-orange-50">
+                <Mail className="h-4 w-4 flex-shrink-0" />
+                <span className="truncate">Send Alert</span>
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
