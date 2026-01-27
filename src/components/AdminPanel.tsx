@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -8,6 +7,7 @@ import { CategoryManagement } from '@/components/admin/CategoryManagement';
 import { SizeManagement } from '@/components/admin/SizeManagement';
 import { CustomerTypeManagement } from '@/components/admin/CustomerTypeManagement';
 import { UserManagement } from '@/components/admin/UserManagement';
+import { WhatsAppSettings } from '@/components/admin/WhatsAppSettings';
 
 type Shop = Database['public']['Tables']['shops']['Row'];
 type Category = Database['public']['Tables']['categories']['Row'];
@@ -67,6 +67,9 @@ export const AdminPanel = () => {
 
   return (
     <div className="space-y-6">
+      {/* WhatsApp Settings */}
+      <WhatsAppSettings />
+      
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6">
         <ShopManagement shops={shops} onRefresh={fetchData} />
         <CategoryManagement categories={categories} onRefresh={fetchData} />
