@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { useCachedData } from '@/hooks/useCachedData';
@@ -17,24 +17,22 @@ import { VoiceNoteRecorder } from '@/components/VoiceNoteRecorder';
 import { toast } from 'sonner';
 import { Database } from '@/types/database';
 import { sanitizeNotes, isValidUUID } from '@/utils/security';
+
 type CustomerType = Database['public']['Tables']['customer_types']['Row'];
+
 export const DamagedGoodsForm = () => {
-  const {
-    profile
-  } = useAuth();
-  const {
-    categories,
-    sizes,
-    shops,
-    loading: dataLoading
-  } = useCachedData();
+  const { profile } = useAuth();
+  const { categories, sizes, shops, loading: dataLoading } = useCachedData();
   const { isOnline, pendingCount, saveOfflineEntry } = useOfflineSync();
   const queryClient = useQueryClient();
+  
   const [loading, setLoading] = useState(false);
   const [userShop, setUserShop] = useState<any>(null);
   const [customerTypes, setCustomerTypes] = useState<CustomerType[]>([]);
   const [selectedImages, setSelectedImages] = useState<File[]>([]);
   const [voiceNoteFile, setVoiceNoteFile] = useState<File | null>(null);
+  const [whatsappRedirectEnabled, setWhatsappRedirectEnabled] = useState(false);
+  
   const [formData, setFormData] = useState({
     category_id: 'none',
     size_id: 'none',
@@ -42,15 +40,34 @@ export const DamagedGoodsForm = () => {
     customer_type_id: '',
     notes: ''
   });
+
+  // Fetch WhatsApp redirect setting
+  const fetchWhatsAppSetting = useCallback(async () => {
+    try {
+      const { data } = await supabase
+        .from('app_settings')
+        .select('value')
+        .eq('key', 'whatsapp_redirect_enabled')
+        .single();
+      
+      if (data) {
+        const value = data.value as { enabled?: boolean };
+        setWhatsappRedirectEnabled(value.enabled ?? false);
+      }
+    } catch (error) {
+      console.error('Error fetching WhatsApp setting:', error);
+    }
+  }, []);
+
   useEffect(() => {
     const fetchCustomerTypes = async () => {
-      const {
-        data
-      } = await supabase.from('customer_types').select('*').is('deleted_at', null).order('name');
+      const { data } = await supabase.from('customer_types').select('*').is('deleted_at', null).order('name');
       if (data) setCustomerTypes(data);
     };
     fetchCustomerTypes();
-  }, []);
+    fetchWhatsAppSetting();
+  }, [fetchWhatsAppSetting]);
+
   useEffect(() => {
     if (profile?.shop_id) {
       setFormData(prev => ({
@@ -243,8 +260,7 @@ export const DamagedGoodsForm = () => {
 
       // Invalidate relevant queries to refresh Dashboard and Reports
       await queryClient.invalidateQueries({ queryKey: ['dashboard-entries'] });
-      await queryClient.invalidateQueries({ queryKey: ['reports-data'] }); // If reports uses React Query in future
-
+      await queryClient.invalidateQueries({ queryKey: ['reports-data'] });
 
       // Reset form
       setFormData({
@@ -256,6 +272,14 @@ export const DamagedGoodsForm = () => {
       });
       setSelectedImages([]);
       setVoiceNoteFile(null);
+
+      // WhatsApp redirect if enabled and shop has a group link
+      if (whatsappRedirectEnabled && userShop?.whatsapp_group_link) {
+        toast.success('Redirecting to WhatsApp group...');
+        setTimeout(() => {
+          window.open(userShop.whatsapp_group_link, '_blank');
+        }, 1000);
+      }
 
       // Refocus notes input after successful submission
       setTimeout(() => {

@@ -1,12 +1,12 @@
-
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { Plus, Edit, Trash2, Building } from 'lucide-react';
+import { Plus, Edit, Trash2, Building, MessageCircle } from 'lucide-react';
 import { Database } from '@/types/database';
 
 type Shop = Database['public']['Tables']['shops']['Row'];
@@ -20,6 +20,7 @@ export const ShopManagement = ({ shops, onRefresh }: ShopManagementProps) => {
   const [newShopName, setNewShopName] = useState('');
   const [editingShop, setEditingShop] = useState<Shop | null>(null);
   const [editName, setEditName] = useState('');
+  const [editWhatsAppLink, setEditWhatsAppLink] = useState('');
 
   const handleCreateShop = async () => {
     if (!newShopName.trim()) return;
@@ -45,7 +46,10 @@ export const ShopManagement = ({ shops, onRefresh }: ShopManagementProps) => {
     try {
       const { error } = await supabase
         .from('shops')
-        .update({ name: editName.trim() })
+        .update({ 
+          name: editName.trim(),
+          whatsapp_group_link: editWhatsAppLink.trim() || null
+        })
         .eq('id', editingShop.id);
 
       if (error) throw error;
@@ -53,6 +57,7 @@ export const ShopManagement = ({ shops, onRefresh }: ShopManagementProps) => {
       toast.success('Shop updated successfully');
       setEditingShop(null);
       setEditName('');
+      setEditWhatsAppLink('');
       onRefresh();
     } catch (error: any) {
       toast.error(error.message || 'Failed to update shop');
@@ -75,6 +80,12 @@ export const ShopManagement = ({ shops, onRefresh }: ShopManagementProps) => {
     }
   };
 
+  const openEditDialog = (shop: Shop) => {
+    setEditingShop(shop);
+    setEditName(shop.name);
+    setEditWhatsAppLink((shop as any).whatsapp_group_link || '');
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -82,7 +93,7 @@ export const ShopManagement = ({ shops, onRefresh }: ShopManagementProps) => {
           <Building className="h-5 w-5" />
           Shops Management
         </CardTitle>
-        <CardDescription>Add and manage shops</CardDescription>
+        <CardDescription>Add and manage shops with WhatsApp group links</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex gap-2">
@@ -98,7 +109,12 @@ export const ShopManagement = ({ shops, onRefresh }: ShopManagementProps) => {
         <div className="space-y-2 max-h-48 overflow-y-auto">
           {shops.map((shop) => (
             <div key={shop.id} className="flex items-center justify-between p-2 border rounded">
-              <span className="text-sm">{shop.name}</span>
+              <div className="flex items-center gap-2">
+                <span className="text-sm">{shop.name}</span>
+                {(shop as any).whatsapp_group_link && (
+                  <MessageCircle className="h-3 w-3 text-green-600" />
+                )}
+              </div>
               <div className="flex gap-2">
                 <Dialog>
                   <DialogTrigger asChild>
@@ -106,10 +122,7 @@ export const ShopManagement = ({ shops, onRefresh }: ShopManagementProps) => {
                       variant="ghost"
                       size="icon"
                       className="h-9 w-9 rounded-lg border-2 border-primary/20 hover:border-primary hover:bg-primary/10"
-                      onClick={() => {
-                        setEditingShop(shop);
-                        setEditName(shop.name);
-                      }}
+                      onClick={() => openEditDialog(shop)}
                     >
                       <Edit className="h-4 w-4 text-primary" />
                     </Button>
@@ -117,14 +130,33 @@ export const ShopManagement = ({ shops, onRefresh }: ShopManagementProps) => {
                   <DialogContent>
                     <DialogHeader>
                       <DialogTitle>Edit Shop</DialogTitle>
-                      <DialogDescription>Update the shop name</DialogDescription>
+                      <DialogDescription>Update shop name and WhatsApp group link</DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4">
-                      <Input
-                        value={editName}
-                        onChange={(e) => setEditName(e.target.value)}
-                        placeholder="Shop name"
-                      />
+                      <div className="space-y-2">
+                        <Label htmlFor="shop-name">Shop Name</Label>
+                        <Input
+                          id="shop-name"
+                          value={editName}
+                          onChange={(e) => setEditName(e.target.value)}
+                          placeholder="Shop name"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="whatsapp-link" className="flex items-center gap-2">
+                          <MessageCircle className="h-4 w-4 text-green-600" />
+                          WhatsApp Group Link
+                        </Label>
+                        <Input
+                          id="whatsapp-link"
+                          value={editWhatsAppLink}
+                          onChange={(e) => setEditWhatsAppLink(e.target.value)}
+                          placeholder="https://chat.whatsapp.com/..."
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Paste the WhatsApp group invite link for this shop
+                        </p>
+                      </div>
                       <div className="flex gap-2 justify-end">
                         <Button variant="outline" onClick={() => setEditingShop(null)}>
                           Cancel

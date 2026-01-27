@@ -8,16 +8,42 @@ export interface Database {
           name: string;
           created_at: string;
           updated_at: string;
+          whatsapp_group_link: string | null;
         };
         Insert: {
           id?: string;
           name: string;
           created_at?: string;
           updated_at?: string;
+          whatsapp_group_link?: string | null;
         };
         Update: {
           id?: string;
           name?: string;
+          created_at?: string;
+          updated_at?: string;
+          whatsapp_group_link?: string | null;
+        };
+      };
+      app_settings: {
+        Row: {
+          id: string;
+          key: string;
+          value: Record<string, unknown>;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          key: string;
+          value: Record<string, unknown>;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          key?: string;
+          value?: Record<string, unknown>;
           created_at?: string;
           updated_at?: string;
         };
