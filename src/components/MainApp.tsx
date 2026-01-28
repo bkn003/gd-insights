@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
+import { useRealtimeSync, useForceLogoutOnDelete } from '@/hooks/useRealtimeSync';
 import { Layout } from '@/components/Layout';
 import { DamagedGoodsForm } from '@/components/DamagedGoodsForm';
 import { MobileBottomNav } from '@/components/MobileBottomNav';
@@ -18,10 +19,20 @@ const UserProfile = React.lazy(() => import('@/components/UserProfile').then(m =
 type ActiveTab = 'gd' | 'dashboard' | 'admin' | 'reports' | 'profile';
 
 export const MainApp = () => {
-  const { isAdmin, isManager, profile, user, checkUserStatus } = useAuth();
+  const { isAdmin, isManager, profile, user, signOut } = useAuth();
   const { permission } = usePushNotifications(); // Initialize push notifications
   const [activeTab, setActiveTab] = useState<ActiveTab>((isAdmin || isManager) ? 'dashboard' : 'gd');
   const notesInputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Force logout handler
+  const handleProfileDeleted = useForceLogoutOnDelete(user?.id, signOut);
+
+  // Enable realtime sync for instant updates across all pages
+  useRealtimeSync({
+    tables: ['goods_damaged_entries', 'profiles', 'shops', 'categories', 'sizes', 'customer_types', 'gd_entry_images', 'app_settings'],
+    onProfileDeleted: handleProfileDeleted,
+    enabled: !!user,
+  });
 
   // Update active tab when user role changes
   useEffect(() => {
@@ -34,17 +45,6 @@ export const MainApp = () => {
       setActiveTab('dashboard');
     }
   }, [isAdmin, isManager, activeTab]);
-
-  // Check user status less frequently - every 5 minutes instead of 30 seconds
-  useEffect(() => {
-    if (!user) return;
-
-    const interval = setInterval(() => {
-      checkUserStatus();
-    }, 5 * 60 * 1000); // 5 minutes
-
-    return () => clearInterval(interval);
-  }, [user, checkUserStatus]);
 
   // Auto-focus notes input when switching to GD tab
   useEffect(() => {

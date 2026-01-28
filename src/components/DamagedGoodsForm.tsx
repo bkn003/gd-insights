@@ -7,13 +7,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { WhatsAppImageUpload } from '@/components/WhatsAppImageUpload';
-import { VoiceMicButton } from '@/components/VoiceMicButton';
-import { VoiceNoteRecorder } from '@/components/VoiceNoteRecorder';
+import { WhatsAppInputBar } from '@/components/WhatsAppInputBar';
 import { toast } from 'sonner';
 import { Database } from '@/types/database';
 import { sanitizeNotes, isValidUUID } from '@/utils/security';
@@ -32,13 +29,13 @@ export const DamagedGoodsForm = () => {
   const [selectedImages, setSelectedImages] = useState<File[]>([]);
   const [voiceNoteFile, setVoiceNoteFile] = useState<File | null>(null);
   const [whatsappRedirectEnabled, setWhatsappRedirectEnabled] = useState(false);
+  const [notes, setNotes] = useState('');
   
   const [formData, setFormData] = useState({
     category_id: 'none',
     size_id: 'none',
     shop_id: profile?.shop_id || 'none',
-    customer_type_id: '',
-    notes: ''
+    customer_type_id: ''
   });
 
   // Fetch WhatsApp redirect setting
@@ -153,7 +150,7 @@ export const DamagedGoodsForm = () => {
     if (!profile) return;
 
     // Validation: Notes OR Voice Note is required
-    const hasNotes = formData.notes.trim().length > 0;
+    const hasNotes = notes.trim().length > 0;
     const hasVoiceNote = voiceNoteFile !== null;
 
     if (formData.category_id === 'none' || formData.size_id === 'none' || formData.shop_id === 'none' || !formData.customer_type_id) {
@@ -174,7 +171,7 @@ export const DamagedGoodsForm = () => {
 
     setLoading(true);
 
-    const sanitizedNotes = sanitizeNotes(formData.notes.trim(), 1000);
+    const sanitizedNotes = sanitizeNotes(notes.trim(), 1000);
 
     const entryData = {
       category_id: formData.category_id,
@@ -196,9 +193,9 @@ export const DamagedGoodsForm = () => {
             category_id: (profile as any)?.default_category_id || 'none',
             size_id: (profile as any)?.default_size_id || 'none',
             shop_id: profile?.shop_id || 'none',
-            customer_type_id: '',
-            notes: ''
+            customer_type_id: ''
           });
+          setNotes('');
           setSelectedImages([]);
           setVoiceNoteFile(null);
 
@@ -267,9 +264,9 @@ export const DamagedGoodsForm = () => {
         category_id: (profile as any)?.default_category_id || 'none',
         size_id: (profile as any)?.default_size_id || 'none',
         shop_id: profile?.shop_id || 'none',
-        customer_type_id: '',
-        notes: ''
+        customer_type_id: ''
       });
+      setNotes('');
       setSelectedImages([]);
       setVoiceNoteFile(null);
 
@@ -382,37 +379,16 @@ export const DamagedGoodsForm = () => {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="notes">Notes {!voiceNoteFile && '*'}</Label>
-          <div className="flex gap-2 items-start">
-            <Textarea
-              id="notes"
-              placeholder="Describe additional details"
-              value={formData.notes}
-              onChange={e => handleInputChange('notes', e.target.value)}
-              rows={4}
-              autoFocus
-              className="flex-1"
-            />
-            <VoiceMicButton
-              language="ta-IN"
-              mode="append"
-              value={formData.notes}
-              onChange={(newValue) => handleInputChange('notes', newValue)}
-            />
-          </div>
-          <p className="text-sm text-muted-foreground">Use mic for Tamil voice input. {voiceNoteFile ? 'Voice note attached - notes optional.' : 'Either Notes or Voice Note is required.'}</p>
-        </div>
-
-        <div className="space-y-2">
-          <Label>Voice Note {!formData.notes.trim() && '*'}</Label>
-          <VoiceNoteRecorder onVoiceNoteChange={setVoiceNoteFile} />
-          <p className="text-sm text-muted-foreground">Record a voice message instead of typing notes.</p>
-        </div>
-
-        <div className="space-y-2">
-          <Label>Images (Optional)</Label>
-          <WhatsAppImageUpload onImagesChange={setSelectedImages} maxImages={10} />
-          <p className="text-sm text-muted-foreground">Add photos to help document the damage. Each image will be compressed to ≤50KB automatically.</p>
+          <Label>Notes / Voice / Images {!voiceNoteFile && !notes.trim() && '*'}</Label>
+          <WhatsAppInputBar
+            notes={notes}
+            onNotesChange={setNotes}
+            onImagesChange={setSelectedImages}
+            onVoiceNoteChange={setVoiceNoteFile}
+            voiceNoteFile={voiceNoteFile}
+            maxImages={10}
+            disabled={loading}
+          />
         </div>
 
         <Button type="submit" className="w-full" disabled={loading}>

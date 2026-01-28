@@ -120,9 +120,10 @@ export const UserManagement = ({ shops: propShops, profiles: propProfiles, onRef
 
   const handleDelete = async (id: string) => {
     try {
+      // Soft delete by setting deleted_at - this triggers realtime for force logout
       const { error } = await supabase
         .from('profiles')
-        .delete()
+        .update({ deleted_at: new Date().toISOString() })
         .eq('id', id);
 
       if (error) throw error;
