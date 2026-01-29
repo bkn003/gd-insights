@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
-import { TrendingUp, Package, Calendar, CalendarDays, Sparkles, Filter, X, ArrowUpDown, BarChart3, FileDown, FileSpreadsheet } from 'lucide-react';
+import { TrendingUp, Package, Calendar, CalendarDays, Sparkles, Filter, X, ArrowUpDown, BarChart3, FileDown, FileSpreadsheet, LineChart } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
@@ -20,6 +20,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { ImageDisplay } from './ImageDisplay';
 import { VoiceNotePlayer } from './VoiceNotePlayer';
 import { NoteViewerModal } from './NoteViewerModal';
+import { AnalyticsCharts } from './AnalyticsCharts';
 
 interface GDEntry {
   id: string;
@@ -50,6 +51,7 @@ export const Dashboard = () => {
   const [customDateTo, setCustomDateTo] = useState<Date>();
   const [showFilters, setShowFilters] = useState(false);
   const [showComparison, setShowComparison] = useState(false);
+  const [showCharts, setShowCharts] = useState(false);
 
   // Modal state
   const [detailModalOpen, setDetailModalOpen] = useState(false);
@@ -527,6 +529,15 @@ export const Dashboard = () => {
             </div>
             <div className="flex items-center gap-2 flex-wrap">
               <Button
+                variant={showCharts ? "default" : "outline"}
+                size="sm"
+                onClick={() => setShowCharts(!showCharts)}
+                className="gap-1 sm:gap-2 text-xs sm:text-sm"
+              >
+                <LineChart className="h-3 w-3 sm:h-4 sm:w-4" />
+                Charts
+              </Button>
+              <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setShowComparison(!showComparison)}
@@ -773,6 +784,13 @@ export const Dashboard = () => {
               </CardContent>
             </Card>
           </div>
+
+          {/* Analytics Charts */}
+          {showCharts && allEntries && allEntries.length > 0 && (
+            <div className="mt-6">
+              <AnalyticsCharts entries={allEntries} />
+            </div>
+          )}
 
           {/* Breakdown Sections */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
