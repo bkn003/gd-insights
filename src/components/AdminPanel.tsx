@@ -35,10 +35,10 @@ export const AdminPanel = () => {
       localStorage.removeItem('gd_app_data');
       
       const [shopsRes, categoriesRes, sizesRes, customerTypesRes, profilesRes] = await Promise.all([
-        supabase.from('shops').select('*').order('name'),
-        supabase.from('categories').select('*').order('name'),
-        supabase.from('sizes').select('*').order('size'),
-        supabase.from('customer_types').select('*').order('name'),
+        supabase.from('shops').select('*').is('deleted_at', null).order('name'),
+        supabase.from('categories').select('*').is('deleted_at', null).order('name'),
+        supabase.from('sizes').select('*').is('deleted_at', null).order('size'),
+        supabase.from('customer_types').select('*').is('deleted_at', null).order('name'),
         supabase.from('profiles').select('*').is('deleted_at', null).order('name'),
       ]);
 

@@ -1,12 +1,11 @@
-
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Plus, Edit, Trash2 } from 'lucide-react';
+import { Plus, Edit, Trash2, Ruler } from 'lucide-react';
 import { Database } from '@/types/database';
 
 type Size = Database['public']['Tables']['sizes']['Row'];
@@ -20,6 +19,7 @@ export const SizeManagement = ({ sizes, onRefresh }: SizeManagementProps) => {
   const [newSizeName, setNewSizeName] = useState('');
   const [editingSize, setEditingSize] = useState<Size | null>(null);
   const [editName, setEditName] = useState('');
+  const [isEditOpen, setIsEditOpen] = useState(false);
 
   const handleCreateSize = async () => {
     if (!newSizeName.trim()) return;
@@ -51,8 +51,7 @@ export const SizeManagement = ({ sizes, onRefresh }: SizeManagementProps) => {
       if (error) throw error;
 
       toast.success('Size updated successfully');
-      setEditingSize(null);
-      setEditName('');
+      closeEditDialog();
       onRefresh();
     } catch (error: any) {
       toast.error(error.message || 'Failed to update size');
@@ -75,10 +74,25 @@ export const SizeManagement = ({ sizes, onRefresh }: SizeManagementProps) => {
     }
   };
 
+  const openEditDialog = (size: Size) => {
+    setEditingSize(size);
+    setEditName(size.size);
+    setIsEditOpen(true);
+  };
+
+  const closeEditDialog = () => {
+    setIsEditOpen(false);
+    setEditingSize(null);
+    setEditName('');
+  };
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Sizes Management</CardTitle>
+        <CardTitle className="flex items-center gap-2">
+          <Ruler className="h-5 w-5" />
+          Sizes Management
+        </CardTitle>
         <CardDescription>Add and manage sizes</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -87,8 +101,9 @@ export const SizeManagement = ({ sizes, onRefresh }: SizeManagementProps) => {
             placeholder="Size name"
             value={newSizeName}
             onChange={(e) => setNewSizeName(e.target.value)}
+            onKeyPress={(e) => e.key === 'Enter' && handleCreateSize()}
           />
-          <Button onClick={handleCreateSize}>
+          <Button onClick={handleCreateSize} disabled={!newSizeName.trim()}>
             <Plus className="h-4 w-4" />
           </Button>
         </div>
@@ -97,42 +112,14 @@ export const SizeManagement = ({ sizes, onRefresh }: SizeManagementProps) => {
             <div key={size.id} className="flex items-center justify-between p-2 border rounded">
               <span className="text-sm">{size.size}</span>
               <div className="flex gap-2">
-                <Dialog>
-                  <DialogTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-9 w-9 rounded-lg border-2 border-primary/20 hover:border-primary hover:bg-primary/10"
-                      onClick={() => {
-                        setEditingSize(size);
-                        setEditName(size.size);
-                      }}
-                    >
-                      <Edit className="h-4 w-4 text-primary" />
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Edit Size</DialogTitle>
-                      <DialogDescription>Update the size name</DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-4">
-                      <Input
-                        value={editName}
-                        onChange={(e) => setEditName(e.target.value)}
-                        placeholder="Size name"
-                      />
-                      <div className="flex gap-2 justify-end">
-                        <Button variant="outline" onClick={() => setEditingSize(null)}>
-                          Cancel
-                        </Button>
-                        <Button onClick={handleEditSize}>
-                          Save
-                        </Button>
-                      </div>
-                    </div>
-                  </DialogContent>
-                </Dialog>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-9 rounded-lg border-2 border-primary/20 hover:border-primary hover:bg-primary/10"
+                  onClick={() => openEditDialog(size)}
+                >
+                  <Edit className="h-4 w-4 text-primary" />
+                </Button>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -145,6 +132,32 @@ export const SizeManagement = ({ sizes, onRefresh }: SizeManagementProps) => {
             </div>
           ))}
         </div>
+        
+        {/* Edit Dialog - controlled */}
+        <Dialog open={isEditOpen} onOpenChange={(open) => { if (!open) closeEditDialog(); }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit Size</DialogTitle>
+              <DialogDescription>Update the size name</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <Input
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                placeholder="Size name"
+                onKeyPress={(e) => e.key === 'Enter' && handleEditSize()}
+              />
+              <div className="flex gap-2 justify-end">
+                <Button variant="outline" onClick={closeEditDialog}>
+                  Cancel
+                </Button>
+                <Button onClick={handleEditSize} disabled={!editName.trim()}>
+                  Save
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </CardContent>
     </Card>
   );

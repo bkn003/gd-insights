@@ -12,8 +12,6 @@ import {
   Pause, 
   Square, 
   Trash2, 
-  FileText, 
-  Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import imageCompression from 'browser-image-compression';
@@ -58,8 +56,6 @@ export const WhatsAppInputBar = ({
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isAttachOpen, setIsAttachOpen] = useState(false);
-  const [isTranscribing, setIsTranscribing] = useState(false);
-  const [isListening, setIsListening] = useState(false);
   
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
@@ -69,7 +65,6 @@ export const WhatsAppInputBar = ({
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const waveformRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const recognitionRef = useRef<any>(null);
   
   const waveformBars = useMemo(() => {
     const bars: number[] = [];
@@ -95,35 +90,8 @@ export const WhatsAppInputBar = ({
     }
   }, [voiceNoteFile]);
 
-  // Initialize speech recognition
+  // Cleanup on unmount
   useEffect(() => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (SpeechRecognition) {
-      const recognition = new SpeechRecognition();
-      recognition.continuous = false;
-      recognition.interimResults = false;
-      recognition.lang = 'ta-IN';
-      
-      recognition.onresult = (event: any) => {
-        const transcript = event.results[0][0].transcript;
-        const newValue = notes ? `${notes} ${transcript}`.trim() : transcript;
-        onNotesChange(newValue);
-        toast.success(`Voice captured: ${transcript}`);
-      };
-      
-      recognition.onerror = (event: any) => {
-        setIsListening(false);
-        if (event.error === 'no-speech') {
-          toast.error('No speech detected');
-        } else if (event.error !== 'aborted') {
-          toast.error(`Error: ${event.error}`);
-        }
-      };
-      
-      recognition.onend = () => setIsListening(false);
-      recognitionRef.current = recognition;
-    }
-    
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
       if (audioUrl) URL.revokeObjectURL(audioUrl);
@@ -262,55 +230,6 @@ export const WhatsAppInputBar = ({
     setCurrentTime(audioRef.current.currentTime);
   };
   
-  const transcribeAudio = async () => {
-    if (!audioBlob) return;
-    setIsTranscribing(true);
-    try {
-      const formData = new FormData();
-      formData.append('audio', new File([audioBlob], 'voice.webm', { type: audioBlob.type }));
-      
-      const response = await fetch(
-        `https://kdzfymqgsylrmfnbvdoj.supabase.co/functions/v1/transcribe-voice`,
-        {
-          method: 'POST',
-          headers: { 'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtkemZ5bXFnc3lscm1mbmJ2ZG9qIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTMxMDczMjEsImV4cCI6MjA2ODY4MzMyMX0.DrYXH9qiz_9aZUHmtA0ttIJHij7uV7KV7U4Fk23GhJU' },
-          body: formData,
-        }
-      );
-      
-      if (response.ok) {
-        const data = await response.json();
-        if (data.transcription) {
-          onNotesChange(notes ? `${notes} ${data.transcription}` : data.transcription);
-          toast.success('Voice note transcribed!');
-        }
-      }
-    } catch (error) {
-      toast.error('Failed to transcribe');
-    } finally {
-      setIsTranscribing(false);
-    }
-  };
-  
-  const toggleSpeechRecognition = () => {
-    if (!recognitionRef.current) {
-      toast.error('Voice typing not supported');
-      return;
-    }
-    
-    if (isListening) {
-      recognitionRef.current.stop();
-      setIsListening(false);
-    } else {
-      try {
-        recognitionRef.current.start();
-        setIsListening(true);
-        toast.info('🎤 Listening in Tamil...');
-      } catch (error) {
-        toast.error('Failed to start voice recognition');
-      }
-    }
-  };
 
   return (
     <div className="space-y-3">
@@ -388,9 +307,6 @@ export const WhatsAppInputBar = ({
             {formatTime(Math.floor(currentTime || duration))}
           </span>
           
-          <Button type="button" variant="ghost" size="icon" onClick={transcribeAudio} disabled={isTranscribing} className="h-7 w-7">
-            {isTranscribing ? <Loader2 className="h-3 w-3 animate-spin" /> : <FileText className="h-3 w-3" />}
-          </Button>
           
           <Button type="button" variant="ghost" size="icon" onClick={deleteRecording} className="h-7 w-7 text-destructive">
             <Trash2 className="h-3 w-3" />
@@ -455,18 +371,6 @@ export const WhatsAppInputBar = ({
           disabled={disabled}
         />
         
-        {/* Voice-to-Text Button */}
-        <Button
-          type="button"
-          variant={isListening ? "default" : "ghost"}
-          size="icon"
-          onClick={toggleSpeechRecognition}
-          className={`h-9 w-9 rounded-full shrink-0 ${isListening ? 'animate-pulse' : ''}`}
-          disabled={disabled || isRecording}
-          title="Voice to text (Tamil)"
-        >
-          <Mic className="h-4 w-4" />
-        </Button>
         
         {/* Record Voice Note Button */}
         {!audioUrl && !isRecording && (
@@ -487,7 +391,7 @@ export const WhatsAppInputBar = ({
       {/* Hint Text */}
       <p className="text-xs text-muted-foreground text-center">
         {images.length > 0 && `${images.length} image(s) • `}
-        {audioUrl ? 'Voice note attached' : isRecording ? 'Recording...' : 'Tap + to attach • Mic for Tamil voice typing • Hold mic for voice note'}
+        {audioUrl ? 'Voice note attached' : isRecording ? 'Recording...' : 'Tap + to attach • Tap mic to record voice note'}
       </p>
       
       {/* Hidden File Inputs */}

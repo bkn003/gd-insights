@@ -1,10 +1,9 @@
-
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { Plus, Edit, Trash2, Package } from 'lucide-react';
 import { Database } from '@/types/database';
@@ -20,6 +19,7 @@ export const CategoryManagement = ({ categories, onRefresh }: CategoryManagement
   const [newCategoryName, setNewCategoryName] = useState('');
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [editName, setEditName] = useState('');
+  const [isEditOpen, setIsEditOpen] = useState(false);
 
   const handleCreateCategory = async () => {
     if (!newCategoryName.trim()) return;
@@ -51,8 +51,7 @@ export const CategoryManagement = ({ categories, onRefresh }: CategoryManagement
       if (error) throw error;
 
       toast.success('Category updated successfully');
-      setEditingCategory(null);
-      setEditName('');
+      closeEditDialog();
       onRefresh();
     } catch (error: any) {
       toast.error(error.message || 'Failed to update category');
@@ -75,6 +74,18 @@ export const CategoryManagement = ({ categories, onRefresh }: CategoryManagement
     }
   };
 
+  const openEditDialog = (category: Category) => {
+    setEditingCategory(category);
+    setEditName(category.name);
+    setIsEditOpen(true);
+  };
+
+  const closeEditDialog = () => {
+    setIsEditOpen(false);
+    setEditingCategory(null);
+    setEditName('');
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -90,8 +101,9 @@ export const CategoryManagement = ({ categories, onRefresh }: CategoryManagement
             placeholder="Category name"
             value={newCategoryName}
             onChange={(e) => setNewCategoryName(e.target.value)}
+            onKeyPress={(e) => e.key === 'Enter' && handleCreateCategory()}
           />
-          <Button onClick={handleCreateCategory}>
+          <Button onClick={handleCreateCategory} disabled={!newCategoryName.trim()}>
             <Plus className="h-4 w-4" />
           </Button>
         </div>
@@ -100,42 +112,14 @@ export const CategoryManagement = ({ categories, onRefresh }: CategoryManagement
             <div key={category.id} className="flex items-center justify-between p-2 border rounded">
               <span className="text-sm">{category.name}</span>
               <div className="flex gap-2">
-                <Dialog>
-                  <DialogTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-9 w-9 rounded-lg border-2 border-primary/20 hover:border-primary hover:bg-primary/10"
-                      onClick={() => {
-                        setEditingCategory(category);
-                        setEditName(category.name);
-                      }}
-                    >
-                      <Edit className="h-4 w-4 text-primary" />
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Edit Category</DialogTitle>
-                      <DialogDescription>Update the category name</DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-4">
-                      <Input
-                        value={editName}
-                        onChange={(e) => setEditName(e.target.value)}
-                        placeholder="Category name"
-                      />
-                      <div className="flex gap-2 justify-end">
-                        <Button variant="outline" onClick={() => setEditingCategory(null)}>
-                          Cancel
-                        </Button>
-                        <Button onClick={handleEditCategory}>
-                          Save
-                        </Button>
-                      </div>
-                    </div>
-                  </DialogContent>
-                </Dialog>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-9 rounded-lg border-2 border-primary/20 hover:border-primary hover:bg-primary/10"
+                  onClick={() => openEditDialog(category)}
+                >
+                  <Edit className="h-4 w-4 text-primary" />
+                </Button>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -148,6 +132,32 @@ export const CategoryManagement = ({ categories, onRefresh }: CategoryManagement
             </div>
           ))}
         </div>
+        
+        {/* Edit Dialog - controlled */}
+        <Dialog open={isEditOpen} onOpenChange={(open) => { if (!open) closeEditDialog(); }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit Category</DialogTitle>
+              <DialogDescription>Update the category name</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <Input
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                placeholder="Category name"
+                onKeyPress={(e) => e.key === 'Enter' && handleEditCategory()}
+              />
+              <div className="flex gap-2 justify-end">
+                <Button variant="outline" onClick={closeEditDialog}>
+                  Cancel
+                </Button>
+                <Button onClick={handleEditCategory} disabled={!editName.trim()}>
+                  Save
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </CardContent>
     </Card>
   );
