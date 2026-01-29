@@ -12,6 +12,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { toast } from 'sonner';
 import { UserPlus, Edit, Trash2 } from 'lucide-react';
 import { Database } from '@/types/database';
+import { DeleteConfirmationDialog } from '@/components/DeleteConfirmationDialog';
 
 type Profile = Database['public']['Tables']['profiles']['Row'] & {
   email?: string;
@@ -35,6 +36,8 @@ export const UserManagement = ({ shops: propShops, profiles: propProfiles, onRef
   const [loading, setLoading] = useState(!propProfiles || !propShops);
   const [editingUser, setEditingUser] = useState<Profile | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [deleteUser, setDeleteUser] = useState<Profile | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     if (!propProfiles || !propShops) {
@@ -118,17 +121,20 @@ export const UserManagement = ({ shops: propShops, profiles: propProfiles, onRef
     }
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async () => {
+    if (!deleteUser) return;
+    setIsDeleting(true);
     try {
       // Soft delete by setting deleted_at - this triggers realtime for force logout
       const { error } = await supabase
         .from('profiles')
         .update({ deleted_at: new Date().toISOString() })
-        .eq('id', id);
+        .eq('id', deleteUser.id);
 
       if (error) throw error;
 
       toast.success('User deleted successfully');
+      setDeleteUser(null);
       if (propOnRefresh) {
         propOnRefresh();
       } else {
@@ -137,6 +143,8 @@ export const UserManagement = ({ shops: propShops, profiles: propProfiles, onRef
     } catch (error: any) {
       console.error('Error deleting user:', error);
       toast.error(error.message || 'Failed to delete user');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -233,7 +241,7 @@ export const UserManagement = ({ shops: propShops, profiles: propProfiles, onRef
                           <Button
                             variant="destructive"
                             size="sm"
-                            onClick={() => handleDelete(user.id)}
+                            onClick={() => setDeleteUser(user)}
                             className="p-2"
                           >
                             <Trash2 className="h-4 w-4" />
@@ -272,6 +280,17 @@ export const UserManagement = ({ shops: propShops, profiles: propProfiles, onRef
             )}
           </DialogContent>
         </Dialog>
+
+        {/* Delete Confirmation Dialog */}
+        <DeleteConfirmationDialog
+          open={!!deleteUser}
+          onOpenChange={(open) => !open && setDeleteUser(null)}
+          onConfirm={handleDelete}
+          title="Delete User"
+          itemName={deleteUser?.name}
+          description={`Are you sure you want to delete "${deleteUser?.name}"? This user will be logged out immediately and will no longer be able to access the system.`}
+          loading={isDeleting}
+        />
       </div>
     </TooltipProvider>
   );

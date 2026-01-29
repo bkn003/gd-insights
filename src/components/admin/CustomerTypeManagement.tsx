@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { toast } from 'sonner';
 import { Plus, Trash2, RotateCcw, Pencil, Check, X } from 'lucide-react';
 import { Database } from '@/types/database';
+import { DeleteConfirmationDialog } from '@/components/DeleteConfirmationDialog';
 
 type CustomerType = Database['public']['Tables']['customer_types']['Row'];
 
@@ -19,6 +20,8 @@ export const CustomerTypeManagement = ({ customerTypes, onRefresh }: CustomerTyp
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
   const [loading, setLoading] = useState(false);
+  const [deleteItem, setDeleteItem] = useState<CustomerType | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const handleAdd = async () => {
     if (!newCustomerType.trim()) {
@@ -44,22 +47,24 @@ export const CustomerTypeManagement = ({ customerTypes, onRefresh }: CustomerTyp
     }
   };
 
-  const handleDelete = async (id: string) => {
-    setLoading(true);
+  const handleDelete = async () => {
+    if (!deleteItem) return;
+    setIsDeleting(true);
     try {
       const { error } = await supabase
         .from('customer_types')
         .update({ deleted_at: new Date().toISOString() })
-        .eq('id', id);
+        .eq('id', deleteItem.id);
 
       if (error) throw error;
 
       toast.success('Customer type deleted successfully');
+      setDeleteItem(null);
       onRefresh();
     } catch (error: any) {
       toast.error(error.message || 'Failed to delete customer type');
     } finally {
-      setLoading(false);
+      setIsDeleting(false);
     }
   };
 
@@ -190,7 +195,7 @@ export const CustomerTypeManagement = ({ customerTypes, onRefresh }: CustomerTyp
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => handleDelete(customerType.id)}
+                        onClick={() => setDeleteItem(customerType)}
                         disabled={loading}
                       >
                         <Trash2 className="h-4 w-4 text-destructive" />
@@ -221,6 +226,16 @@ export const CustomerTypeManagement = ({ customerTypes, onRefresh }: CustomerTyp
             ))}
           </div>
         )}
+
+        {/* Delete Confirmation Dialog */}
+        <DeleteConfirmationDialog
+          open={!!deleteItem}
+          onOpenChange={(open) => !open && setDeleteItem(null)}
+          onConfirm={handleDelete}
+          title="Delete Customer Type"
+          itemName={deleteItem?.name}
+          loading={isDeleting}
+        />
       </CardContent>
     </Card>
   );

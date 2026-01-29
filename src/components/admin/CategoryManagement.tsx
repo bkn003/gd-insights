@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { toast } from 'sonner';
 import { Plus, Edit, Trash2, Package } from 'lucide-react';
 import { Database } from '@/types/database';
+import { DeleteConfirmationDialog } from '@/components/DeleteConfirmationDialog';
 
 type Category = Database['public']['Tables']['categories']['Row'];
 
@@ -20,6 +21,8 @@ export const CategoryManagement = ({ categories, onRefresh }: CategoryManagement
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [editName, setEditName] = useState('');
   const [isEditOpen, setIsEditOpen] = useState(false);
+  const [deleteItem, setDeleteItem] = useState<Category | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const handleCreateCategory = async () => {
     if (!newCategoryName.trim()) return;
@@ -58,19 +61,24 @@ export const CategoryManagement = ({ categories, onRefresh }: CategoryManagement
     }
   };
 
-  const handleDeleteCategory = async (id: string) => {
+  const handleDeleteCategory = async () => {
+    if (!deleteItem) return;
+    setIsDeleting(true);
     try {
       const { error } = await supabase
         .from('categories')
         .update({ deleted_at: new Date().toISOString() })
-        .eq('id', id);
+        .eq('id', deleteItem.id);
 
       if (error) throw error;
 
       toast.success('Category deleted successfully');
+      setDeleteItem(null);
       onRefresh();
     } catch (error: any) {
       toast.error(error.message || 'Failed to delete category');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -124,7 +132,7 @@ export const CategoryManagement = ({ categories, onRefresh }: CategoryManagement
                   variant="ghost"
                   size="icon"
                   className="h-9 w-9 rounded-lg border-2 border-destructive/20 hover:border-destructive hover:bg-destructive/10"
-                  onClick={() => handleDeleteCategory(category.id)}
+                  onClick={() => setDeleteItem(category)}
                 >
                   <Trash2 className="h-4 w-4 text-destructive" />
                 </Button>
@@ -158,6 +166,16 @@ export const CategoryManagement = ({ categories, onRefresh }: CategoryManagement
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Delete Confirmation Dialog */}
+        <DeleteConfirmationDialog
+          open={!!deleteItem}
+          onOpenChange={(open) => !open && setDeleteItem(null)}
+          onConfirm={handleDeleteCategory}
+          title="Delete Category"
+          itemName={deleteItem?.name}
+          loading={isDeleting}
+        />
       </CardContent>
     </Card>
   );

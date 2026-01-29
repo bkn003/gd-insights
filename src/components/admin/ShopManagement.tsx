@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { Plus, Edit, Trash2, Building, MessageCircle } from 'lucide-react';
 import { Database } from '@/types/database';
+import { DeleteConfirmationDialog } from '@/components/DeleteConfirmationDialog';
 
 type Shop = Database['public']['Tables']['shops']['Row'];
 
@@ -24,6 +25,8 @@ export const ShopManagement = ({ shops, onRefresh }: ShopManagementProps) => {
   const [editWhatsAppLink, setEditWhatsAppLink] = useState('');
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const [deleteShop, setDeleteShop] = useState<Shop | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const handleCreateShop = async () => {
     if (!newShopName.trim()) return;
@@ -70,19 +73,24 @@ export const ShopManagement = ({ shops, onRefresh }: ShopManagementProps) => {
     }
   };
 
-  const handleDeleteShop = async (id: string) => {
+  const handleDeleteShop = async () => {
+    if (!deleteShop) return;
+    setIsDeleting(true);
     try {
       const { error } = await supabase
         .from('shops')
         .update({ deleted_at: new Date().toISOString() })
-        .eq('id', id);
+        .eq('id', deleteShop.id);
 
       if (error) throw error;
 
       toast.success('Shop deleted successfully');
+      setDeleteShop(null);
       onRefresh();
     } catch (error: any) {
       toast.error(error.message || 'Failed to delete shop');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -184,7 +192,7 @@ export const ShopManagement = ({ shops, onRefresh }: ShopManagementProps) => {
                   variant="ghost"
                   size="icon"
                   className="h-9 w-9 rounded-lg border-2 border-destructive/20 hover:border-destructive hover:bg-destructive/10"
-                  onClick={() => handleDeleteShop(shop.id)}
+                  onClick={() => setDeleteShop(shop)}
                 >
                   <Trash2 className="h-4 w-4 text-destructive" />
                 </Button>
@@ -236,6 +244,16 @@ export const ShopManagement = ({ shops, onRefresh }: ShopManagementProps) => {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Delete Confirmation Dialog */}
+        <DeleteConfirmationDialog
+          open={!!deleteShop}
+          onOpenChange={(open) => !open && setDeleteShop(null)}
+          onConfirm={handleDeleteShop}
+          title="Delete Shop"
+          itemName={deleteShop?.name}
+          loading={isDeleting}
+        />
       </CardContent>
     </Card>
   );

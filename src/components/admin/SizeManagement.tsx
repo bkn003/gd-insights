@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { toast } from 'sonner';
 import { Plus, Edit, Trash2, Ruler } from 'lucide-react';
 import { Database } from '@/types/database';
+import { DeleteConfirmationDialog } from '@/components/DeleteConfirmationDialog';
 
 type Size = Database['public']['Tables']['sizes']['Row'];
 
@@ -20,6 +21,8 @@ export const SizeManagement = ({ sizes, onRefresh }: SizeManagementProps) => {
   const [editingSize, setEditingSize] = useState<Size | null>(null);
   const [editName, setEditName] = useState('');
   const [isEditOpen, setIsEditOpen] = useState(false);
+  const [deleteItem, setDeleteItem] = useState<Size | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const handleCreateSize = async () => {
     if (!newSizeName.trim()) return;
@@ -58,19 +61,24 @@ export const SizeManagement = ({ sizes, onRefresh }: SizeManagementProps) => {
     }
   };
 
-  const handleDeleteSize = async (id: string) => {
+  const handleDeleteSize = async () => {
+    if (!deleteItem) return;
+    setIsDeleting(true);
     try {
       const { error } = await supabase
         .from('sizes')
         .update({ deleted_at: new Date().toISOString() })
-        .eq('id', id);
+        .eq('id', deleteItem.id);
 
       if (error) throw error;
 
       toast.success('Size deleted successfully');
+      setDeleteItem(null);
       onRefresh();
     } catch (error: any) {
       toast.error(error.message || 'Failed to delete size');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -124,7 +132,7 @@ export const SizeManagement = ({ sizes, onRefresh }: SizeManagementProps) => {
                   variant="ghost"
                   size="icon"
                   className="h-9 w-9 rounded-lg border-2 border-destructive/20 hover:border-destructive hover:bg-destructive/10"
-                  onClick={() => handleDeleteSize(size.id)}
+                  onClick={() => setDeleteItem(size)}
                 >
                   <Trash2 className="h-4 w-4 text-destructive" />
                 </Button>
@@ -158,6 +166,16 @@ export const SizeManagement = ({ sizes, onRefresh }: SizeManagementProps) => {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Delete Confirmation Dialog */}
+        <DeleteConfirmationDialog
+          open={!!deleteItem}
+          onOpenChange={(open) => !open && setDeleteItem(null)}
+          onConfirm={handleDeleteSize}
+          title="Delete Size"
+          itemName={deleteItem?.size}
+          loading={isDeleting}
+        />
       </CardContent>
     </Card>
   );
