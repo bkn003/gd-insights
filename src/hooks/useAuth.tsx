@@ -141,8 +141,10 @@ export const useAuth = () => {
   };
 
   const resetPassword = async (email: string) => {
+    // Use the published production URL for password reset redirects
+    const productionUrl = 'https://gd-tracker.lovable.app';
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
+      redirectTo: `${productionUrl}/reset-password`,
     });
     return { error };
   };
