@@ -141,8 +141,8 @@ export const useAuth = () => {
   };
 
   const resetPassword = async (email: string) => {
-    // Use the published production URL for password reset redirects
-    const productionUrl = 'https://gd-tracker.lovable.app';
+    // Use the Vercel production URL for password reset redirects
+    const productionUrl = 'https://gd-tracking.vercel.app';
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${productionUrl}/reset-password`,
     });
