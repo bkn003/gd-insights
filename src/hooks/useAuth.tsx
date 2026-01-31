@@ -42,7 +42,7 @@ export const useAuth = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  const fetchProfile = async (userId: string) => {
+  const fetchProfile = async (userId: string, retryCount = 0) => {
     try {
       // Check cache first
       const cachedProfileStr = localStorage.getItem(PROFILE_CACHE_KEY);
@@ -63,7 +63,24 @@ export const useAuth = () => {
         .eq('id', userId)
         .single();
 
-      if (error) throw error;
+      if (error) {
+        // Only sign out for critical auth errors, not transient errors
+        if (error.message?.includes('JWT') || error.message?.includes('unauthorized') || error.code === 'PGRST301') {
+          console.error('Auth error fetching profile, signing out:', error);
+          await signOut();
+          return;
+        }
+        
+        // For other errors (like RLS issues during setup), retry a few times
+        if (retryCount < 3) {
+          console.log(`Profile fetch attempt ${retryCount + 1} failed, retrying...`, error);
+          await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
+          return fetchProfile(userId, retryCount + 1);
+        }
+        
+        console.error('Error fetching profile after retries:', error);
+        throw error;
+      }
 
       // Check if profile is soft-deleted
       if (data.deleted_at) {
@@ -80,9 +97,13 @@ export const useAuth = () => {
       }));
 
       setProfile(data as Profile);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching profile:', error);
-      await signOut();
+      // Don't sign out on transient errors - just log them
+      // Only sign out if it's clearly an auth problem
+      if (error?.message?.includes('JWT') || error?.message?.includes('unauthorized')) {
+        await signOut();
+      }
     } finally {
       setLoading(false);
     }
