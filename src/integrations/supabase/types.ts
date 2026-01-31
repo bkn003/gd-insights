@@ -338,6 +338,8 @@ export type Database = {
     Functions: {
       get_current_user_role: { Args: never; Returns: string }
       get_current_user_shop_id: { Args: never; Returns: string }
+      get_user_role_secure: { Args: { user_uuid: string }; Returns: string }
+      get_user_shop_id_secure: { Args: { user_uuid: string }; Returns: string }
     }
     Enums: {
       [_ in never]: never
