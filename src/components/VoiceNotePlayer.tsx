@@ -147,18 +147,11 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
     }
   }, [duration]);
 
-  // Handle click on waveform to seek (single click without drag)
-  const handleWaveformClick = (e: React.MouseEvent) => {
-    if (!isLoaded || !duration) return;
-    const clientX = e.clientX;
-    const newTime = getTimeFromPosition(clientX);
-    seekTo(newTime);
-  };
-
-  // Mouse/Touch handlers for drag seeking
+  // Mouse/Touch handlers for drag seeking (also handles click-to-seek)
   const handlePointerDown = (e: React.MouseEvent | React.TouchEvent) => {
     if (!isLoaded || !duration) return;
     e.preventDefault();
+    e.stopPropagation(); // Prevent ScrollArea/Dialog from intercepting
     setIsDragging(true);
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
     const newTime = getTimeFromPosition(clientX);
@@ -226,7 +219,6 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
         <div
           ref={waveformCompactRef}
           className="flex-1 h-8 cursor-pointer relative select-none overflow-hidden touch-none"
-          onClick={handleWaveformClick}
           onMouseDown={handlePointerDown}
           onTouchStart={handlePointerDown}
         >
@@ -316,7 +308,6 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
       <div
         ref={waveformRef}
         className="flex-1 h-10 cursor-pointer relative select-none overflow-hidden touch-none"
-        onClick={handleWaveformClick}
         onMouseDown={handlePointerDown}
         onTouchStart={handlePointerDown}
       >

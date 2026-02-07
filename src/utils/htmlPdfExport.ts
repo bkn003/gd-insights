@@ -10,11 +10,14 @@ export interface PDFColumn {
   align?: 'left' | 'center' | 'right';
 }
 
+/** A cell can be plain text or raw HTML (e.g. for embedded images) */
+export type CellContent = string | { html: string };
+
 export interface HTMLPDFExportOptions {
   title: string;
   subtitle?: string;
   columns: PDFColumn[];
-  rows: string[][];
+  rows: CellContent[][];
   fileName?: string;
   orientation?: 'portrait' | 'landscape';
 }
@@ -50,15 +53,18 @@ export function exportToPDFViaHTML({
         `<tr style="background: ${rowIdx % 2 === 0 ? '#fff' : '#f5f3ff'};">
           ${row
             .map(
-              (cell, colIdx) =>
-                `<td style="
+              (cell, colIdx) => {
+                const cellContent = typeof cell === 'string' ? escapeHtml(cell) : cell.html;
+                return `<td style="
                   padding: 6px 10px;
                   font-size: 11px;
                   border: 1px solid #e5e7eb;
                   text-align: ${columns[colIdx]?.align || 'left'};
                   word-wrap: break-word;
                   max-width: 300px;
-                ">${escapeHtml(cell)}</td>`
+                  vertical-align: middle;
+                ">${cellContent}</td>`;
+              }
             )
             .join('')}
         </tr>`
@@ -215,7 +221,7 @@ export interface MultiSectionPDFOptions {
   title: string;
   subtitle?: string;
   columns: PDFColumn[];
-  sections: { title: string; rows: string[][] }[];
+  sections: { title: string; rows: CellContent[][] }[];
   orientation?: 'portrait' | 'landscape';
 }
 
@@ -228,7 +234,7 @@ export function exportMultiSectionPDFViaHTML({
 }: MultiSectionPDFOptions) {
   const totalRows = sections.reduce((sum, s) => sum + s.rows.length, 0);
 
-  const buildTable = (rows: string[][]) => {
+  const buildTable = (rows: CellContent[][]) => {
     const headerCells = columns
       .map(
         (col) =>
@@ -252,15 +258,18 @@ export function exportMultiSectionPDFViaHTML({
           `<tr style="background: ${rowIdx % 2 === 0 ? '#fff' : '#f5f3ff'};">
             ${row
               .map(
-                (cell, colIdx) =>
-                  `<td style="
+                (cell, colIdx) => {
+                  const cellContent = typeof cell === 'string' ? escapeHtml(cell) : cell.html;
+                  return `<td style="
                     padding: 6px 10px;
                     font-size: 11px;
                     border: 1px solid #e5e7eb;
                     text-align: ${columns[colIdx]?.align || 'left'};
                     word-wrap: break-word;
                     max-width: 300px;
-                  ">${escapeHtml(cell)}</td>`
+                    vertical-align: middle;
+                  ">${cellContent}</td>`;
+                }
               )
               .join('')}
           </tr>`
@@ -356,4 +365,16 @@ function escapeHtml(text: string): string {
   const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
+}
+
+/** Helper to create an image cell for PDF export */
+export function makeImageCell(imageUrls: string[]): CellContent {
+  if (!imageUrls || imageUrls.length === 0) {
+    return { html: '<span style="color:#94a3b8;font-size:10px;">—</span>' };
+  }
+  const imgs = imageUrls.slice(0, 3).map(
+    (url) =>
+      `<img src="${url}" style="width:48px;height:48px;object-fit:cover;border-radius:4px;border:1px solid #e5e7eb;" onerror="this.style.display='none'" />`
+  ).join(' ');
+  return { html: `<div style="display:flex;gap:4px;align-items:center;justify-content:center;">${imgs}</div>` };
 }
