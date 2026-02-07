@@ -24,8 +24,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { format } from 'date-fns';
 import { Database } from '@/types/database';
 import * as XLSX from 'xlsx';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import { exportToPDFViaHTML, exportMultiSectionPDFViaHTML } from '@/utils/htmlPdfExport';
 
 type GoodsEntry = Database['public']['Tables']['goods_damaged_entries']['Row'] & {
   categories: { name: string };
@@ -630,24 +629,15 @@ export const ReportsPanel = () => {
     toast.success('Excel exported successfully');
   };
 
-  // Export table data to PDF
+  // Export table data to PDF using HTML print method (supports Tamil)
   const exportTablePDF = () => {
     if (tableFilteredEntries.length === 0) {
       toast.error('No data to export');
       return;
     }
 
-    const doc = new jsPDF('l', 'mm', 'a4');
-
-    doc.setFontSize(16);
-    doc.text('GD Reports', 14, 15);
-
-    doc.setFontSize(10);
-    doc.setTextColor(100);
-    doc.text(`Generated: ${format(new Date(), 'dd-MM-yyyy HH:mm')} | Total: ${tableFilteredEntries.length} entries`, 14, 22);
-
-    const tableData = tableFilteredEntries.map((entry, index) => [
-      index + 1,
+    const rows = tableFilteredEntries.map((entry, index) => [
+      String(index + 1),
       entry.shops.name,
       entry.categories.name,
       entry.sizes.size,
@@ -656,26 +646,23 @@ export const ReportsPanel = () => {
       formatDateTime(entry.created_at!)
     ]);
 
-    autoTable(doc, {
-      head: [['S.NO', 'SHOP', 'CATEGORY', 'SIZE', 'CUSTOMER TYPE', 'NOTES', 'DATE AND TIME']],
-      body: tableData,
-      startY: 28,
-      styles: { fontSize: 8, cellPadding: 2 },
-      headStyles: { fillColor: [124, 58, 237], textColor: 255 },
-      columnStyles: {
-        0: { cellWidth: 12, halign: 'center' },
-        1: { cellWidth: 25 },
-        2: { cellWidth: 25 },
-        3: { cellWidth: 15, halign: 'center' },
-        4: { cellWidth: 30 },
-        5: { cellWidth: 80 },
-        6: { cellWidth: 35 }
-      }
+    exportToPDFViaHTML({
+      title: 'GD Reports',
+      subtitle: `Generated: ${format(new Date(), 'dd-MM-yyyy HH:mm')}`,
+      columns: [
+        { header: 'S.NO', width: '50px', align: 'center' },
+        { header: 'SHOP', width: '12%' },
+        { header: 'CATEGORY', width: '12%' },
+        { header: 'SIZE', width: '8%', align: 'center' },
+        { header: 'CUSTOMER TYPE', width: '14%' },
+        { header: 'NOTES' },
+        { header: 'DATE AND TIME', width: '14%' }
+      ],
+      rows,
+      orientation: 'landscape',
     });
 
-    const fileName = `gd-reports-table-${format(new Date(), 'yyyy-MM-dd-HHmm')}.pdf`;
-    doc.save(fileName);
-    toast.success('PDF exported successfully');
+    toast.success('PDF export opened');
   };
 
   const formatTime12Hour = (date: Date) => {
@@ -937,15 +924,7 @@ export const ReportsPanel = () => {
     }
 
     try {
-      console.log('Starting multi-sheet PDF export...');
-
-      // Wait for fonts to be ready
-      await (document as any).fonts?.ready;
-
-      // Step 1: Create Excel workbook in memory (same as Excel export)
-      const wb = XLSX.utils.book_new();
-
-      // Prepare data for export
+      // Prepare data
       const exportData = filteredEntries.map(entry => ({
         Date: formatTime12Hour(new Date(entry.created_at)),
         Shop: entry.shops.name,
@@ -956,111 +935,60 @@ export const ReportsPanel = () => {
         Notes: entry.notes || ''
       }));
 
-      // Auto-width columns helper
-      const autoWidth = (ws: XLSX.WorkSheet, rows: any[]) => {
-        const colWidths: number[] = [];
-        rows.forEach(row => {
-          Object.values(row).forEach((value, i) => {
-            const v = value == null ? '' : String(value);
-            colWidths[i] = Math.max(colWidths[i] || 0, v.length);
-          });
-        });
-        ws['!cols'] = colWidths.map(width => ({ wch: Math.min(Math.max(width + 2, 12), 40) }));
-      };
+      const columns = [
+        { header: 'DATE', width: '14%' },
+        { header: 'SHOP', width: '12%' },
+        { header: 'CATEGORY', width: '12%' },
+        { header: 'SIZE', width: '8%', align: 'center' as const },
+        { header: 'CUSTOMER TYPE', width: '12%' },
+        { header: 'REPORTER', width: '12%' },
+        { header: 'NOTES' }
+      ];
 
-      // Create worksheet helper
-      const createWorksheet = (name: string, data: any[]) => {
-        const ws = XLSX.utils.json_to_sheet(data, { skipHeader: false });
-        autoWidth(ws, data);
-        ws['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: 'A2', activePane: 'bottomLeft', state: 'frozen' };
-        return ws;
-      };
+      const toRow = (d: typeof exportData[0], idx: number) => [
+        d.Date, d.Shop, d.Category, d.Size, d['Customer Type'], d.Reporter, d.Notes
+      ];
 
-      // Overall Report
-      const overallWs = createWorksheet('Overall Report', exportData);
-      XLSX.utils.book_append_sheet(wb, overallWs, 'Overall Report');
+      // Build sections: Overall + Shop-wise + Category-wise
+      type Section = { title: string; rows: string[][] };
+      const sections: Section[] = [];
 
-      // Shop-wise sheets
-      const uniqueShops = [...new Set(exportData.map(d => d.Shop).filter(Boolean))].sort();
+      // Overall
+      sections.push({
+        title: 'Overall Report',
+        rows: exportData.map((d, i) => toRow(d, i))
+      });
+
+      // Shop-wise
+      const uniqueShops = [...new Set(exportData.map(d => d.Shop))].sort();
       for (const shop of uniqueShops) {
         const shopData = exportData.filter(d => d.Shop === shop);
-        const sheetName = `Shop - ${shop}`.slice(0, 31);
-        const ws = createWorksheet(sheetName, shopData);
-        XLSX.utils.book_append_sheet(wb, ws, sheetName);
-      }
-
-      // Category-wise sheets
-      const uniqueCategories = [...new Set(exportData.map(d => d.Category).filter(Boolean))].sort();
-      for (const category of uniqueCategories) {
-        const categoryData = exportData.filter(d => d.Category === category);
-        const sheetName = `Category - ${category}`.slice(0, 31);
-        const ws = createWorksheet(sheetName, categoryData);
-        XLSX.utils.book_append_sheet(wb, ws, sheetName);
-      }
-
-      // Step 2: Convert each sheet into PDF
-      const doc = new jsPDF({
-        orientation: 'landscape',
-        unit: 'mm',
-        format: 'a4',
-        putOnlyUsedFonts: true,
-        compress: true
-      });
-
-      // Set document properties for UTF-8 support
-      doc.setProperties({
-        title: 'GD Multi-Sheet Report',
-        creator: 'GD App'
-      });
-
-      wb.SheetNames.forEach((sheetName, idx) => {
-        const ws = wb.Sheets[sheetName];
-        const sheetData = XLSX.utils.sheet_to_json(ws, { header: 1 });
-
-        if (idx > 0) doc.addPage(); // new page for each sheet
-
-        // Add sheet title
-        doc.setFontSize(16);
-        doc.text(`${sheetName} Report`, 14, 22);
-
-        // Add table for this sheet
-        autoTable(doc, {
-          head: [sheetData[0] as string[]],
-          body: sheetData.slice(1) as string[][],
-          startY: 35,
-          styles: {
-            fontSize: 9,
-            cellPadding: 3,
-            overflow: 'linebreak',
-            cellWidth: 'wrap',
-            halign: 'left',
-            valign: 'top',
-            fontStyle: 'normal'
-          },
-          headStyles: {
-            fillColor: [41, 128, 185],
-            fontStyle: 'bold',
-            textColor: [255, 255, 255],
-            halign: 'center'
-          },
-          columnStyles: {
-            0: { cellWidth: 35 },  // Date
-            1: { cellWidth: 25 },  // Shop
-            2: { cellWidth: 25 },  // Category
-            3: { cellWidth: 20 },  // Size
-            4: { cellWidth: 25 },  // Customer Type
-            5: { cellWidth: 25 },  // Reporter
-            6: { cellWidth: 60, fontSize: 8 }  // Notes
-          }
+        sections.push({
+          title: `Shop - ${shop}`,
+          rows: shopData.map((d, i) => toRow(d, i))
         });
+      }
+
+      // Category-wise
+      const uniqueCategories = [...new Set(exportData.map(d => d.Category))].sort();
+      for (const category of uniqueCategories) {
+        const catData = exportData.filter(d => d.Category === category);
+        sections.push({
+          title: `Category - ${category}`,
+          rows: catData.map((d, i) => toRow(d, i))
+        });
+      }
+
+      // Use multi-section HTML PDF export
+      exportMultiSectionPDFViaHTML({
+        title: 'GD Multi-Sheet Report',
+        subtitle: `Generated: ${format(new Date(), 'dd-MM-yyyy HH:mm')} | Total: ${filteredEntries.length} entries`,
+        columns,
+        sections,
+        orientation: 'landscape',
       });
 
-      // Step 3: Save final PDF
-      const fileName = `gd_report_multisheet_${format(new Date(), 'yyyy-MM-dd')}.pdf`;
-      doc.save(fileName);
-
-      console.log('Multi-sheet PDF saved successfully');
-      toast.success(`PDF report exported successfully! ${filteredEntries.length} entries across ${wb.SheetNames.length} sheets`);
+      toast.success(`PDF report opened! ${filteredEntries.length} entries across ${sections.length} sections`);
     } catch (error) {
       console.error('Error exporting multi-sheet PDF:', error);
       toast.error('Failed to export PDF. Please try again.');
