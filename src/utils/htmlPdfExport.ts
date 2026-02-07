@@ -1,0 +1,359 @@
+/**
+ * HTML + Browser Print PDF Export Utility
+ * Generates styled HTML tables and opens them in a new window for printing/saving as PDF.
+ * Supports Tamil/Unicode text perfectly since it uses native browser rendering.
+ */
+
+export interface PDFColumn {
+  header: string;
+  width?: string; // CSS width (e.g., '60px', '15%')
+  align?: 'left' | 'center' | 'right';
+}
+
+export interface HTMLPDFExportOptions {
+  title: string;
+  subtitle?: string;
+  columns: PDFColumn[];
+  rows: string[][];
+  fileName?: string;
+  orientation?: 'portrait' | 'landscape';
+}
+
+export function exportToPDFViaHTML({
+  title,
+  subtitle,
+  columns,
+  rows,
+  fileName = 'report',
+  orientation = 'landscape',
+}: HTMLPDFExportOptions) {
+  const headerCells = columns
+    .map(
+      (col) =>
+        `<th style="
+          padding: 8px 10px;
+          text-align: ${col.align || 'left'};
+          font-weight: 700;
+          font-size: 11px;
+          color: #fff;
+          background: #7c3aed;
+          border: 1px solid #6d28d9;
+          white-space: nowrap;
+          ${col.width ? `width: ${col.width};` : ''}
+        ">${escapeHtml(col.header)}</th>`
+    )
+    .join('');
+
+  const bodyRows = rows
+    .map(
+      (row, rowIdx) =>
+        `<tr style="background: ${rowIdx % 2 === 0 ? '#fff' : '#f5f3ff'};">
+          ${row
+            .map(
+              (cell, colIdx) =>
+                `<td style="
+                  padding: 6px 10px;
+                  font-size: 11px;
+                  border: 1px solid #e5e7eb;
+                  text-align: ${columns[colIdx]?.align || 'left'};
+                  word-wrap: break-word;
+                  max-width: 300px;
+                ">${escapeHtml(cell)}</td>`
+            )
+            .join('')}
+        </tr>`
+    )
+    .join('');
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${escapeHtml(title)}</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Tamil:wght@400;700&display=swap');
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Noto Sans Tamil', 'Latha', 'Tamil Sangam MN', Arial, sans-serif;
+      padding: 20px;
+      color: #1a1a2e;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    .report-header {
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 2px solid #7c3aed;
+    }
+
+    .report-title {
+      font-size: 20px;
+      font-weight: 700;
+      color: #7c3aed;
+      margin-bottom: 4px;
+    }
+
+    .report-subtitle {
+      font-size: 12px;
+      color: #64748b;
+    }
+
+    .report-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+
+    .entry-count {
+      font-size: 12px;
+      color: #64748b;
+      font-weight: 600;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-family: 'Noto Sans Tamil', 'Latha', 'Tamil Sangam MN', Arial, sans-serif;
+    }
+
+    @media print {
+      body {
+        padding: 10px;
+      }
+
+      @page {
+        size: ${orientation === 'landscape' ? 'A4 landscape' : 'A4 portrait'};
+        margin: 10mm;
+      }
+
+      .no-print {
+        display: none !important;
+      }
+
+      table { page-break-inside: auto; }
+      tr { page-break-inside: avoid; page-break-after: auto; }
+      thead { display: table-header-group; }
+    }
+
+    .print-btn {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      padding: 10px 24px;
+      background: #7c3aed;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      z-index: 1000;
+      font-family: 'Noto Sans Tamil', Arial, sans-serif;
+    }
+
+    .print-btn:hover {
+      background: #6d28d9;
+    }
+  </style>
+</head>
+<body>
+  <button class="print-btn no-print" onclick="window.print()">📄 Save as PDF</button>
+
+  <div class="report-header">
+    <div class="report-meta">
+      <div class="report-title">${escapeHtml(title)}</div>
+      <div class="entry-count">Total: ${rows.length} entries</div>
+    </div>
+    ${subtitle ? `<div class="report-subtitle">${escapeHtml(subtitle)}</div>` : ''}
+  </div>
+
+  <table>
+    <thead>
+      <tr>${headerCells}</tr>
+    </thead>
+    <tbody>
+      ${bodyRows}
+    </tbody>
+  </table>
+
+  <script>
+    // Auto-trigger print after fonts load, with fallback timeout
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(function() {
+        setTimeout(function() { window.print(); }, 500);
+      });
+    } else {
+      setTimeout(function() { window.print(); }, 1500);
+    }
+  </script>
+</body>
+</html>`;
+
+  const printWindow = window.open('', '_blank');
+  if (printWindow) {
+    printWindow.document.write(html);
+    printWindow.document.close();
+  } else {
+    // Fallback: try opening as blob
+    const blob = new Blob([html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  }
+}
+
+export interface MultiSectionPDFOptions {
+  title: string;
+  subtitle?: string;
+  columns: PDFColumn[];
+  sections: { title: string; rows: string[][] }[];
+  orientation?: 'portrait' | 'landscape';
+}
+
+export function exportMultiSectionPDFViaHTML({
+  title,
+  subtitle,
+  columns,
+  sections,
+  orientation = 'landscape',
+}: MultiSectionPDFOptions) {
+  const totalRows = sections.reduce((sum, s) => sum + s.rows.length, 0);
+
+  const buildTable = (rows: string[][]) => {
+    const headerCells = columns
+      .map(
+        (col) =>
+          `<th style="
+            padding: 8px 10px;
+            text-align: ${col.align || 'left'};
+            font-weight: 700;
+            font-size: 11px;
+            color: #fff;
+            background: #7c3aed;
+            border: 1px solid #6d28d9;
+            white-space: nowrap;
+            ${col.width ? `width: ${col.width};` : ''}
+          ">${escapeHtml(col.header)}</th>`
+      )
+      .join('');
+
+    const bodyRows = rows
+      .map(
+        (row, rowIdx) =>
+          `<tr style="background: ${rowIdx % 2 === 0 ? '#fff' : '#f5f3ff'};">
+            ${row
+              .map(
+                (cell, colIdx) =>
+                  `<td style="
+                    padding: 6px 10px;
+                    font-size: 11px;
+                    border: 1px solid #e5e7eb;
+                    text-align: ${columns[colIdx]?.align || 'left'};
+                    word-wrap: break-word;
+                    max-width: 300px;
+                  ">${escapeHtml(cell)}</td>`
+              )
+              .join('')}
+          </tr>`
+      )
+      .join('');
+
+    return `<table style="width:100%;border-collapse:collapse;font-family:'Noto Sans Tamil','Latha',Arial,sans-serif;">
+      <thead><tr>${headerCells}</tr></thead>
+      <tbody>${bodyRows}</tbody>
+    </table>`;
+  };
+
+  const sectionBlocks = sections
+    .map(
+      (section, idx) =>
+        `<div style="${idx > 0 ? 'page-break-before: always;' : ''}margin-bottom:20px;">
+          <h2 style="font-size:16px;font-weight:700;color:#7c3aed;margin:12px 0 8px 0;">
+            ${escapeHtml(section.title)} (${section.rows.length} entries)
+          </h2>
+          ${buildTable(section.rows)}
+        </div>`
+    )
+    .join('');
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>${escapeHtml(title)}</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Tamil:wght@400;700&display=swap');
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body {
+      font-family: 'Noto Sans Tamil','Latha','Tamil Sangam MN',Arial,sans-serif;
+      padding: 20px; color: #1a1a2e;
+      -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    }
+    .report-header { margin-bottom:16px; padding-bottom:12px; border-bottom:2px solid #7c3aed; }
+    .report-title { font-size:20px; font-weight:700; color:#7c3aed; margin-bottom:4px; }
+    .report-subtitle { font-size:12px; color:#64748b; }
+    .entry-count { font-size:12px; color:#64748b; font-weight:600; }
+    .report-meta { display:flex; justify-content:space-between; align-items:center; }
+    @media print {
+      body { padding:10px; }
+      @page { size: ${orientation === 'landscape' ? 'A4 landscape' : 'A4 portrait'}; margin:10mm; }
+      .no-print { display:none !important; }
+      table { page-break-inside:auto; }
+      tr { page-break-inside:avoid; }
+      thead { display:table-header-group; }
+    }
+    .print-btn {
+      position:fixed; top:16px; right:16px; padding:10px 24px;
+      background:#7c3aed; color:#fff; border:none; border-radius:8px;
+      font-size:14px; font-weight:600; cursor:pointer; z-index:1000;
+      font-family:'Noto Sans Tamil',Arial,sans-serif;
+    }
+    .print-btn:hover { background:#6d28d9; }
+  </style>
+</head>
+<body>
+  <button class="print-btn no-print" onclick="window.print()">📄 Save as PDF</button>
+  <div class="report-header">
+    <div class="report-meta">
+      <div class="report-title">${escapeHtml(title)}</div>
+      <div class="entry-count">Total: ${totalRows} entries | ${sections.length} sections</div>
+    </div>
+    ${subtitle ? `<div class="report-subtitle">${escapeHtml(subtitle)}</div>` : ''}
+  </div>
+  ${sectionBlocks}
+  <script>
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(function() { setTimeout(function() { window.print(); }, 500); });
+    } else {
+      setTimeout(function() { window.print(); }, 1500);
+    }
+  </script>
+</body>
+</html>`;
+
+  const printWindow = window.open('', '_blank');
+  if (printWindow) {
+    printWindow.document.write(html);
+    printWindow.document.close();
+  } else {
+    const blob = new Blob([html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  }
+}
+
+function escapeHtml(text: string): string {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}

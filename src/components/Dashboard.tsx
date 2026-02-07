@@ -9,8 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { TrendingUp, Package, Calendar, CalendarDays, Sparkles, Filter, X, ArrowUpDown, BarChart3, FileDown, FileSpreadsheet, LineChart } from 'lucide-react';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import { exportToPDFViaHTML } from '@/utils/htmlPdfExport';
 import * as XLSX from 'xlsx';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
@@ -426,24 +425,14 @@ export const Dashboard = () => {
     XLSX.writeFile(wb, fileName);
   };
 
-  // Export to PDF
+  // Export to PDF using HTML print method (supports Tamil)
   const exportToPDF = () => {
-    const doc = new jsPDF();
-
-    // Add title
-    doc.setFontSize(16);
-    doc.text(`GD Report: ${modalFilter.value}`, 14, 15);
-
-    // Add subtitle with date range
-    doc.setFontSize(10);
     const dateRangeText = (customDateFrom || customDateTo)
       ? `${customDateFrom ? format(customDateFrom, 'PP') : ''} - ${customDateTo ? format(customDateTo, 'PP') : ''}`
       : "Today's entries";
-    doc.text(dateRangeText, 14, 22);
 
-    // Add table
-    const tableData = getModalEntries.map((entry, idx) => [
-      idx + 1,
+    const rows = getModalEntries.map((entry, idx) => [
+      String(idx + 1),
       entry.shops?.name || 'N/A',
       entry.categories?.name || 'N/A',
       entry.sizes?.size || 'N/A',
@@ -452,27 +441,21 @@ export const Dashboard = () => {
       formatDateTime(entry.created_at)
     ]);
 
-    autoTable(doc, {
-      startY: 28,
-      head: [['S.NO', 'SHOP', 'CATEGORY', 'SIZE', 'CUSTOMER TYPE', 'NOTES', 'DATE & TIME']],
-      body: tableData,
-      styles: { fontSize: 8, cellPadding: 2 },
-      headStyles: { fillColor: [59, 130, 246], fontStyle: 'bold' },
-      alternateRowStyles: { fillColor: [245, 247, 250] },
-      columnStyles: {
-        0: { cellWidth: 12 },
-        1: { cellWidth: 25 },
-        2: { cellWidth: 25 },
-        3: { cellWidth: 15 },
-        4: { cellWidth: 30 },
-        5: { cellWidth: 50 },
-        6: { cellWidth: 30 }
-      },
-      margin: { top: 28 }
+    exportToPDFViaHTML({
+      title: `GD Report: ${modalFilter.value}`,
+      subtitle: dateRangeText,
+      columns: [
+        { header: 'S.NO', width: '50px', align: 'center' },
+        { header: 'SHOP', width: '12%' },
+        { header: 'CATEGORY', width: '12%' },
+        { header: 'SIZE', width: '8%', align: 'center' },
+        { header: 'CUSTOMER TYPE', width: '14%' },
+        { header: 'NOTES' },
+        { header: 'DATE & TIME', width: '14%' }
+      ],
+      rows,
+      orientation: 'landscape',
     });
-
-    const fileName = `GD_${modalFilter.type}_${modalFilter.value}_${format(new Date(), 'yyyy-MM-dd')}.pdf`;
-    doc.save(fileName);
   };
 
   if (!isAdmin && !isManager) {
