@@ -24,7 +24,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { format } from 'date-fns';
 import { Database } from '@/types/database';
 import * as XLSX from 'xlsx';
-import { exportToPDFViaHTML, exportMultiSectionPDFViaHTML } from '@/utils/htmlPdfExport';
+import { exportToPDFViaHTML, exportMultiSectionPDFViaHTML, makeImageCell, type CellContent } from '@/utils/htmlPdfExport';
 
 type GoodsEntry = Database['public']['Tables']['goods_damaged_entries']['Row'] & {
   categories: { name: string };
@@ -629,20 +629,21 @@ export const ReportsPanel = () => {
     toast.success('Excel exported successfully');
   };
 
-  // Export table data to PDF using HTML print method (supports Tamil)
+  // Export table data to PDF using HTML print method (supports Tamil + images)
   const exportTablePDF = () => {
     if (tableFilteredEntries.length === 0) {
       toast.error('No data to export');
       return;
     }
 
-    const rows = tableFilteredEntries.map((entry, index) => [
+    const rows: CellContent[][] = tableFilteredEntries.map((entry, index) => [
       String(index + 1),
       entry.shops.name,
       entry.categories.name,
       entry.sizes.size,
       entry.customer_types?.name || 'N/A',
       entry.notes || '',
+      makeImageCell((entry.gd_entry_images || []).map(img => img.image_url)),
       formatDateTime(entry.created_at!)
     ]);
 
@@ -650,13 +651,14 @@ export const ReportsPanel = () => {
       title: 'GD Reports',
       subtitle: `Generated: ${format(new Date(), 'dd-MM-yyyy HH:mm')}`,
       columns: [
-        { header: 'S.NO', width: '50px', align: 'center' },
-        { header: 'SHOP', width: '12%' },
-        { header: 'CATEGORY', width: '12%' },
-        { header: 'SIZE', width: '8%', align: 'center' },
-        { header: 'CUSTOMER TYPE', width: '14%' },
+        { header: 'S.NO', width: '40px', align: 'center' },
+        { header: 'SHOP', width: '11%' },
+        { header: 'CATEGORY', width: '11%' },
+        { header: 'SIZE', width: '7%', align: 'center' },
+        { header: 'CUSTOMER TYPE', width: '12%' },
         { header: 'NOTES' },
-        { header: 'DATE AND TIME', width: '14%' }
+        { header: 'IMAGE', width: '14%', align: 'center' },
+        { header: 'DATE AND TIME', width: '13%' }
       ],
       rows,
       orientation: 'landscape',
@@ -924,7 +926,7 @@ export const ReportsPanel = () => {
     }
 
     try {
-      // Prepare data
+      // Prepare data with image cells
       const exportData = filteredEntries.map(entry => ({
         Date: formatTime12Hour(new Date(entry.created_at)),
         Shop: entry.shops.name,
@@ -932,31 +934,33 @@ export const ReportsPanel = () => {
         Size: entry.sizes.size,
         'Customer Type': entry.customer_types?.name || 'Not specified',
         Reporter: entry.employee_name || 'Unknown',
-        Notes: entry.notes || ''
+        Notes: entry.notes || '',
+        Images: makeImageCell((entry.gd_entry_images || []).map(img => img.image_url)),
       }));
 
       const columns = [
-        { header: 'DATE', width: '14%' },
-        { header: 'SHOP', width: '12%' },
-        { header: 'CATEGORY', width: '12%' },
-        { header: 'SIZE', width: '8%', align: 'center' as const },
-        { header: 'CUSTOMER TYPE', width: '12%' },
-        { header: 'REPORTER', width: '12%' },
-        { header: 'NOTES' }
+        { header: 'DATE', width: '13%' },
+        { header: 'SHOP', width: '10%' },
+        { header: 'CATEGORY', width: '10%' },
+        { header: 'SIZE', width: '7%', align: 'center' as const },
+        { header: 'CUSTOMER TYPE', width: '10%' },
+        { header: 'REPORTER', width: '10%' },
+        { header: 'NOTES' },
+        { header: 'IMAGE', width: '14%', align: 'center' as const }
       ];
 
-      const toRow = (d: typeof exportData[0], idx: number) => [
-        d.Date, d.Shop, d.Category, d.Size, d['Customer Type'], d.Reporter, d.Notes
+      const toRow = (d: typeof exportData[0]): CellContent[] => [
+        d.Date, d.Shop, d.Category, d.Size, d['Customer Type'], d.Reporter, d.Notes, d.Images
       ];
 
       // Build sections: Overall + Shop-wise + Category-wise
-      type Section = { title: string; rows: string[][] };
+      type Section = { title: string; rows: CellContent[][] };
       const sections: Section[] = [];
 
       // Overall
       sections.push({
         title: 'Overall Report',
-        rows: exportData.map((d, i) => toRow(d, i))
+        rows: exportData.map((d) => toRow(d))
       });
 
       // Shop-wise
@@ -965,7 +969,7 @@ export const ReportsPanel = () => {
         const shopData = exportData.filter(d => d.Shop === shop);
         sections.push({
           title: `Shop - ${shop}`,
-          rows: shopData.map((d, i) => toRow(d, i))
+          rows: shopData.map((d) => toRow(d))
         });
       }
 
@@ -975,7 +979,7 @@ export const ReportsPanel = () => {
         const catData = exportData.filter(d => d.Category === category);
         sections.push({
           title: `Category - ${category}`,
-          rows: catData.map((d, i) => toRow(d, i))
+          rows: catData.map((d) => toRow(d))
         });
       }
 

@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { TrendingUp, Package, Calendar, CalendarDays, Sparkles, Filter, X, ArrowUpDown, BarChart3, FileDown, FileSpreadsheet, LineChart } from 'lucide-react';
-import { exportToPDFViaHTML } from '@/utils/htmlPdfExport';
+import { exportToPDFViaHTML, makeImageCell } from '@/utils/htmlPdfExport';
 import * as XLSX from 'xlsx';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
@@ -425,7 +425,7 @@ export const Dashboard = () => {
     XLSX.writeFile(wb, fileName);
   };
 
-  // Export to PDF using HTML print method (supports Tamil)
+  // Export to PDF using HTML print method (supports Tamil + images)
   const exportToPDF = () => {
     const dateRangeText = (customDateFrom || customDateTo)
       ? `${customDateFrom ? format(customDateFrom, 'PP') : ''} - ${customDateTo ? format(customDateTo, 'PP') : ''}`
@@ -438,6 +438,7 @@ export const Dashboard = () => {
       entry.sizes?.size || 'N/A',
       entry.customer_types?.name || 'N/A',
       entry.notes,
+      makeImageCell((entry.gd_entry_images || []).map(img => img.image_url)),
       formatDateTime(entry.created_at)
     ]);
 
@@ -445,13 +446,14 @@ export const Dashboard = () => {
       title: `GD Report: ${modalFilter.value}`,
       subtitle: dateRangeText,
       columns: [
-        { header: 'S.NO', width: '50px', align: 'center' },
-        { header: 'SHOP', width: '12%' },
-        { header: 'CATEGORY', width: '12%' },
-        { header: 'SIZE', width: '8%', align: 'center' },
-        { header: 'CUSTOMER TYPE', width: '14%' },
+        { header: 'S.NO', width: '40px', align: 'center' },
+        { header: 'SHOP', width: '11%' },
+        { header: 'CATEGORY', width: '11%' },
+        { header: 'SIZE', width: '7%', align: 'center' },
+        { header: 'CUSTOMER TYPE', width: '12%' },
         { header: 'NOTES' },
-        { header: 'DATE & TIME', width: '14%' }
+        { header: 'IMAGE', width: '14%', align: 'center' },
+        { header: 'DATE & TIME', width: '13%' }
       ],
       rows,
       orientation: 'landscape',
