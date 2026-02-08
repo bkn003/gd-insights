@@ -180,7 +180,8 @@ export const DamagedGoodsForm = () => {
       customer_type_id: formData.customer_type_id,
       employee_id: profile.id,
       employee_name: profile.name,
-      notes: sanitizedNotes || 'Voice note attached'
+      notes: sanitizedNotes || 'Voice note attached',
+      admin_id: (profile as any)?.admin_id || profile.id,
     };
 
     try {

@@ -1,54 +1,26 @@
 
-
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { PasswordInput } from '@/components/ui/password-input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { Package } from 'lucide-react';
-import { Database } from '@/types/database';
-
-type Shop = Database['public']['Tables']['shops']['Row'];
+import { Package, AlertCircle } from 'lucide-react';
 
 export const AuthForm = () => {
   const [isSignUp, setIsSignUp] = useState(false);
   const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [shops, setShops] = useState<Shop[]>([]);
+  const [signupSuccess, setSignupSuccess] = useState(false);
   const [formData, setFormData] = useState({
     email: '',
     password: '',
     name: '',
-    shopId: 'none',
   });
 
   const { signIn, signUp, resetPassword } = useAuth();
-
-  useEffect(() => {
-    if (isSignUp) {
-      fetchShops();
-    }
-  }, [isSignUp]);
-
-  const fetchShops = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('shops')
-        .select('*')
-        .order('name');
-      
-      if (error) throw error;
-      setShops(data);
-    } catch (error) {
-      console.error('Error fetching shops:', error);
-      toast.error('Failed to load shops');
-    }
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -66,15 +38,9 @@ export const AuthForm = () => {
         setIsForgotPassword(false);
         setFormData({ ...formData, email: '' });
       } else if (isSignUp) {
-        if (formData.shopId === 'none') {
-          toast.error('Please select a shop');
-          return;
-        }
-        
         const { error } = await signUp(formData.email, formData.password, formData.name);
         if (error) throw error;
-        
-        toast.success('Account created successfully! Please check your email to verify your account.');
+        setSignupSuccess(true);
       } else {
         const { error } = await signIn(formData.email, formData.password);
         if (error) throw error;
@@ -94,6 +60,44 @@ export const AuthForm = () => {
     });
   };
 
+  // Show success message after admin signup
+  if (signupSuccess) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background px-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="space-y-1">
+            <div className="flex items-center justify-center mb-4">
+              <AlertCircle className="h-12 w-12 text-amber-500" />
+            </div>
+            <CardTitle className="text-2xl text-center">Account Pending Activation</CardTitle>
+            <CardDescription className="text-center">
+              Your admin account has been created successfully! Please check your email to verify your account.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="bg-muted border border-border rounded-lg p-4">
+              <p className="text-sm text-muted-foreground">
+                <strong>Important:</strong> Your account is currently paused and pending activation by the Super Admin. 
+                You will be able to log in once your account has been activated.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => {
+                setSignupSuccess(false);
+                setIsSignUp(false);
+                setFormData({ email: '', password: '', name: '' });
+              }}
+            >
+              Back to Sign In
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
       <Card className="w-full max-w-md">
@@ -102,53 +106,31 @@ export const AuthForm = () => {
             <Package className="h-8 w-8 text-primary" />
           </div>
           <CardTitle className="text-2xl text-center">
-            {isForgotPassword ? 'Reset Password' : isSignUp ? 'Create Account' : 'Sign In'}
+            {isForgotPassword ? 'Reset Password' : isSignUp ? 'Create Admin Account' : 'Sign In'}
           </CardTitle>
           <CardDescription className="text-center">
             {isForgotPassword
               ? 'Enter your email to receive a password reset link'
               : isSignUp
-              ? 'Enter your information to create an account'
+              ? 'Register as an admin. Your account will need activation.'
               : 'Enter your email and password to sign in'}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             {isSignUp && !isForgotPassword && (
-              <>
-                <div className="space-y-2">
-                  <Label htmlFor="name">Full Name</Label>
-                  <Input
-                    id="name"
-                    name="name"
-                    type="text"
-                    placeholder="John Doe"
-                    value={formData.name}
-                    onChange={handleInputChange}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="shop">Shop</Label>
-                  <Select
-                    value={formData.shopId}
-                    onValueChange={(value) => setFormData({ ...formData, shopId: value })}
-                    required
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select your shop" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Select your shop</SelectItem>
-                      {shops.map((shop) => (
-                        <SelectItem key={shop.id} value={shop.id}>
-                          {shop.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </>
+              <div className="space-y-2">
+                <Label htmlFor="name">Full Name</Label>
+                <Input
+                  id="name"
+                  name="name"
+                  type="text"
+                  placeholder="Your name"
+                  value={formData.name}
+                  onChange={handleInputChange}
+                  required
+                />
+              </div>
             )}
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
@@ -156,7 +138,7 @@ export const AuthForm = () => {
                 id="email"
                 name="email"
                 type="email"
-                placeholder="john@example.com"
+                placeholder="you@example.com"
                 value={formData.email}
                 onChange={handleInputChange}
                 required
@@ -185,6 +167,14 @@ export const AuthForm = () => {
                 />
               </div>
             )}
+
+            {isSignUp && !isForgotPassword && (
+              <div className="bg-muted/50 rounded-lg p-3 text-sm text-muted-foreground">
+                <p>✓ Admin accounts require Super Admin activation</p>
+                <p>✓ Sub-users are created from within your dashboard</p>
+              </div>
+            )}
+
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? 'Loading...' : isForgotPassword ? 'Send Reset Link' : isSignUp ? 'Create Account' : 'Sign In'}
             </Button>
@@ -209,7 +199,7 @@ export const AuthForm = () => {
               >
                 {isSignUp
                   ? 'Already have an account? Sign in'
-                  : "Don't have an account? Sign up"}
+                  : "Don't have an account? Sign up as Admin"}
               </Button>
             )}
           </div>
@@ -218,4 +208,3 @@ export const AuthForm = () => {
     </div>
   );
 };
-

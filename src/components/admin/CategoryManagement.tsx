@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { Plus, Edit, Trash2, Package } from 'lucide-react';
 import { Database } from '@/types/database';
 import { DeleteConfirmationDialog } from '@/components/DeleteConfirmationDialog';
+import { useAuth } from '@/hooks/useAuth';
 
 type Category = Database['public']['Tables']['categories']['Row'];
 
@@ -17,6 +18,7 @@ interface CategoryManagementProps {
 }
 
 export const CategoryManagement = ({ categories, onRefresh }: CategoryManagementProps) => {
+  const { profile } = useAuth();
   const [newCategoryName, setNewCategoryName] = useState('');
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [editName, setEditName] = useState('');
@@ -28,9 +30,9 @@ export const CategoryManagement = ({ categories, onRefresh }: CategoryManagement
     if (!newCategoryName.trim()) return;
 
     try {
-      const { error } = await supabase
-        .from('categories')
-        .insert({ name: newCategoryName.trim() });
+      const { error } = await (supabase
+        .from('categories') as any)
+        .insert({ name: newCategoryName.trim(), admin_id: (profile as any)?.admin_id || profile?.id });
 
       if (error) throw error;
 

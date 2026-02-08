@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { Plus, Edit, Trash2, Ruler } from 'lucide-react';
 import { Database } from '@/types/database';
 import { DeleteConfirmationDialog } from '@/components/DeleteConfirmationDialog';
+import { useAuth } from '@/hooks/useAuth';
 
 type Size = Database['public']['Tables']['sizes']['Row'];
 
@@ -17,6 +18,7 @@ interface SizeManagementProps {
 }
 
 export const SizeManagement = ({ sizes, onRefresh }: SizeManagementProps) => {
+  const { profile } = useAuth();
   const [newSizeName, setNewSizeName] = useState('');
   const [editingSize, setEditingSize] = useState<Size | null>(null);
   const [editName, setEditName] = useState('');
@@ -28,9 +30,9 @@ export const SizeManagement = ({ sizes, onRefresh }: SizeManagementProps) => {
     if (!newSizeName.trim()) return;
 
     try {
-      const { error } = await supabase
-        .from('sizes')
-        .insert({ size: newSizeName.trim() });
+      const { error } = await (supabase
+        .from('sizes') as any)
+        .insert({ size: newSizeName.trim(), admin_id: (profile as any)?.admin_id || profile?.id });
 
       if (error) throw error;
 

@@ -9,6 +9,8 @@ export interface Database {
           created_at: string;
           updated_at: string;
           whatsapp_group_link: string | null;
+          deleted_at: string | null;
+          admin_id: string | null;
         };
         Insert: {
           id?: string;
@@ -16,6 +18,8 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
           whatsapp_group_link?: string | null;
+          deleted_at?: string | null;
+          admin_id?: string | null;
         };
         Update: {
           id?: string;
@@ -23,6 +27,8 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
           whatsapp_group_link?: string | null;
+          deleted_at?: string | null;
+          admin_id?: string | null;
         };
       };
       app_settings: {
@@ -32,6 +38,7 @@ export interface Database {
           value: Record<string, unknown>;
           created_at: string;
           updated_at: string;
+          admin_id: string | null;
         };
         Insert: {
           id?: string;
@@ -39,6 +46,7 @@ export interface Database {
           value: Record<string, unknown>;
           created_at?: string;
           updated_at?: string;
+          admin_id?: string | null;
         };
         Update: {
           id?: string;
@@ -46,6 +54,7 @@ export interface Database {
           value?: Record<string, unknown>;
           created_at?: string;
           updated_at?: string;
+          admin_id?: string | null;
         };
       };
       categories: {
@@ -54,18 +63,24 @@ export interface Database {
           name: string;
           created_at: string;
           updated_at: string;
+          deleted_at: string | null;
+          admin_id: string | null;
         };
         Insert: {
           id?: string;
           name: string;
           created_at?: string;
           updated_at?: string;
+          deleted_at?: string | null;
+          admin_id?: string | null;
         };
         Update: {
           id?: string;
           name?: string;
           created_at?: string;
           updated_at?: string;
+          deleted_at?: string | null;
+          admin_id?: string | null;
         };
       };
       sizes: {
@@ -74,18 +89,24 @@ export interface Database {
           size: string;
           created_at: string;
           updated_at: string;
+          deleted_at: string | null;
+          admin_id: string | null;
         };
         Insert: {
           id?: string;
           size: string;
           created_at?: string;
           updated_at?: string;
+          deleted_at?: string | null;
+          admin_id?: string | null;
         };
         Update: {
           id?: string;
           size?: string;
           created_at?: string;
           updated_at?: string;
+          deleted_at?: string | null;
+          admin_id?: string | null;
         };
       };
       customer_types: {
@@ -95,6 +116,7 @@ export interface Database {
           created_at: string;
           updated_at: string;
           deleted_at: string | null;
+          admin_id: string | null;
         };
         Insert: {
           id?: string;
@@ -102,6 +124,7 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
           deleted_at?: string | null;
+          admin_id?: string | null;
         };
         Update: {
           id?: string;
@@ -109,6 +132,7 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
           deleted_at?: string | null;
+          admin_id?: string | null;
         };
       };
       profiles: {
@@ -116,37 +140,55 @@ export interface Database {
           id: string;
           name: string;
           user_id: string;
-          role: 'admin' | 'user' | 'manager';
+          role: 'super_admin' | 'admin' | 'user' | 'manager';
           shop_id: string | null;
           default_category_id: string | null;
           default_size_id: string | null;
           created_at: string;
           updated_at: string;
           deleted_at: string | null;
+          email: string | null;
+          admin_id: string | null;
+          status: 'active' | 'paused';
+          max_shops: number | null;
+          max_users: number | null;
+          last_login_at: string | null;
         };
         Insert: {
           id: string;
           name: string;
           user_id: string;
-          role?: 'admin' | 'user' | 'manager';
+          role?: 'super_admin' | 'admin' | 'user' | 'manager';
           shop_id?: string | null;
           default_category_id?: string | null;
           default_size_id?: string | null;
           created_at?: string;
           updated_at?: string;
           deleted_at?: string | null;
+          email?: string | null;
+          admin_id?: string | null;
+          status?: 'active' | 'paused';
+          max_shops?: number | null;
+          max_users?: number | null;
+          last_login_at?: string | null;
         };
         Update: {
           id?: string;
           name?: string;
           user_id?: string;
-          role?: 'admin' | 'user' | 'manager';
+          role?: 'super_admin' | 'admin' | 'user' | 'manager';
           shop_id?: string | null;
           default_category_id?: string | null;
           default_size_id?: string | null;
           created_at?: string;
           updated_at?: string;
           deleted_at?: string | null;
+          email?: string | null;
+          admin_id?: string | null;
+          status?: 'active' | 'paused';
+          max_shops?: number | null;
+          max_users?: number | null;
+          last_login_at?: string | null;
         };
       };
       goods_damaged_entries: {
@@ -161,6 +203,9 @@ export interface Database {
           notes: string;
           created_at: string;
           updated_at: string;
+          image_url: string | null;
+          voice_note_url: string | null;
+          admin_id: string | null;
         };
         Insert: {
           id?: string;
@@ -173,6 +218,9 @@ export interface Database {
           notes: string;
           created_at?: string;
           updated_at?: string;
+          image_url?: string | null;
+          voice_note_url?: string | null;
+          admin_id?: string | null;
         };
         Update: {
           id?: string;
@@ -185,6 +233,9 @@ export interface Database {
           notes?: string;
           created_at?: string;
           updated_at?: string;
+          image_url?: string | null;
+          voice_note_url?: string | null;
+          admin_id?: string | null;
         };
       };
     };

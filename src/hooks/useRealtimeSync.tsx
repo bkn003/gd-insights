@@ -8,19 +8,20 @@ type TableName = 'goods_damaged_entries' | 'profiles' | 'shops' | 'categories' |
 interface UseRealtimeSyncOptions {
   tables: TableName[];
   onProfileDeleted?: (userId: string) => void;
+  onProfilePaused?: (userId: string) => void;
   enabled?: boolean;
 }
 
 export const useRealtimeSync = ({
   tables,
   onProfileDeleted,
+  onProfilePaused,
   enabled = true,
 }: UseRealtimeSyncOptions) => {
   const queryClient = useQueryClient();
   const channelRef = useRef<RealtimeChannel | null>(null);
 
   const invalidateQueries = useCallback((table: string) => {
-    // Invalidate all related queries for instant UI updates
     switch (table) {
       case 'goods_damaged_entries':
         queryClient.invalidateQueries({ queryKey: ['dashboard-entries'] });
@@ -53,7 +54,6 @@ export const useRealtimeSync = ({
         queryClient.invalidateQueries({ queryKey: ['app-settings'] });
         break;
       default:
-        // Invalidate everything as fallback
         queryClient.invalidateQueries();
     }
   }, [queryClient]);
@@ -61,14 +61,12 @@ export const useRealtimeSync = ({
   useEffect(() => {
     if (!enabled) return;
 
-    // Create a single channel for all table subscriptions
     const channel = supabase.channel('realtime-sync', {
       config: {
         broadcast: { self: true },
       },
     });
 
-    // Subscribe to each table
     tables.forEach((table) => {
       channel.on(
         'postgres_changes',
@@ -80,7 +78,7 @@ export const useRealtimeSync = ({
         (payload) => {
           console.log(`Realtime update on ${table}:`, payload.eventType);
           
-          // Handle profile deletion for force logout
+          // Handle profile changes for force logout
           if (table === 'profiles') {
             if (payload.eventType === 'DELETE') {
               const deletedId = (payload.old as any)?.id;
@@ -89,19 +87,22 @@ export const useRealtimeSync = ({
               }
             } else if (payload.eventType === 'UPDATE') {
               const updatedProfile = payload.new as any;
+              // Force logout on soft delete
               if (updatedProfile?.deleted_at && onProfileDeleted) {
                 onProfileDeleted(updatedProfile.id);
+              }
+              // Force logout on pause
+              if (updatedProfile?.status === 'paused' && onProfilePaused) {
+                onProfilePaused(updatedProfile.id);
               }
             }
           }
           
-          // Invalidate queries for immediate UI update
           invalidateQueries(table);
         }
       );
     });
 
-    // Subscribe to channel
     channel.subscribe((status) => {
       if (status === 'SUBSCRIBED') {
         console.log('Realtime sync connected for:', tables.join(', '));
@@ -116,9 +117,8 @@ export const useRealtimeSync = ({
         channelRef.current = null;
       }
     };
-  }, [enabled, tables.join(','), invalidateQueries, onProfileDeleted]);
+  }, [enabled, tables.join(','), invalidateQueries, onProfileDeleted, onProfilePaused]);
 
-  // Manual refresh function
   const refresh = useCallback(() => {
     tables.forEach((table) => invalidateQueries(table));
   }, [tables, invalidateQueries]);
@@ -126,9 +126,10 @@ export const useRealtimeSync = ({
   return { refresh };
 };
 
-// Hook for force logout when user is deleted
+// Hook for force logout when user is deleted or paused
 export const useForceLogoutOnDelete = (
   currentUserId: string | undefined,
+  currentAdminId: string | null | undefined,
   signOut: () => Promise<{ error: any }>
 ) => {
   const handleProfileDeleted = useCallback(
@@ -142,5 +143,17 @@ export const useForceLogoutOnDelete = (
     [currentUserId, signOut]
   );
 
-  return handleProfileDeleted;
+  const handleProfilePaused = useCallback(
+    async (pausedUserId: string) => {
+      // Force logout if current user is paused OR if their admin is paused
+      if (currentUserId && (pausedUserId === currentUserId || pausedUserId === currentAdminId)) {
+        console.log('User or admin was paused, forcing logout...');
+        await signOut();
+        window.location.href = '/';
+      }
+    },
+    [currentUserId, currentAdminId, signOut]
+  );
+
+  return { handleProfileDeleted, handleProfilePaused };
 };
