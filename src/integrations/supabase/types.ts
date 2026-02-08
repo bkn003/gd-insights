@@ -16,6 +16,7 @@ export type Database = {
     Tables: {
       app_settings: {
         Row: {
+          admin_id: string | null
           created_at: string | null
           id: string
           key: string
@@ -23,6 +24,7 @@ export type Database = {
           value: Json
         }
         Insert: {
+          admin_id?: string | null
           created_at?: string | null
           id?: string
           key: string
@@ -30,6 +32,7 @@ export type Database = {
           value?: Json
         }
         Update: {
+          admin_id?: string | null
           created_at?: string | null
           id?: string
           key?: string
@@ -40,6 +43,7 @@ export type Database = {
       }
       categories: {
         Row: {
+          admin_id: string | null
           created_at: string | null
           deleted_at: string | null
           id: string
@@ -47,6 +51,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          admin_id?: string | null
           created_at?: string | null
           deleted_at?: string | null
           id?: string
@@ -54,6 +59,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          admin_id?: string | null
           created_at?: string | null
           deleted_at?: string | null
           id?: string
@@ -64,6 +70,7 @@ export type Database = {
       }
       customer_types: {
         Row: {
+          admin_id: string | null
           created_at: string | null
           deleted_at: string | null
           id: string
@@ -71,6 +78,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          admin_id?: string | null
           created_at?: string | null
           deleted_at?: string | null
           id?: string
@@ -78,6 +86,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          admin_id?: string | null
           created_at?: string | null
           deleted_at?: string | null
           id?: string
@@ -123,6 +132,7 @@ export type Database = {
       }
       goods_damaged_entries: {
         Row: {
+          admin_id: string | null
           category_id: string
           created_at: string | null
           customer_type_id: string | null
@@ -137,6 +147,7 @@ export type Database = {
           voice_note_url: string | null
         }
         Insert: {
+          admin_id?: string | null
           category_id: string
           created_at?: string | null
           customer_type_id?: string | null
@@ -151,6 +162,7 @@ export type Database = {
           voice_note_url?: string | null
         }
         Update: {
+          admin_id?: string | null
           category_id?: string
           created_at?: string | null
           customer_type_id?: string | null
@@ -225,41 +237,56 @@ export type Database = {
       }
       profiles: {
         Row: {
+          admin_id: string | null
           created_at: string | null
           default_category_id: string | null
           default_size_id: string | null
           deleted_at: string | null
           email: string | null
           id: string
+          last_login_at: string | null
+          max_shops: number | null
+          max_users: number | null
           name: string
           role: string
           shop_id: string | null
+          status: string
           updated_at: string | null
           user_id: string
         }
         Insert: {
+          admin_id?: string | null
           created_at?: string | null
           default_category_id?: string | null
           default_size_id?: string | null
           deleted_at?: string | null
           email?: string | null
           id: string
+          last_login_at?: string | null
+          max_shops?: number | null
+          max_users?: number | null
           name: string
           role?: string
           shop_id?: string | null
+          status?: string
           updated_at?: string | null
           user_id: string
         }
         Update: {
+          admin_id?: string | null
           created_at?: string | null
           default_category_id?: string | null
           default_size_id?: string | null
           deleted_at?: string | null
           email?: string | null
           id?: string
+          last_login_at?: string | null
+          max_shops?: number | null
+          max_users?: number | null
           name?: string
           role?: string
           shop_id?: string | null
+          status?: string
           updated_at?: string | null
           user_id?: string
         }
@@ -282,6 +309,7 @@ export type Database = {
       }
       shops: {
         Row: {
+          admin_id: string | null
           created_at: string | null
           deleted_at: string | null
           id: string
@@ -290,6 +318,7 @@ export type Database = {
           whatsapp_group_link: string | null
         }
         Insert: {
+          admin_id?: string | null
           created_at?: string | null
           deleted_at?: string | null
           id?: string
@@ -298,6 +327,7 @@ export type Database = {
           whatsapp_group_link?: string | null
         }
         Update: {
+          admin_id?: string | null
           created_at?: string | null
           deleted_at?: string | null
           id?: string
@@ -309,6 +339,7 @@ export type Database = {
       }
       sizes: {
         Row: {
+          admin_id: string | null
           created_at: string | null
           deleted_at: string | null
           id: string
@@ -316,6 +347,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          admin_id?: string | null
           created_at?: string | null
           deleted_at?: string | null
           id?: string
@@ -323,6 +355,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          admin_id?: string | null
           created_at?: string | null
           deleted_at?: string | null
           id?: string
@@ -336,10 +369,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      count_admin_shops: { Args: { admin_uuid: string }; Returns: number }
+      count_admin_users: { Args: { admin_uuid: string }; Returns: number }
       get_current_user_role: { Args: never; Returns: string }
       get_current_user_shop_id: { Args: never; Returns: string }
+      get_user_admin_id_secure: { Args: { user_uuid: string }; Returns: string }
       get_user_role_secure: { Args: { user_uuid: string }; Returns: string }
       get_user_shop_id_secure: { Args: { user_uuid: string }; Returns: string }
+      is_super_admin: { Args: { user_uuid: string }; Returns: boolean }
+      is_user_active: { Args: { user_uuid: string }; Returns: boolean }
+      setup_super_admin: { Args: { user_email: string }; Returns: undefined }
     }
     Enums: {
       [_ in never]: never
