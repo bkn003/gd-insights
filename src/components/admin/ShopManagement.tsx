@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { Plus, Edit, Trash2, Building, MessageCircle } from 'lucide-react';
 import { Database } from '@/types/database';
 import { DeleteConfirmationDialog } from '@/components/DeleteConfirmationDialog';
+import { useAuth } from '@/hooks/useAuth';
 
 type Shop = Database['public']['Tables']['shops']['Row'];
 
@@ -18,6 +19,7 @@ interface ShopManagementProps {
 }
 
 export const ShopManagement = ({ shops, onRefresh }: ShopManagementProps) => {
+  const { profile } = useAuth();
   const [newShopName, setNewShopName] = useState('');
   const [newWhatsAppLink, setNewWhatsAppLink] = useState('');
   const [editingShop, setEditingShop] = useState<Shop | null>(null);
@@ -32,11 +34,12 @@ export const ShopManagement = ({ shops, onRefresh }: ShopManagementProps) => {
     if (!newShopName.trim()) return;
 
     try {
-      const { error } = await supabase
-        .from('shops')
+      const { error } = await (supabase
+        .from('shops') as any)
         .insert({ 
           name: newShopName.trim(),
-          whatsapp_group_link: newWhatsAppLink.trim() || null
+          whatsapp_group_link: newWhatsAppLink.trim() || null,
+          admin_id: (profile as any)?.admin_id || profile?.id,
         });
 
       if (error) throw error;

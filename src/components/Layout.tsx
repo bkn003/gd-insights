@@ -10,7 +10,7 @@ interface LayoutProps {
 }
 
 export const Layout = ({ children }: LayoutProps) => {
-  const { profile, signOut, isAdmin } = useAuth();
+  const { profile, signOut, isSuperAdmin, isAdmin, isManager } = useAuth();
 
   const handleSignOut = async () => {
     const { error } = await signOut();
@@ -20,6 +20,15 @@ export const Layout = ({ children }: LayoutProps) => {
       toast.success('Signed out successfully');
     }
   };
+
+  const getRoleBadge = () => {
+    if (isSuperAdmin) return { label: 'Super Admin', className: 'bg-red-600 text-white' };
+    if (isAdmin) return { label: 'Admin', className: 'bg-primary text-primary-foreground' };
+    if (isManager) return { label: 'Manager', className: 'bg-blue-600 text-white' };
+    return null;
+  };
+
+  const roleBadge = getRoleBadge();
 
   return (
     <div className="min-h-screen bg-background w-full overflow-x-hidden">
@@ -39,14 +48,13 @@ export const Layout = ({ children }: LayoutProps) => {
                 <span className="text-xs sm:text-sm text-muted-foreground truncate max-w-20 sm:max-w-none">
                   {profile?.name}
                 </span>
-                {isAdmin && (
-                  <span className="px-1.5 py-0.5 sm:px-2 sm:py-1 bg-primary text-primary-foreground text-xs rounded flex-shrink-0">
-                    Admin
+                {roleBadge && (
+                  <span className={`px-1.5 py-0.5 sm:px-2 sm:py-1 text-xs rounded flex-shrink-0 ${roleBadge.className}`}>
+                    {roleBadge.label}
                   </span>
                 )}
               </div>
               
-              {/* Real-time Notification Bell */}
               <NotificationBell />
               
               <Button

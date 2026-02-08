@@ -8,48 +8,52 @@ import { DamagedGoodsForm } from '@/components/DamagedGoodsForm';
 import { MobileBottomNav } from '@/components/MobileBottomNav';
 import { PWAInstallPrompt } from '@/components/PWAInstallPrompt';
 import { Button } from '@/components/ui/button';
-import { BarChart3, Plus, Settings, FileText, User } from 'lucide-react';
+import { BarChart3, Plus, Settings, FileText, User, Shield } from 'lucide-react';
 
 // Lazy load heavy components
 const Dashboard = React.lazy(() => import('@/components/Dashboard').then(m => ({ default: m.Dashboard })));
 const ReportsPanel = React.lazy(() => import('@/components/ReportsPanel').then(m => ({ default: m.ReportsPanel })));
 const AdminPanel = React.lazy(() => import('@/components/AdminPanel').then(m => ({ default: m.AdminPanel })));
 const UserProfile = React.lazy(() => import('@/components/UserProfile').then(m => ({ default: m.UserProfile })));
+const SuperAdminDashboard = React.lazy(() => import('@/components/SuperAdminDashboard').then(m => ({ default: m.SuperAdminDashboard })));
 
-type ActiveTab = 'gd' | 'dashboard' | 'admin' | 'reports' | 'profile';
+type ActiveTab = 'gd' | 'dashboard' | 'admin' | 'reports' | 'profile' | 'super_admin';
 
 export const MainApp = () => {
-  const { isAdmin, isManager, profile, user, signOut } = useAuth();
-  const { permission } = usePushNotifications(); // Initialize push notifications
-  const [activeTab, setActiveTab] = useState<ActiveTab>((isAdmin || isManager) ? 'dashboard' : 'gd');
+  const { isSuperAdmin, isAdmin, isManager, profile, user, signOut, adminId } = useAuth();
+  const { permission } = usePushNotifications();
+  const [activeTab, setActiveTab] = useState<ActiveTab>(
+    isSuperAdmin ? 'super_admin' : (isAdmin || isManager) ? 'dashboard' : 'gd'
+  );
   const notesInputRef = useRef<HTMLTextAreaElement>(null);
 
   // Force logout handler
-  const handleProfileDeleted = useForceLogoutOnDelete(user?.id, signOut);
+  const { handleProfileDeleted, handleProfilePaused } = useForceLogoutOnDelete(user?.id, adminId, signOut);
 
   // Enable realtime sync for instant updates across all pages
   useRealtimeSync({
     tables: ['goods_damaged_entries', 'profiles', 'shops', 'categories', 'sizes', 'customer_types', 'gd_entry_images', 'app_settings'],
     onProfileDeleted: handleProfileDeleted,
+    onProfilePaused: handleProfilePaused,
     enabled: !!user,
   });
 
   // Update active tab when user role changes
   useEffect(() => {
-    // Only regular users (not admin or manager) should be forced to GD tab
-    if (!isAdmin && !isManager && activeTab !== 'gd') {
+    if (isSuperAdmin && activeTab !== 'super_admin') {
+      // Super admin defaults to super_admin tab
+    } else if (!isAdmin && !isManager && !isSuperAdmin && activeTab !== 'gd') {
       setActiveTab('gd');
     }
     // Managers should not access admin tab
     if (isManager && !isAdmin && activeTab === 'admin') {
       setActiveTab('dashboard');
     }
-  }, [isAdmin, isManager, activeTab]);
+  }, [isAdmin, isManager, isSuperAdmin, activeTab]);
 
   // Auto-focus notes input when switching to GD tab
   useEffect(() => {
     if (activeTab === 'gd') {
-      // Small delay to ensure the component is rendered
       setTimeout(() => {
         const notesInput = document.querySelector('textarea#notes') as HTMLTextAreaElement;
         if (notesInput) {
@@ -67,22 +71,26 @@ export const MainApp = () => {
 
   const renderContent = () => {
     switch (activeTab) {
+      case 'super_admin':
+        return isSuperAdmin ? (
+          <Suspense fallback={<LoadingSpinner />}><SuperAdminDashboard /></Suspense>
+        ) : <div className="text-center text-muted-foreground">Access denied</div>;
       case 'gd':
         return <DamagedGoodsForm />;
       case 'dashboard':
-        return (isAdmin || isManager) ? (
+        return (isAdmin || isManager || isSuperAdmin) ? (
           <Suspense fallback={<LoadingSpinner />}><Dashboard /></Suspense>
         ) : <div className="text-center text-muted-foreground">Access denied</div>;
       case 'admin':
-        return isAdmin ? (
+        return (isAdmin || isSuperAdmin) ? (
           <Suspense fallback={<LoadingSpinner />}><AdminPanel /></Suspense>
         ) : <div className="text-center text-muted-foreground">Access denied</div>;
       case 'reports':
-        return (isAdmin || isManager) ? (
+        return (isAdmin || isManager || isSuperAdmin) ? (
           <Suspense fallback={<LoadingSpinner />}><ReportsPanel /></Suspense>
         ) : <div className="text-center text-muted-foreground">Access denied</div>;
       case 'profile':
-        return (isAdmin || isManager) ? (
+        return (isAdmin || isManager || isSuperAdmin) ? (
           <Suspense fallback={<LoadingSpinner />}><UserProfile /></Suspense>
         ) : <div className="text-center text-muted-foreground">Access denied</div>;
       default:
@@ -101,16 +109,32 @@ export const MainApp = () => {
         <div className="space-y-4 sm:space-y-6 pb-20 md:pb-6 w-full min-w-0">
           {/* Desktop Navigation - hidden on mobile */}
           <div className="hidden md:flex flex-wrap gap-2 border-b overflow-x-auto pb-2">
-            <Button
-              variant={activeTab === 'gd' ? 'default' : 'ghost'}
-              onClick={() => setActiveTab('gd')}
-              className="flex items-center gap-2 flex-shrink-0"
-            >
-              <Plus className="h-4 w-4" />
-              GD
-            </Button>
-            {/* Only show Profile button for admins */}
-            {(isAdmin || isManager) && (
+            {/* Super Admin tab */}
+            {isSuperAdmin && (
+              <Button
+                variant={activeTab === 'super_admin' ? 'default' : 'ghost'}
+                onClick={() => setActiveTab('super_admin')}
+                className="flex items-center gap-2 flex-shrink-0"
+              >
+                <Shield className="h-4 w-4" />
+                Super Admin
+              </Button>
+            )}
+
+            {/* GD tab - visible to all except super admin */}
+            {!isSuperAdmin && (
+              <Button
+                variant={activeTab === 'gd' ? 'default' : 'ghost'}
+                onClick={() => setActiveTab('gd')}
+                className="flex items-center gap-2 flex-shrink-0"
+              >
+                <Plus className="h-4 w-4" />
+                GD
+              </Button>
+            )}
+
+            {/* Profile button for admins+ */}
+            {(isAdmin || isManager || isSuperAdmin) && (
               <Button
                 variant={activeTab === 'profile' ? 'default' : 'ghost'}
                 onClick={() => setActiveTab('profile')}
@@ -120,7 +144,7 @@ export const MainApp = () => {
                 Profile
               </Button>
             )}
-            {(isAdmin || isManager) && (
+            {(isAdmin || isManager || isSuperAdmin) && (
               <Button
                 variant={activeTab === 'dashboard' ? 'default' : 'ghost'}
                 onClick={() => setActiveTab('dashboard')}
@@ -130,7 +154,7 @@ export const MainApp = () => {
                 Dashboard
               </Button>
             )}
-            {(isAdmin || isManager) && (
+            {(isAdmin || isManager || isSuperAdmin) && (
               <Button
                 variant={activeTab === 'reports' ? 'default' : 'ghost'}
                 onClick={() => setActiveTab('reports')}
@@ -140,7 +164,7 @@ export const MainApp = () => {
                 Reports
               </Button>
             )}
-            {isAdmin && (
+            {(isAdmin || isSuperAdmin) && (
               <Button
                 variant={activeTab === 'admin' ? 'default' : 'ghost'}
                 onClick={() => setActiveTab('admin')}
@@ -163,6 +187,7 @@ export const MainApp = () => {
           setActiveTab={setActiveTab}
           isAdmin={isAdmin}
           isManager={isManager}
+          isSuperAdmin={isSuperAdmin}
         />
       </Layout>
     </>

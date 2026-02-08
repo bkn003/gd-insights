@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { Database } from '@/types/database';
+import { toast } from 'sonner';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 
@@ -89,6 +90,37 @@ export const useAuth = () => {
         return;
       }
 
+      // Check if user account is paused
+      const profileData = data as any;
+      if (profileData.status === 'paused') {
+        console.log('User account is paused, signing out...');
+        toast.error('Your account has been paused. Please contact the administrator.');
+        await signOut();
+        return;
+      }
+
+      // For sub-users, check if their admin is also active
+      if (profileData.role !== 'admin' && profileData.role !== 'super_admin' && profileData.admin_id) {
+        const { data: adminData } = await supabase
+          .from('profiles')
+          .select('status, deleted_at')
+          .eq('id', profileData.admin_id)
+          .single();
+        
+        if (adminData && (adminData as any).status === 'paused') {
+          console.log('Admin account is paused, signing out sub-user...');
+          toast.error('Your organization has been paused. Please contact the administrator.');
+          await signOut();
+          return;
+        }
+      }
+
+      // Update last_login_at
+      await supabase
+        .from('profiles')
+        .update({ last_login_at: new Date().toISOString() } as any)
+        .eq('id', userId);
+
       // Cache the profile
       localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({
         data,
@@ -99,8 +131,6 @@ export const useAuth = () => {
       setProfile(data as Profile);
     } catch (error: any) {
       console.error('Error fetching profile:', error);
-      // Don't sign out on transient errors - just log them
-      // Only sign out if it's clearly an auth problem
       if (error?.message?.includes('JWT') || error?.message?.includes('unauthorized')) {
         await signOut();
       }
@@ -116,17 +146,17 @@ export const useAuth = () => {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('deleted_at')
+        .select('deleted_at, status')
         .eq('id', user.id)
         .single();
 
-      if (error || !data || data.deleted_at) {
-        console.log('User has been deleted, forcing logout...');
+      const profileData = data as any;
+      if (error || !data || profileData.deleted_at || profileData.status === 'paused') {
+        console.log('User has been deleted or paused, forcing logout...');
         await signOut();
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error checking user status:', error);
-      // Only sign out if it's a critical error, not network issues
       if (error.message?.includes('JWT') || error.message?.includes('unauthorized')) {
         await signOut();
       }
@@ -162,7 +192,6 @@ export const useAuth = () => {
   };
 
   const resetPassword = async (email: string) => {
-    // Use the Vercel production URL for password reset redirects
     const productionUrl = 'https://gd-tracking.vercel.app';
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${productionUrl}/reset-password`,
@@ -172,7 +201,6 @@ export const useAuth = () => {
 
   const refreshProfile = async () => {
     if (!user) return;
-    // Clear cache and force refetch
     localStorage.removeItem(PROFILE_CACHE_KEY);
     await fetchProfile(user.id);
   };
@@ -187,8 +215,10 @@ export const useAuth = () => {
     resetPassword,
     refreshProfile,
     checkUserStatus,
+    isSuperAdmin: profile?.role === 'super_admin',
     isAdmin: profile?.role === 'admin',
     isManager: profile?.role === 'manager',
     userShopId: profile?.shop_id,
+    adminId: profile?.admin_id,
   };
 };

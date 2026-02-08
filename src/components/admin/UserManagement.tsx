@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { UserPlus, Edit, Trash2 } from 'lucide-react';
 import { Database } from '@/types/database';
 import { DeleteConfirmationDialog } from '@/components/DeleteConfirmationDialog';
+import { PasswordInput } from '@/components/ui/password-input';
 
 type Profile = Database['public']['Tables']['profiles']['Row'] & {
   email?: string;
@@ -28,7 +29,7 @@ interface UserManagementProps {
 }
 
 export const UserManagement = ({ shops: propShops, profiles: propProfiles, onRefresh: propOnRefresh }: UserManagementProps = {}) => {
-  const { user, refreshProfile } = useAuth();
+  const { user, profile: currentProfile, refreshProfile } = useAuth();
   const [profiles, setProfiles] = useState<Profile[]>(propProfiles || []);
   const [shops, setShops] = useState<Shop[]>(propShops || []);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -39,11 +40,21 @@ export const UserManagement = ({ shops: propShops, profiles: propProfiles, onRef
   const [deleteUser, setDeleteUser] = useState<Profile | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // Create sub-user state
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [newUser, setNewUser] = useState({
+    name: '',
+    email: '',
+    password: '',
+    role: 'user',
+    shop_id: 'none',
+  });
+
   useEffect(() => {
     if (!propProfiles || !propShops) {
       fetchData();
     } else {
-      // Still need to fetch categories and sizes even if profiles and shops are provided
       fetchCategoriesAndSizes();
     }
   }, [propProfiles, propShops]);
@@ -54,16 +65,8 @@ export const UserManagement = ({ shops: propShops, profiles: propProfiles, onRef
         supabase.from('categories').select('*').order('name'),
         supabase.from('sizes').select('*').order('size'),
       ]);
-
-      if (categoriesRes.error) {
-        console.error('Error fetching categories:', categoriesRes.error);
-        throw categoriesRes.error;
-      }
-      if (sizesRes.error) {
-        console.error('Error fetching sizes:', sizesRes.error);
-        throw sizesRes.error;
-      }
-
+      if (categoriesRes.error) throw categoriesRes.error;
+      if (sizesRes.error) throw sizesRes.error;
       setCategories(categoriesRes.data);
       setSizes(sizesRes.data);
     } catch (error) {
@@ -74,42 +77,22 @@ export const UserManagement = ({ shops: propShops, profiles: propProfiles, onRef
   const fetchData = async () => {
     try {
       setLoading(true);
-
       const { data: profilesData, error: profilesError } = await supabase
         .from('profiles')
         .select('*')
         .order('name');
-
-      if (profilesError) {
-        console.error('Error fetching profiles:', profilesError);
-        throw profilesError;
-      }
+      if (profilesError) throw profilesError;
 
       const [shopsRes, categoriesRes, sizesRes] = await Promise.all([
         supabase.from('shops').select('*').order('name'),
         supabase.from('categories').select('*').order('name'),
         supabase.from('sizes').select('*').order('size'),
       ]);
+      if (shopsRes.error) throw shopsRes.error;
+      if (categoriesRes.error) throw categoriesRes.error;
+      if (sizesRes.error) throw sizesRes.error;
 
-      if (shopsRes.error) {
-        console.error('Error fetching shops:', shopsRes.error);
-        throw shopsRes.error;
-      }
-      if (categoriesRes.error) {
-        console.error('Error fetching categories:', categoriesRes.error);
-        throw categoriesRes.error;
-      }
-      if (sizesRes.error) {
-        console.error('Error fetching sizes:', sizesRes.error);
-        throw sizesRes.error;
-      }
-
-      const typedProfiles = profilesData.map(profile => ({
-        ...profile,
-        role: profile.role as 'admin' | 'user' | 'manager'
-      }));
-
-      setProfiles(typedProfiles);
+      setProfiles(profilesData as Profile[]);
       setShops(shopsRes.data);
       setCategories(categoriesRes.data);
       setSizes(sizesRes.data);
@@ -121,27 +104,59 @@ export const UserManagement = ({ shops: propShops, profiles: propProfiles, onRef
     }
   };
 
+  const handleCreateSubUser = async () => {
+    if (!newUser.name || !newUser.email || !newUser.password) {
+      toast.error('Name, email, and password are required');
+      return;
+    }
+    if (newUser.shop_id === 'none') {
+      toast.error('Please select a shop');
+      return;
+    }
+
+    setCreating(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('create-sub-user', {
+        body: {
+          name: newUser.name,
+          email: newUser.email,
+          password: newUser.password,
+          role: newUser.role,
+          shop_id: newUser.shop_id === 'none' ? null : newUser.shop_id,
+        },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      toast.success(`Sub-user "${newUser.name}" created successfully`);
+      setIsCreateOpen(false);
+      setNewUser({ name: '', email: '', password: '', role: 'user', shop_id: 'none' });
+      if (propOnRefresh) propOnRefresh();
+      else fetchData();
+    } catch (error: any) {
+      console.error('Error creating sub-user:', error);
+      toast.error(error.message || 'Failed to create sub-user');
+    } finally {
+      setCreating(false);
+    }
+  };
+
   const handleDelete = async () => {
     if (!deleteUser) return;
     setIsDeleting(true);
     try {
-      // Soft delete by setting deleted_at - this triggers realtime for force logout
       const { error } = await supabase
         .from('profiles')
-        .update({ deleted_at: new Date().toISOString() })
+        .update({ deleted_at: new Date().toISOString() } as any)
         .eq('id', deleteUser.id);
-
       if (error) throw error;
 
       toast.success('User deleted successfully');
       setDeleteUser(null);
-      if (propOnRefresh) {
-        propOnRefresh();
-      } else {
-        fetchData();
-      }
+      if (propOnRefresh) propOnRefresh();
+      else fetchData();
     } catch (error: any) {
-      console.error('Error deleting user:', error);
       toast.error(error.message || 'Failed to delete user');
     } finally {
       setIsDeleting(false);
@@ -155,39 +170,28 @@ export const UserManagement = ({ shops: propShops, profiles: propProfiles, onRef
 
   const handleSaveUser = async (userData: Partial<Profile>) => {
     if (!editingUser) return;
-
     try {
       const { error } = await supabase
         .from('profiles')
-        .update(userData)
+        .update(userData as any)
         .eq('id', editingUser.id);
-
       if (error) throw error;
 
       toast.success('User updated successfully');
-
-      // If the updated user is the current user, refresh their profile immediately
-      if (user && editingUser.id === user.id) {
-        await refreshProfile();
-      }
-
+      if (user && editingUser.id === user.id) await refreshProfile();
       setIsEditDialogOpen(false);
       setEditingUser(null);
-      if (propOnRefresh) {
-        propOnRefresh();
-      } else {
-        fetchData();
-      }
+      if (propOnRefresh) propOnRefresh();
+      else fetchData();
     } catch (error: any) {
-      console.error('Error updating user:', error);
       toast.error(error.message || 'Failed to update user');
     }
   };
 
-  const handleCancelEdit = () => {
-    setIsEditDialogOpen(false);
-    setEditingUser(null);
-  };
+  // Filter out the current user and super admins from the list
+  const displayProfiles = profiles.filter(p => 
+    p.id !== currentProfile?.id && p.role !== 'super_admin'
+  );
 
   if (loading) {
     return <div className="flex justify-center items-center h-64">Loading user data...</div>;
@@ -198,76 +202,143 @@ export const UserManagement = ({ shops: propShops, profiles: propProfiles, onRef
       <div className="space-y-6">
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <UserPlus className="h-5 w-5" />
-              User Management
-            </CardTitle>
-            <CardDescription>
-              Manage users and their roles
-            </CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <UserPlus className="h-5 w-5" />
+                  User Management
+                </CardTitle>
+                <CardDescription>
+                  Manage sub-users and their roles ({displayProfiles.length} users)
+                </CardDescription>
+              </div>
+              <Button onClick={() => setIsCreateOpen(true)} className="flex items-center gap-2">
+                <UserPlus className="h-4 w-4" />
+                Add User
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="grid gap-4">
-              {profiles.map((user) => (
-                <div key={user.id} className="border rounded-lg p-4">
+              {displayProfiles.map((p) => (
+                <div key={p.id} className="border rounded-lg p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <div className="font-medium">{user.name}</div>
+                      <div className="font-medium">{p.name}</div>
                       <div className="text-sm text-muted-foreground">
-                        {user.email || user.user_id}
+                        {p.email || p.user_id}
                       </div>
-                      <div className="mt-1">
-                        <Badge variant="secondary">{user.role}</Badge>
+                      <div className="mt-1 flex gap-2">
+                        <Badge variant="secondary">{p.role}</Badge>
+                        <Badge variant={(p as any).status === 'active' ? 'default' : 'destructive'}>
+                          {(p as any).status || 'active'}
+                        </Badge>
                       </div>
                     </div>
                     <div className="flex gap-2">
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleEditUser(user)}
-                            className="p-2"
-                          >
+                          <Button variant="outline" size="sm" onClick={() => handleEditUser(p)} className="p-2">
                             <Edit className="h-4 w-4" />
                           </Button>
                         </TooltipTrigger>
-                        <TooltipContent>
-                          <p>Edit user</p>
-                        </TooltipContent>
+                        <TooltipContent><p>Edit user</p></TooltipContent>
                       </Tooltip>
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={() => setDeleteUser(user)}
-                            className="p-2"
-                          >
+                          <Button variant="destructive" size="sm" onClick={() => setDeleteUser(p)} className="p-2">
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </TooltipTrigger>
-                        <TooltipContent>
-                          <p>Delete user</p>
-                        </TooltipContent>
+                        <TooltipContent><p>Delete user</p></TooltipContent>
                       </Tooltip>
                     </div>
                   </div>
                 </div>
               ))}
+              {displayProfiles.length === 0 && (
+                <p className="text-center text-muted-foreground py-4">No sub-users yet. Click "Add User" to create one.</p>
+              )}
             </div>
           </CardContent>
         </Card>
 
+        {/* Create Sub-User Dialog */}
+        <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Create Sub-User</DialogTitle>
+              <DialogDescription>
+                Add a new user to your organization. They will be able to log in immediately.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Full Name</Label>
+                <Input
+                  value={newUser.name}
+                  onChange={e => setNewUser({ ...newUser, name: e.target.value })}
+                  placeholder="Enter name"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Email</Label>
+                <Input
+                  type="email"
+                  value={newUser.email}
+                  onChange={e => setNewUser({ ...newUser, email: e.target.value })}
+                  placeholder="user@example.com"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Password</Label>
+                <PasswordInput
+                  value={newUser.password}
+                  onChange={e => setNewUser({ ...newUser, password: e.target.value })}
+                  placeholder="Min 6 characters"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Role</Label>
+                <Select value={newUser.role} onValueChange={v => setNewUser({ ...newUser, role: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="user">User</SelectItem>
+                    <SelectItem value="manager">Manager</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Shop</Label>
+                <Select value={newUser.shop_id} onValueChange={v => setNewUser({ ...newUser, shop_id: v })}>
+                  <SelectTrigger><SelectValue placeholder="Select shop" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Select a shop</SelectItem>
+                    {shops.map(shop => (
+                      <SelectItem key={shop.id} value={shop.id}>{shop.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex gap-2 pt-2">
+                <Button onClick={handleCreateSubUser} disabled={creating} className="flex-1">
+                  {creating ? 'Creating...' : 'Create User'}
+                </Button>
+                <Button variant="outline" onClick={() => setIsCreateOpen(false)} className="flex-1">
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Edit User Dialog */}
         <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle>Edit User</DialogTitle>
-              <DialogDescription>
-                Update user information and assignments
-              </DialogDescription>
+              <DialogDescription>Update user information and assignments</DialogDescription>
             </DialogHeader>
-
             {editingUser && (
               <EditUserForm
                 user={editingUser}
@@ -275,20 +346,19 @@ export const UserManagement = ({ shops: propShops, profiles: propProfiles, onRef
                 categories={categories}
                 sizes={sizes}
                 onSave={handleSaveUser}
-                onCancel={handleCancelEdit}
+                onCancel={() => { setIsEditDialogOpen(false); setEditingUser(null); }}
               />
             )}
           </DialogContent>
         </Dialog>
 
-        {/* Delete Confirmation Dialog */}
         <DeleteConfirmationDialog
           open={!!deleteUser}
           onOpenChange={(open) => !open && setDeleteUser(null)}
           onConfirm={handleDelete}
           title="Delete User"
           itemName={deleteUser?.name}
-          description={`Are you sure you want to delete "${deleteUser?.name}"? This user will be logged out immediately and will no longer be able to access the system.`}
+          description={`Are you sure you want to delete "${deleteUser?.name}"? This user will be logged out immediately.`}
           loading={isDeleting}
         />
       </div>
@@ -321,110 +391,64 @@ const EditUserForm = ({ user, shops, categories, sizes, onSave, onCancel }: Edit
       shop_id: formData.shop_id === 'none' ? null : formData.shop_id,
       default_category_id: formData.default_category_id === 'none' ? null : formData.default_category_id,
       default_size_id: formData.default_size_id === 'none' ? null : formData.default_size_id
-    });
+    } as any);
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="space-y-2">
         <Label htmlFor="name">Name</Label>
-        <Input
-          id="name"
-          value={formData.name}
-          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-          required
-        />
+        <Input id="name" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} required />
       </div>
-
       <div className="space-y-2">
         <Label htmlFor="role">Role</Label>
-        <Select
-          value={formData.role}
-          onValueChange={(value: 'admin' | 'user' | 'manager') => setFormData({ ...formData, role: value })}
-        >
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
+        <Select value={formData.role} onValueChange={(value) => setFormData({ ...formData, role: value as any })}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="user">User</SelectItem>
             <SelectItem value="manager">Manager</SelectItem>
-            <SelectItem value="admin">Admin</SelectItem>
           </SelectContent>
         </Select>
       </div>
-
       <div className="space-y-2">
         <Label htmlFor="shop">Shop</Label>
-        <Select
-          value={formData.shop_id}
-          onValueChange={(value) => setFormData({ ...formData, shop_id: value })}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Select a shop" />
-          </SelectTrigger>
+        <Select value={formData.shop_id} onValueChange={(value) => setFormData({ ...formData, shop_id: value })}>
+          <SelectTrigger><SelectValue placeholder="Select a shop" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="none">No Shop</SelectItem>
             {shops.map((shop) => (
-              <SelectItem key={shop.id} value={shop.id}>
-                {shop.name}
-              </SelectItem>
+              <SelectItem key={shop.id} value={shop.id}>{shop.name}</SelectItem>
             ))}
           </SelectContent>
         </Select>
       </div>
-
       <div className="space-y-2">
-        <Label htmlFor="default_category">Default Category</Label>
-        <Select
-          value={formData.default_category_id}
-          onValueChange={(value) => setFormData({ ...formData, default_category_id: value })}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Select a category" />
-          </SelectTrigger>
+        <Label>Default Category</Label>
+        <Select value={formData.default_category_id} onValueChange={(value) => setFormData({ ...formData, default_category_id: value })}>
+          <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="none">No Default Category</SelectItem>
-            {categories.map((category) => (
-              <SelectItem key={category.id} value={category.id}>
-                {category.name}
-              </SelectItem>
+            <SelectItem value="none">No Default</SelectItem>
+            {categories.map((c) => (
+              <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
             ))}
           </SelectContent>
         </Select>
       </div>
-
       <div className="space-y-2">
-        <Label htmlFor="default_size">Default Size</Label>
-        <Select
-          value={formData.default_size_id}
-          onValueChange={(value) => setFormData({ ...formData, default_size_id: value })}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Select a size" />
-          </SelectTrigger>
+        <Label>Default Size</Label>
+        <Select value={formData.default_size_id} onValueChange={(value) => setFormData({ ...formData, default_size_id: value })}>
+          <SelectTrigger><SelectValue placeholder="Select size" /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="none">No Default Size</SelectItem>
-            {sizes.map((size) => (
-              <SelectItem key={size.id} value={size.id}>
-                {size.size}
-              </SelectItem>
+            <SelectItem value="none">No Default</SelectItem>
+            {sizes.map((s) => (
+              <SelectItem key={s.id} value={s.id}>{s.size}</SelectItem>
             ))}
           </SelectContent>
         </Select>
       </div>
-
       <div className="flex gap-2 pt-4">
-        <Button type="submit" className="flex-1">
-          Save Changes
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          className="flex-1"
-          onClick={onCancel}
-        >
-          Cancel
-        </Button>
+        <Button type="submit" className="flex-1">Save Changes</Button>
+        <Button type="button" variant="outline" className="flex-1" onClick={onCancel}>Cancel</Button>
       </div>
     </form>
   );

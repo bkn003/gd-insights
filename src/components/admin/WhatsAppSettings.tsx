@@ -5,8 +5,10 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { MessageCircle } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
 
 export const WhatsAppSettings = () => {
+  const { profile } = useAuth();
   const [enabled, setEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -39,11 +41,12 @@ export const WhatsAppSettings = () => {
     try {
       setEnabled(newValue);
       
-      const { error } = await supabase
-        .from('app_settings')
+      const { error } = await (supabase
+        .from('app_settings') as any)
         .upsert({
           key: 'whatsapp_redirect_enabled',
-          value: { enabled: newValue }
+          value: { enabled: newValue },
+          admin_id: (profile as any)?.admin_id || profile?.id,
         }, { onConflict: 'key' });
 
       if (error) throw error;

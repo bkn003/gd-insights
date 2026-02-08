@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { Plus, Trash2, RotateCcw, Pencil, Check, X } from 'lucide-react';
 import { Database } from '@/types/database';
 import { DeleteConfirmationDialog } from '@/components/DeleteConfirmationDialog';
+import { useAuth } from '@/hooks/useAuth';
 
 type CustomerType = Database['public']['Tables']['customer_types']['Row'];
 
@@ -16,6 +17,7 @@ interface CustomerTypeManagementProps {
 }
 
 export const CustomerTypeManagement = ({ customerTypes, onRefresh }: CustomerTypeManagementProps) => {
+  const { profile } = useAuth();
   const [newCustomerType, setNewCustomerType] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
@@ -31,9 +33,9 @@ export const CustomerTypeManagement = ({ customerTypes, onRefresh }: CustomerTyp
 
     setLoading(true);
     try {
-      const { error } = await supabase
-        .from('customer_types')
-        .insert({ name: newCustomerType.trim() });
+      const { error } = await (supabase
+        .from('customer_types') as any)
+        .insert({ name: newCustomerType.trim(), admin_id: (profile as any)?.admin_id || profile?.id });
 
       if (error) throw error;
 
