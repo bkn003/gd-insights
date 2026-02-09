@@ -179,7 +179,7 @@ export const AuthForm = () => {
               {loading ? 'Loading...' : isForgotPassword ? 'Send Reset Link' : isSignUp ? 'Create Account' : 'Sign In'}
             </Button>
           </form>
-          <div className="mt-4 text-center space-y-2">
+          <div className="mt-6 flex justify-center">
             {isForgotPassword ? (
               <Button
                 variant="link"
@@ -192,15 +192,15 @@ export const AuthForm = () => {
                 Back to sign in
               </Button>
             ) : (
-              <Button
-                variant="link"
+              <button
+                type="button"
                 onClick={() => setIsSignUp(!isSignUp)}
-                className="text-sm"
+                className="text-sm font-medium text-primary hover:underline"
               >
                 {isSignUp
                   ? 'Already have an account? Sign in'
                   : "Don't have an account? Sign up as Admin"}
-              </Button>
+              </button>
             )}
           </div>
         </CardContent>
