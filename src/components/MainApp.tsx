@@ -40,9 +40,12 @@ export const MainApp = () => {
 
   // Update active tab when user role changes
   useEffect(() => {
-    if (isSuperAdmin && activeTab !== 'super_admin') {
-      // Super admin defaults to super_admin tab
-    } else if (!isAdmin && !isManager && !isSuperAdmin && activeTab !== 'gd') {
+    if (isSuperAdmin) {
+      // Super admin can only access super_admin and profile tabs
+      if (activeTab !== 'super_admin' && activeTab !== 'profile') {
+        setActiveTab('super_admin');
+      }
+    } else if (!isAdmin && !isManager && activeTab !== 'gd') {
       setActiveTab('gd');
     }
     // Managers should not access admin tab
@@ -75,26 +78,28 @@ export const MainApp = () => {
         return isSuperAdmin ? (
           <Suspense fallback={<LoadingSpinner />}><SuperAdminDashboard /></Suspense>
         ) : <div className="text-center text-muted-foreground">Access denied</div>;
+      case 'profile':
+        return (
+          <Suspense fallback={<LoadingSpinner />}><UserProfile /></Suspense>
+        );
       case 'gd':
-        return <DamagedGoodsForm />;
+        return !isSuperAdmin ? <DamagedGoodsForm /> : <div className="text-center text-muted-foreground">Access denied</div>;
       case 'dashboard':
-        return (isAdmin || isManager || isSuperAdmin) ? (
+        return (isAdmin || isManager) && !isSuperAdmin ? (
           <Suspense fallback={<LoadingSpinner />}><Dashboard /></Suspense>
         ) : <div className="text-center text-muted-foreground">Access denied</div>;
       case 'admin':
-        return (isAdmin || isSuperAdmin) ? (
+        return isAdmin && !isSuperAdmin ? (
           <Suspense fallback={<LoadingSpinner />}><AdminPanel /></Suspense>
         ) : <div className="text-center text-muted-foreground">Access denied</div>;
       case 'reports':
-        return (isAdmin || isManager || isSuperAdmin) ? (
+        return (isAdmin || isManager) && !isSuperAdmin ? (
           <Suspense fallback={<LoadingSpinner />}><ReportsPanel /></Suspense>
         ) : <div className="text-center text-muted-foreground">Access denied</div>;
-      case 'profile':
-        return (isAdmin || isManager || isSuperAdmin) ? (
-          <Suspense fallback={<LoadingSpinner />}><UserProfile /></Suspense>
-        ) : <div className="text-center text-muted-foreground">Access denied</div>;
       default:
-        return <DamagedGoodsForm />;
+        return isSuperAdmin ? (
+          <Suspense fallback={<LoadingSpinner />}><SuperAdminDashboard /></Suspense>
+        ) : <DamagedGoodsForm />;
     }
   };
 
@@ -109,70 +114,81 @@ export const MainApp = () => {
         <div className="space-y-4 sm:space-y-6 pb-20 md:pb-6 w-full min-w-0">
           {/* Desktop Navigation - hidden on mobile */}
           <div className="hidden md:flex flex-wrap gap-2 border-b overflow-x-auto pb-2">
-            {/* Super Admin tab */}
+            {/* Super Admin tabs - only SA + Profile */}
             {isSuperAdmin && (
-              <Button
-                variant={activeTab === 'super_admin' ? 'default' : 'ghost'}
-                onClick={() => setActiveTab('super_admin')}
-                className="flex items-center gap-2 flex-shrink-0"
-              >
-                <Shield className="h-4 w-4" />
-                Super Admin
-              </Button>
+              <>
+                <Button
+                  variant={activeTab === 'super_admin' ? 'default' : 'ghost'}
+                  onClick={() => setActiveTab('super_admin')}
+                  className="flex items-center gap-2 flex-shrink-0"
+                >
+                  <Shield className="h-4 w-4" />
+                  Super Admin
+                </Button>
+                <Button
+                  variant={activeTab === 'profile' ? 'default' : 'ghost'}
+                  onClick={() => setActiveTab('profile')}
+                  className="flex items-center gap-2 flex-shrink-0"
+                >
+                  <User className="h-4 w-4" />
+                  Profile
+                </Button>
+              </>
             )}
 
-            {/* GD tab - visible to all except super admin */}
+            {/* Regular user tabs - hidden for super admin */}
             {!isSuperAdmin && (
-              <Button
-                variant={activeTab === 'gd' ? 'default' : 'ghost'}
-                onClick={() => setActiveTab('gd')}
-                className="flex items-center gap-2 flex-shrink-0"
-              >
-                <Plus className="h-4 w-4" />
-                GD
-              </Button>
-            )}
+              <>
+                <Button
+                  variant={activeTab === 'gd' ? 'default' : 'ghost'}
+                  onClick={() => setActiveTab('gd')}
+                  className="flex items-center gap-2 flex-shrink-0"
+                >
+                  <Plus className="h-4 w-4" />
+                  GD
+                </Button>
 
-            {/* Profile button for admins+ */}
-            {(isAdmin || isManager || isSuperAdmin) && (
-              <Button
-                variant={activeTab === 'profile' ? 'default' : 'ghost'}
-                onClick={() => setActiveTab('profile')}
-                className="flex items-center gap-2 flex-shrink-0"
-              >
-                <User className="h-4 w-4" />
-                Profile
-              </Button>
-            )}
-            {(isAdmin || isManager || isSuperAdmin) && (
-              <Button
-                variant={activeTab === 'dashboard' ? 'default' : 'ghost'}
-                onClick={() => setActiveTab('dashboard')}
-                className="flex items-center gap-2 flex-shrink-0"
-              >
-                <BarChart3 className="h-4 w-4" />
-                Dashboard
-              </Button>
-            )}
-            {(isAdmin || isManager || isSuperAdmin) && (
-              <Button
-                variant={activeTab === 'reports' ? 'default' : 'ghost'}
-                onClick={() => setActiveTab('reports')}
-                className="flex items-center gap-2 flex-shrink-0"
-              >
-                <FileText className="h-4 w-4" />
-                Reports
-              </Button>
-            )}
-            {(isAdmin || isSuperAdmin) && (
-              <Button
-                variant={activeTab === 'admin' ? 'default' : 'ghost'}
-                onClick={() => setActiveTab('admin')}
-                className="flex items-center gap-2 flex-shrink-0"
-              >
-                <Settings className="h-4 w-4" />
-                Admin Panel
-              </Button>
+                {(isAdmin || isManager) && (
+                  <Button
+                    variant={activeTab === 'profile' ? 'default' : 'ghost'}
+                    onClick={() => setActiveTab('profile')}
+                    className="flex items-center gap-2 flex-shrink-0"
+                  >
+                    <User className="h-4 w-4" />
+                    Profile
+                  </Button>
+                )}
+                {(isAdmin || isManager) && (
+                  <Button
+                    variant={activeTab === 'dashboard' ? 'default' : 'ghost'}
+                    onClick={() => setActiveTab('dashboard')}
+                    className="flex items-center gap-2 flex-shrink-0"
+                  >
+                    <BarChart3 className="h-4 w-4" />
+                    Dashboard
+                  </Button>
+                )}
+                {(isAdmin || isManager) && (
+                  <Button
+                    variant={activeTab === 'reports' ? 'default' : 'ghost'}
+                    onClick={() => setActiveTab('reports')}
+                    className="flex items-center gap-2 flex-shrink-0"
+                  >
+                    <FileText className="h-4 w-4" />
+                    Reports
+                  </Button>
+                )}
+                {isAdmin && (
+                  <Button
+                    variant={activeTab === 'admin' ? 'default' : 'ghost'}
+                    onClick={() => setActiveTab('admin')}
+                    className="flex items-center gap-2 flex-shrink-0"
+                  >
+                    <Settings className="h-4 w-4" />
+                    Admin Panel
+                  </Button>
+                )}
+              </>
             )}
           </div>
 
