@@ -8,7 +8,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { Play, Pause, Trash2, Settings, Users, Building, Shield } from 'lucide-react';
 import { DeleteConfirmationDialog } from './DeleteConfirmationDialog';
@@ -82,15 +81,24 @@ export const SuperAdminDashboard = () => {
     try {
       const updateData: any = { role: newRole };
 
-      // If changing to admin, set admin_id to self and activate
+      // If changing to admin, set admin_id to self and start paused
       if (newRole === 'admin') {
         updateData.admin_id = profile.id;
-        updateData.status = 'paused'; // New admins start paused
+        updateData.status = 'paused';
       }
       // If changing to super_admin, clear admin_id
       if (newRole === 'super_admin') {
         updateData.admin_id = null;
         updateData.status = 'active';
+      }
+      // For manager/user, keep existing admin_id
+      if (newRole === 'manager' || newRole === 'user') {
+        // If this profile doesn't have an admin_id (was previously admin/super_admin),
+        // we can't assign them as sub-user without an admin parent
+        if (!profile.admin_id || profile.admin_id === profile.id) {
+          toast.error("Cannot demote to sub-user role without an admin parent. Assign an admin_id first.");
+          return;
+        }
       }
 
       const { error } = await (supabase.from('profiles') as any)
@@ -127,9 +135,10 @@ export const SuperAdminDashboard = () => {
 
   const handlePause = async (admin: AdminProfile) => {
     try {
+      // Pause admin and all sub-users
       await (supabase.from('profiles') as any).update({ status: 'paused' }).eq('id', admin.id);
       await (supabase.from('profiles') as any).update({ status: 'paused' }).eq('admin_id', admin.id);
-      toast.success(`${admin.name} and all sub-users paused`);
+      toast.success(`${admin.name} and all sub-users paused. They will be logged out and see a contact administrator message.`);
       fetchData();
     } catch (error: any) {
       toast.error(error.message || 'Failed to pause');
@@ -140,11 +149,45 @@ export const SuperAdminDashboard = () => {
     if (!deleteAdmin) return;
     setIsDeleting(true);
     try {
+      const adminId = deleteAdmin.id;
+
+      // 1. Soft-delete all GD entries for this admin
+      await (supabase.from('goods_damaged_entries') as any)
+        .delete()
+        .eq('admin_id', adminId);
+
+      // 2. Soft-delete all GD entry images for this admin's entries
+      // (cascade should handle, but let's be safe with related data)
+
+      // 3. Soft-delete all shops
+      await (supabase.from('shops') as any)
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('admin_id', adminId);
+
+      // 4. Soft-delete all categories, sizes, customer_types
+      await Promise.all([
+        (supabase.from('categories') as any).update({ deleted_at: new Date().toISOString() }).eq('admin_id', adminId),
+        (supabase.from('sizes') as any).update({ deleted_at: new Date().toISOString() }).eq('admin_id', adminId),
+        (supabase.from('customer_types') as any).update({ deleted_at: new Date().toISOString() }).eq('admin_id', adminId),
+      ]);
+
+      // 5. Soft-delete all sub-users
       await (supabase.from('profiles') as any)
         .update({ deleted_at: new Date().toISOString(), status: 'paused' })
-        .eq('admin_id', deleteAdmin.id);
+        .eq('admin_id', adminId)
+        .neq('id', adminId);
 
-      toast.success(`${deleteAdmin.name} and all associated data deleted`);
+      // 6. Soft-delete the admin profile itself
+      await (supabase.from('profiles') as any)
+        .update({ deleted_at: new Date().toISOString(), status: 'paused' })
+        .eq('id', adminId);
+
+      // 7. Delete app_settings for this admin
+      await (supabase.from('app_settings') as any)
+        .delete()
+        .eq('admin_id', adminId);
+
+      toast.success(`${deleteAdmin.name} and ALL associated data (shops, users, entries, settings) have been deleted.`);
       setDeleteAdmin(null);
       fetchData();
     } catch (error: any) {
@@ -183,187 +226,171 @@ export const SuperAdminDashboard = () => {
 
   return (
     <div className="space-y-6">
-      <Tabs defaultValue="admins" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="admins">
-            <Shield className="h-4 w-4 mr-2" /> Tenant Admins ({admins.length})
-          </TabsTrigger>
-          <TabsTrigger value="all-users">
-            <Users className="h-4 w-4 mr-2" /> All Users ({allProfiles.length})
-          </TabsTrigger>
-        </TabsList>
-
-        {/* Tenant Admins Tab */}
-        <TabsContent value="admins">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Shield className="h-5 w-5" />
-                Admin Management
-              </CardTitle>
-              <CardDescription>
-                {admins.length} registered admin(s). Manage tenant admins, set limits, and control access.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Signup Date</TableHead>
-                      <TableHead>Last Login</TableHead>
-                      <TableHead>Shops</TableHead>
-                      <TableHead>Users</TableHead>
-                      <TableHead>Actions</TableHead>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Shield className="h-5 w-5" />
+            Tenant Admin Management
+          </CardTitle>
+          <CardDescription>
+            {admins.length} registered admin(s). Activate, pause, set limits, or delete tenant admins. New signups start paused.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Signup Date</TableHead>
+                  <TableHead>Last Login</TableHead>
+                  <TableHead>Shops</TableHead>
+                  <TableHead>Users</TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {admins.map(admin => {
+                  const stats = getAdminStats(admin.id);
+                  return (
+                    <TableRow key={admin.id}>
+                      <TableCell className="font-medium">{admin.name}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{admin.email || '-'}</TableCell>
+                      <TableCell>
+                        <Badge variant={admin.status === 'active' ? 'default' : 'destructive'}>
+                          {admin.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-sm">{format(new Date(admin.created_at), 'PP')}</TableCell>
+                      <TableCell className="text-sm">
+                        {admin.last_login_at ? format(new Date(admin.last_login_at), 'PP p') : 'Never'}
+                      </TableCell>
+                      <TableCell>
+                        <span className="flex items-center gap-1 text-sm">
+                          <Building className="h-3 w-3" />
+                          {stats.shopCount}/{admin.max_shops ?? '∞'}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <span className="flex items-center gap-1 text-sm">
+                          <Users className="h-3 w-3" />
+                          {stats.userCount}/{admin.max_users ?? '∞'}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-1">
+                          {admin.status === 'paused' ? (
+                            <Button size="sm" variant="outline" onClick={() => handleActivate(admin)} title="Activate">
+                              <Play className="h-3 w-3" />
+                            </Button>
+                          ) : (
+                            <Button size="sm" variant="outline" onClick={() => handlePause(admin)} title="Pause">
+                              <Pause className="h-3 w-3" />
+                            </Button>
+                          )}
+                          <Button size="sm" variant="outline" onClick={() => openLimitsDialog(admin)} title="Set limits">
+                            <Settings className="h-3 w-3" />
+                          </Button>
+                          <Button size="sm" variant="destructive" onClick={() => setDeleteAdmin(admin)} title="Delete">
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {admins.map(admin => {
-                      const stats = getAdminStats(admin.id);
-                      return (
-                        <TableRow key={admin.id}>
-                          <TableCell className="font-medium">{admin.name}</TableCell>
-                          <TableCell className="text-sm text-muted-foreground">{admin.email || '-'}</TableCell>
-                          <TableCell>
-                            <Badge variant={admin.status === 'active' ? 'default' : 'destructive'}>
-                              {admin.status}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-sm">{format(new Date(admin.created_at), 'PP')}</TableCell>
-                          <TableCell className="text-sm">
-                            {admin.last_login_at ? format(new Date(admin.last_login_at), 'PP p') : 'Never'}
-                          </TableCell>
-                          <TableCell>
-                            <span className="flex items-center gap-1 text-sm">
-                              <Building className="h-3 w-3" />
-                              {stats.shopCount}/{admin.max_shops ?? '∞'}
-                            </span>
-                          </TableCell>
-                          <TableCell>
-                            <span className="flex items-center gap-1 text-sm">
-                              <Users className="h-3 w-3" />
-                              {stats.userCount}/{admin.max_users ?? '∞'}
-                            </span>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex gap-1">
-                              {admin.status === 'paused' ? (
-                                <Button size="sm" variant="outline" onClick={() => handleActivate(admin)} title="Activate">
-                                  <Play className="h-3 w-3" />
-                                </Button>
-                              ) : (
-                                <Button size="sm" variant="outline" onClick={() => handlePause(admin)} title="Pause">
-                                  <Pause className="h-3 w-3" />
-                                </Button>
-                              )}
-                              <Button size="sm" variant="outline" onClick={() => openLimitsDialog(admin)} title="Set limits">
-                                <Settings className="h-3 w-3" />
-                              </Button>
-                              <Button size="sm" variant="destructive" onClick={() => setDeleteAdmin(admin)} title="Delete">
-                                <Trash2 className="h-3 w-3" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                    {admins.length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
-                          No admins registered yet.
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
+                  );
+                })}
+                {admins.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                      No admins registered yet.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
 
-        {/* All Users Tab */}
-        <TabsContent value="all-users">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Users className="h-5 w-5" />
-                All Users
-              </CardTitle>
-              <CardDescription>
-                View and manage roles for all {allProfiles.length} user(s) across the platform.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Role</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Admin</TableHead>
-                      <TableHead>Created</TableHead>
+      {/* All Users (read-only overview with role dropdown for super admin) */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Users className="h-5 w-5" />
+            All Users Overview
+          </CardTitle>
+          <CardDescription>
+            View all {allProfiles.length} user(s) across the platform. Change roles as needed.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Role</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Admin</TableHead>
+                  <TableHead>Created</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {allProfiles.map(profile => {
+                  const parentAdmin = profile.admin_id
+                    ? allProfiles.find(p => p.id === profile.admin_id)
+                    : null;
+                  const isSelf = profile.id === user?.id;
+
+                  return (
+                    <TableRow key={profile.id} className={isSelf ? 'bg-muted/30' : ''}>
+                      <TableCell className="font-medium">
+                        {profile.name}
+                        {isSelf && <Badge variant="outline" className="ml-2 text-xs">You</Badge>}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{profile.email || '-'}</TableCell>
+                      <TableCell>
+                        {isSelf ? (
+                          <Badge variant="secondary">{profile.role}</Badge>
+                        ) : (
+                          <Select
+                            value={profile.role}
+                            onValueChange={(val) => handleRoleChange(profile, val)}
+                          >
+                            <SelectTrigger className="w-[130px] h-8 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="super_admin">Super Admin</SelectItem>
+                              <SelectItem value="admin">Admin</SelectItem>
+                              <SelectItem value="manager">Manager</SelectItem>
+                              <SelectItem value="user">User (Staff)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={profile.status === 'active' ? 'default' : 'destructive'}>
+                          {profile.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {parentAdmin ? parentAdmin.name : profile.role === 'super_admin' ? '-' : 'Self'}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {format(new Date(profile.created_at), 'PP')}
+                      </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {allProfiles.map(profile => {
-                      const parentAdmin = profile.admin_id
-                        ? allProfiles.find(p => p.id === profile.admin_id)
-                        : null;
-                      const isSelf = profile.id === user?.id;
-
-                      return (
-                        <TableRow key={profile.id} className={isSelf ? 'bg-muted/30' : ''}>
-                          <TableCell className="font-medium">
-                            {profile.name}
-                            {isSelf && <Badge variant="outline" className="ml-2 text-xs">You</Badge>}
-                          </TableCell>
-                          <TableCell className="text-sm text-muted-foreground">{profile.email || '-'}</TableCell>
-                          <TableCell>
-                            {isSelf ? (
-                              <Badge variant="secondary">{profile.role}</Badge>
-                            ) : (
-                              <Select
-                                value={profile.role}
-                                onValueChange={(val) => handleRoleChange(profile, val)}
-                              >
-                                <SelectTrigger className="w-[130px] h-8 text-xs">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="super_admin">Super Admin</SelectItem>
-                                  <SelectItem value="admin">Admin</SelectItem>
-                                  <SelectItem value="manager">Manager</SelectItem>
-                                  <SelectItem value="user">User (Staff)</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={profile.status === 'active' ? 'default' : 'destructive'}>
-                              {profile.status}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-sm text-muted-foreground">
-                            {parentAdmin ? parentAdmin.name : profile.role === 'super_admin' ? '-' : 'Self'}
-                          </TableCell>
-                          <TableCell className="text-sm">
-                            {format(new Date(profile.created_at), 'PP')}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Limits Dialog */}
       <Dialog open={limitsDialogOpen} onOpenChange={setLimitsDialogOpen}>
@@ -396,9 +423,9 @@ export const SuperAdminDashboard = () => {
         open={!!deleteAdmin}
         onOpenChange={open => !open && setDeleteAdmin(null)}
         onConfirm={handleDelete}
-        title="Delete Admin"
+        title="Delete Admin & All Data"
         itemName={deleteAdmin?.name}
-        description={`Are you sure you want to delete "${deleteAdmin?.name}"? This will delete the admin and ALL their data including shops, sub-users, and entries. All active sessions will be terminated immediately.`}
+        description={`Are you sure you want to delete "${deleteAdmin?.name}"? This will permanently delete the admin, ALL their sub-users, shops, categories, sizes, customer types, GD entries, and settings. All active sessions will be terminated immediately.`}
         loading={isDeleting}
       />
     </div>

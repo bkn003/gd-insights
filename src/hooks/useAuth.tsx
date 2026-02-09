@@ -10,6 +10,21 @@ type Profile = Database['public']['Tables']['profiles']['Row'];
 const PROFILE_CACHE_KEY = 'user_profile';
 const CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
 
+// Fetch super admin contact email for paused account messages
+const fetchSuperAdminEmail = async (): Promise<string | null> => {
+  try {
+    const { data } = await supabase
+      .from('profiles')
+      .select('email')
+      .eq('role', 'super_admin')
+      .limit(1)
+      .maybeSingle();
+    return (data as any)?.email || null;
+  } catch {
+    return null;
+  }
+};
+
 export const useAuth = () => {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -94,7 +109,11 @@ export const useAuth = () => {
       const profileData = data as any;
       if (profileData.status === 'paused') {
         console.log('User account is paused, signing out...');
-        toast.error('Your account has been paused. Please contact the administrator.');
+        const saEmail = await fetchSuperAdminEmail();
+        const contactMsg = saEmail
+          ? `Your account has been paused. Please contact the administrator at ${saEmail}.`
+          : 'Your account has been paused. Please contact the administrator.';
+        toast.error(contactMsg, { duration: 8000 });
         await signOut();
         return;
       }
@@ -109,7 +128,18 @@ export const useAuth = () => {
         
         if (adminData && (adminData as any).status === 'paused') {
           console.log('Admin account is paused, signing out sub-user...');
-          toast.error('Your organization has been paused. Please contact the administrator.');
+          const saEmail = await fetchSuperAdminEmail();
+          const contactMsg = saEmail
+            ? `Your organization has been paused. Please contact the administrator at ${saEmail}.`
+            : 'Your organization has been paused. Please contact the administrator.';
+          toast.error(contactMsg, { duration: 8000 });
+          await signOut();
+          return;
+        }
+
+        if (adminData && (adminData as any).deleted_at) {
+          console.log('Admin account is deleted, signing out sub-user...');
+          toast.error('Your organization account has been removed. Please contact the administrator.');
           await signOut();
           return;
         }
@@ -153,6 +183,13 @@ export const useAuth = () => {
       const profileData = data as any;
       if (error || !data || profileData.deleted_at || profileData.status === 'paused') {
         console.log('User has been deleted or paused, forcing logout...');
+        if (profileData?.status === 'paused') {
+          const saEmail = await fetchSuperAdminEmail();
+          const contactMsg = saEmail
+            ? `Your account has been paused. Please contact the administrator at ${saEmail}.`
+            : 'Your account has been paused. Please contact the administrator.';
+          toast.error(contactMsg, { duration: 8000 });
+        }
         await signOut();
       }
     } catch (error: any) {
