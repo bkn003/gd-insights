@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { Play, Pause, Trash2, Settings, Users, Building, Shield } from 'lucide-react';
+import { Play, Pause, Trash2, Settings, Users, Building, Shield, Search } from 'lucide-react';
 import { DeleteConfirmationDialog } from './DeleteConfirmationDialog';
 import { format } from 'date-fns';
 import { useAuth } from '@/hooks/useAuth';
@@ -39,6 +39,7 @@ export const SuperAdminDashboard = () => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [maxShops, setMaxShops] = useState(5);
   const [maxUsers, setMaxUsers] = useState(10);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     fetchData();
@@ -66,6 +67,19 @@ export const SuperAdminDashboard = () => {
   };
 
   const admins = allProfiles.filter(p => p.role === 'admin');
+  
+  const filteredAdmins = admins.filter(a => 
+    !searchQuery || 
+    a.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (a.email || '').toLowerCase().includes(searchQuery.toLowerCase())
+  );
+  
+  const filteredAllProfiles = allProfiles.filter(p =>
+    !searchQuery ||
+    p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (p.email || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+    p.role.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   const getAdminStats = (adminId: string) => {
     const shopCount = allShops.filter((s: any) => s.admin_id === adminId).length;
@@ -169,6 +183,7 @@ export const SuperAdminDashboard = () => {
         (supabase.from('categories') as any).update({ deleted_at: new Date().toISOString() }).eq('admin_id', adminId),
         (supabase.from('sizes') as any).update({ deleted_at: new Date().toISOString() }).eq('admin_id', adminId),
         (supabase.from('customer_types') as any).update({ deleted_at: new Date().toISOString() }).eq('admin_id', adminId),
+        (supabase.from('custom_fields') as any).update({ deleted_at: new Date().toISOString() }).eq('admin_id', adminId),
       ]);
 
       // 5. Soft-delete all sub-users
@@ -237,6 +252,17 @@ export const SuperAdminDashboard = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          <div className="mb-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by name, email, or role..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+          </div>
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
@@ -252,7 +278,7 @@ export const SuperAdminDashboard = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {admins.map(admin => {
+                {filteredAdmins.map(admin => {
                   const stats = getAdminStats(admin.id);
                   return (
                     <TableRow key={admin.id}>
@@ -301,7 +327,7 @@ export const SuperAdminDashboard = () => {
                     </TableRow>
                   );
                 })}
-                {admins.length === 0 && (
+                {filteredAdmins.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
                       No admins registered yet.
@@ -322,7 +348,7 @@ export const SuperAdminDashboard = () => {
             All Users Overview
           </CardTitle>
           <CardDescription>
-            View all {allProfiles.length} user(s) across the platform. Change roles as needed.
+            View all {allProfiles.length} user(s) across the platform. Change roles as needed. {searchQuery && `(${filteredAllProfiles.length} matching)`}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -339,7 +365,7 @@ export const SuperAdminDashboard = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {allProfiles.map(profile => {
+                {filteredAllProfiles.map(profile => {
                   const parentAdmin = profile.admin_id
                     ? allProfiles.find(p => p.id === profile.admin_id)
                     : null;

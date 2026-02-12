@@ -17,6 +17,20 @@ import { sanitizeNotes, isValidUUID } from '@/utils/security';
 
 type CustomerType = Database['public']['Tables']['customer_types']['Row'];
 
+interface CustomField {
+  id: string;
+  name: string;
+  is_visible: boolean;
+  is_mandatory: boolean;
+  display_order: number;
+}
+
+interface CustomFieldOption {
+  id: string;
+  custom_field_id: string;
+  value: string;
+}
+
 export const DamagedGoodsForm = () => {
   const { profile } = useAuth();
   const { categories, sizes, shops, loading: dataLoading } = useCachedData();
@@ -26,6 +40,9 @@ export const DamagedGoodsForm = () => {
   const [loading, setLoading] = useState(false);
   const [userShop, setUserShop] = useState<any>(null);
   const [customerTypes, setCustomerTypes] = useState<CustomerType[]>([]);
+  const [customFields, setCustomFields] = useState<CustomField[]>([]);
+  const [customFieldOptions, setCustomFieldOptions] = useState<Record<string, CustomFieldOption[]>>({});
+  const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>({});
   const [selectedImages, setSelectedImages] = useState<File[]>([]);
   const [voiceNoteFile, setVoiceNoteFile] = useState<File | null>(null);
   const [whatsappRedirectEnabled, setWhatsappRedirectEnabled] = useState(false);
@@ -57,11 +74,31 @@ export const DamagedGoodsForm = () => {
   }, []);
 
   useEffect(() => {
-    const fetchCustomerTypes = async () => {
-      const { data } = await supabase.from('customer_types').select('*').is('deleted_at', null).order('name');
-      if (data) setCustomerTypes(data);
+    const fetchFormData = async () => {
+      const [ctRes, cfRes] = await Promise.all([
+        supabase.from('customer_types').select('*').is('deleted_at', null).order('name'),
+        (supabase.from('custom_fields') as any).select('*').is('deleted_at', null).eq('is_visible', true).order('display_order'),
+      ]);
+      if (ctRes.data) setCustomerTypes(ctRes.data);
+      if (cfRes.data && cfRes.data.length > 0) {
+        setCustomFields(cfRes.data);
+        const fieldIds = cfRes.data.map((f: CustomField) => f.id);
+        const { data: optData } = await (supabase.from('custom_field_options') as any)
+          .select('*')
+          .in('custom_field_id', fieldIds)
+          .is('deleted_at', null)
+          .order('display_order');
+        if (optData) {
+          const grouped: Record<string, CustomFieldOption[]> = {};
+          optData.forEach((opt: CustomFieldOption) => {
+            if (!grouped[opt.custom_field_id]) grouped[opt.custom_field_id] = [];
+            grouped[opt.custom_field_id].push(opt);
+          });
+          setCustomFieldOptions(grouped);
+        }
+      }
     };
-    fetchCustomerTypes();
+    fetchFormData();
     fetchWhatsAppSetting();
   }, [fetchWhatsAppSetting]);
 
@@ -158,6 +195,15 @@ export const DamagedGoodsForm = () => {
       return;
     }
 
+    // Validate mandatory custom fields
+    const missingCustomFields = customFields
+      .filter(f => f.is_mandatory && !customFieldValues[f.id])
+      .map(f => f.name);
+    if (missingCustomFields.length > 0) {
+      toast.error(`Please fill in: ${missingCustomFields.join(', ')}`);
+      return;
+    }
+
     // Validate UUIDs to prevent injection
     if (!isValidUUID(formData.category_id) || !isValidUUID(formData.size_id) || !isValidUUID(formData.shop_id) || (formData.customer_type_id && !isValidUUID(formData.customer_type_id))) {
       toast.error('Invalid form data. Please refresh and try again.');
@@ -199,8 +245,8 @@ export const DamagedGoodsForm = () => {
           setNotes('');
           setSelectedImages([]);
           setVoiceNoteFile(null);
+          setCustomFieldValues({});
 
-          // Refocus notes input
           setTimeout(() => {
             const notesInput = document.querySelector('textarea#notes') as HTMLTextAreaElement;
             if (notesInput) notesInput.focus();
@@ -234,6 +280,20 @@ export const DamagedGoodsForm = () => {
       // Upload images if any
       if (selectedImages.length > 0) {
         await uploadImages(createdEntry.id);
+      }
+
+      // Save custom field values
+      const customValueInserts = Object.entries(customFieldValues)
+        .filter(([, optionId]) => optionId)
+        .map(([fieldId, optionId]) => ({
+          gd_entry_id: createdEntry.id,
+          custom_field_id: fieldId,
+          custom_field_option_id: optionId,
+        }));
+      if (customValueInserts.length > 0) {
+        const { error: cvError } = await (supabase.from('gd_entry_custom_values') as any)
+          .insert(customValueInserts);
+        if (cvError) console.error('Error saving custom field values:', cvError);
       }
 
       const successParts = [];
@@ -270,6 +330,7 @@ export const DamagedGoodsForm = () => {
       setNotes('');
       setSelectedImages([]);
       setVoiceNoteFile(null);
+      setCustomFieldValues({});
 
       // WhatsApp redirect if enabled and shop has a group link
       if (whatsappRedirectEnabled && userShop?.whatsapp_group_link) {
@@ -378,6 +439,30 @@ export const DamagedGoodsForm = () => {
           </RadioGroup>
           {customerTypes.length === 0 && <p className="text-sm text-muted-foreground">No customer types available. Please contact admin.</p>}
         </div>
+
+        {/* Custom Fields */}
+        {customFields.map((field) => {
+          const fieldOptions = customFieldOptions[field.id] || [];
+          if (fieldOptions.length === 0) return null;
+          return (
+            <div key={field.id} className="space-y-2">
+              <Label>{field.name} {field.is_mandatory && '*'}</Label>
+              <Select
+                value={customFieldValues[field.id] || ''}
+                onValueChange={(value) => setCustomFieldValues(prev => ({ ...prev, [field.id]: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={`Select ${field.name.toLowerCase()}`} />
+                </SelectTrigger>
+                <SelectContent>
+                  {fieldOptions.map((opt) => (
+                    <SelectItem key={opt.id} value={opt.id}>{opt.value}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          );
+        })}
 
         <div className="space-y-2">
           <Label>Notes / Voice / Images {!voiceNoteFile && !notes.trim() && '*'}</Label>
