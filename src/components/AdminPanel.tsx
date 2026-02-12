@@ -8,6 +8,7 @@ import { SizeManagement } from '@/components/admin/SizeManagement';
 import { CustomerTypeManagement } from '@/components/admin/CustomerTypeManagement';
 import { UserManagement } from '@/components/admin/UserManagement';
 import { WhatsAppSettings } from '@/components/admin/WhatsAppSettings';
+import { CustomFieldManagement } from '@/components/admin/CustomFieldManagement';
 
 type Shop = Database['public']['Tables']['shops']['Row'];
 type Category = Database['public']['Tables']['categories']['Row'];
@@ -78,6 +79,9 @@ export const AdminPanel = () => {
       </div>
       
       <UserManagement shops={shops} profiles={profiles} onRefresh={fetchData} />
+      
+      {/* Custom Fields */}
+      <CustomFieldManagement />
     </div>
   );
 };

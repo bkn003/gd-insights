@@ -68,6 +68,80 @@ export type Database = {
         }
         Relationships: []
       }
+      custom_field_options: {
+        Row: {
+          created_at: string | null
+          custom_field_id: string
+          deleted_at: string | null
+          display_order: number
+          id: string
+          updated_at: string | null
+          value: string
+        }
+        Insert: {
+          created_at?: string | null
+          custom_field_id: string
+          deleted_at?: string | null
+          display_order?: number
+          id?: string
+          updated_at?: string | null
+          value: string
+        }
+        Update: {
+          created_at?: string | null
+          custom_field_id?: string
+          deleted_at?: string | null
+          display_order?: number
+          id?: string
+          updated_at?: string | null
+          value?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "custom_field_options_custom_field_id_fkey"
+            columns: ["custom_field_id"]
+            isOneToOne: false
+            referencedRelation: "custom_fields"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      custom_fields: {
+        Row: {
+          admin_id: string
+          created_at: string | null
+          deleted_at: string | null
+          display_order: number
+          id: string
+          is_mandatory: boolean
+          is_visible: boolean
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          admin_id: string
+          created_at?: string | null
+          deleted_at?: string | null
+          display_order?: number
+          id?: string
+          is_mandatory?: boolean
+          is_visible?: boolean
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          admin_id?: string
+          created_at?: string | null
+          deleted_at?: string | null
+          display_order?: number
+          id?: string
+          is_mandatory?: boolean
+          is_visible?: boolean
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       customer_types: {
         Row: {
           admin_id: string | null
@@ -94,6 +168,52 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      gd_entry_custom_values: {
+        Row: {
+          created_at: string | null
+          custom_field_id: string
+          custom_field_option_id: string
+          gd_entry_id: string
+          id: string
+        }
+        Insert: {
+          created_at?: string | null
+          custom_field_id: string
+          custom_field_option_id: string
+          gd_entry_id: string
+          id?: string
+        }
+        Update: {
+          created_at?: string | null
+          custom_field_id?: string
+          custom_field_option_id?: string
+          gd_entry_id?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gd_entry_custom_values_custom_field_id_fkey"
+            columns: ["custom_field_id"]
+            isOneToOne: false
+            referencedRelation: "custom_fields"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gd_entry_custom_values_custom_field_option_id_fkey"
+            columns: ["custom_field_option_id"]
+            isOneToOne: false
+            referencedRelation: "custom_field_options"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gd_entry_custom_values_gd_entry_id_fkey"
+            columns: ["gd_entry_id"]
+            isOneToOne: false
+            referencedRelation: "goods_damaged_entries"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       gd_entry_images: {
         Row: {
