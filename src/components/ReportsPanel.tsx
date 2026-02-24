@@ -26,6 +26,13 @@ import { Database } from '@/types/database';
 import * as XLSX from 'xlsx';
 import { exportToPDFViaHTML, exportMultiSectionPDFViaHTML, makeImageCell, type CellContent } from '@/utils/htmlPdfExport';
 
+interface CustomFieldDef {
+  id: string;
+  name: string;
+  is_visible: boolean;
+  display_order: number;
+}
+
 type GoodsEntry = Database['public']['Tables']['goods_damaged_entries']['Row'] & {
   categories: { name: string };
   sizes: { size: string };
@@ -37,6 +44,7 @@ type GoodsEntry = Database['public']['Tables']['goods_damaged_entries']['Row'] &
     image_name?: string;
   }>;
   voice_note_url?: string | null;
+  customFieldValues?: Record<string, string>; // fieldId -> option value text
 };
 
 type Shop = Database['public']['Tables']['shops']['Row'];
@@ -54,6 +62,7 @@ export const ReportsPanel = () => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [sizes, setSizes] = useState<Size[]>([]);
   const [customerTypes, setCustomerTypes] = useState<CustomerType[]>([]);
+  const [customFields, setCustomFields] = useState<CustomFieldDef[]>([]);
 
   // Filter states - default to "today"
   const [selectedShop, setSelectedShop] = useState<string>('all');
@@ -140,12 +149,13 @@ export const ReportsPanel = () => {
       console.log('Fetched images for entries:', imagesData);
 
 
-      // Fetch related data separately
-      const [shopsRes, categoriesRes, sizesRes, customerTypesRes] = await Promise.all([
+      // Fetch related data separately (including custom fields)
+      const [shopsRes, categoriesRes, sizesRes, customerTypesRes, cfRes] = await Promise.all([
         supabase.from('shops').select('*').order('name'),
         supabase.from('categories').select('*').order('name'),
         supabase.from('sizes').select('*').order('size'),
         supabase.from('customer_types').select('*').is('deleted_at', null).order('name'),
+        (supabase.from('custom_fields') as any).select('*').is('deleted_at', null).eq('is_visible', true).order('display_order'),
       ]);
 
       if (shopsRes.error) {
@@ -165,6 +175,32 @@ export const ReportsPanel = () => {
         throw customerTypesRes.error;
       }
 
+      // Fetch custom field values and options for entries
+      const visibleFields: CustomFieldDef[] = cfRes.data || [];
+      let customValuesMap: Record<string, Record<string, string>> = {}; // entryId -> { fieldId -> optionValue }
+
+      if (visibleFields.length > 0 && entryIds.length > 0) {
+        const fieldIds = visibleFields.map(f => f.id);
+        const [cvRes, cfoRes] = await Promise.all([
+          (supabase.from('gd_entry_custom_values') as any)
+            .select('*')
+            .in('gd_entry_id', entryIds)
+            .in('custom_field_id', fieldIds),
+          (supabase.from('custom_field_options') as any)
+            .select('*')
+            .in('custom_field_id', fieldIds)
+            .is('deleted_at', null),
+        ]);
+
+        const optionsById: Record<string, string> = {};
+        (cfoRes.data || []).forEach((opt: any) => { optionsById[opt.id] = opt.value; });
+
+        (cvRes.data || []).forEach((cv: any) => {
+          if (!customValuesMap[cv.gd_entry_id]) customValuesMap[cv.gd_entry_id] = {};
+          customValuesMap[cv.gd_entry_id][cv.custom_field_id] = optionsById[cv.custom_field_option_id] || 'N/A';
+        });
+      }
+
       // Manually join the data including images
       const enrichedEntries = entriesData.map(entry => {
         const shop = shopsRes.data.find(s => s.id === entry.shop_id);
@@ -179,7 +215,8 @@ export const ReportsPanel = () => {
           categories: { name: category?.name || 'Unknown Category' },
           sizes: { size: size?.size || 'Unknown Size' },
           customer_types: customerType ? { name: customerType.name } : undefined,
-          gd_entry_images: entryImages
+          gd_entry_images: entryImages,
+          customFieldValues: customValuesMap[entry.id] || {},
         };
       });
 
@@ -190,6 +227,7 @@ export const ReportsPanel = () => {
       setCategories(categoriesRes.data);
       setSizes(sizesRes.data);
       setCustomerTypes(customerTypesRes.data);
+      setCustomFields(visibleFields);
     } catch (error) {
       console.error('Error fetching data:', error);
       toast.error('Failed to load reports data');
@@ -597,15 +635,21 @@ export const ReportsPanel = () => {
       return;
     }
 
-    const exportData = tableFilteredEntries.map((entry, index) => ({
-      'S.NO': index + 1,
-      'SHOP': entry.shops.name,
-      'CATEGORY': entry.categories.name,
-      'SIZE': entry.sizes.size,
-      'CUSTOMER TYPE': entry.customer_types?.name || 'N/A',
-      'NOTES': entry.notes || '',
-      'DATE AND TIME': formatDateTime(entry.created_at!)
-    }));
+    const exportData = tableFilteredEntries.map((entry, index) => {
+      const base: Record<string, any> = {
+        'S.NO': index + 1,
+        'SHOP': entry.shops.name,
+        'CATEGORY': entry.categories.name,
+        'SIZE': entry.sizes.size,
+        'CUSTOMER TYPE': entry.customer_types?.name || 'N/A',
+      };
+      customFields.forEach(cf => {
+        base[cf.name.toUpperCase()] = entry.customFieldValues?.[cf.id] || 'N/A';
+      });
+      base['NOTES'] = entry.notes || '';
+      base['DATE AND TIME'] = formatDateTime(entry.created_at!);
+      return base;
+    });
 
     const ws = XLSX.utils.json_to_sheet(exportData);
 
@@ -616,6 +660,7 @@ export const ReportsPanel = () => {
       { wch: 15 }, // CATEGORY
       { wch: 10 }, // SIZE
       { wch: 18 }, // CUSTOMER TYPE
+      ...customFields.map(() => ({ wch: 15 })),
       { wch: 40 }, // NOTES
       { wch: 20 }, // DATE AND TIME
     ];
@@ -642,6 +687,7 @@ export const ReportsPanel = () => {
       entry.categories.name,
       entry.sizes.size,
       entry.customer_types?.name || 'N/A',
+      ...customFields.map(cf => entry.customFieldValues?.[cf.id] || 'N/A'),
       entry.notes || '',
       makeImageCell((entry.gd_entry_images || []).map(img => img.image_url)),
       formatDateTime(entry.created_at!)
@@ -652,13 +698,14 @@ export const ReportsPanel = () => {
       subtitle: `Generated: ${format(new Date(), 'dd-MM-yyyy HH:mm')}`,
       columns: [
         { header: 'S.NO', width: '40px', align: 'center' },
-        { header: 'SHOP', width: '11%' },
-        { header: 'CATEGORY', width: '11%' },
-        { header: 'SIZE', width: '7%', align: 'center' },
-        { header: 'CUSTOMER TYPE', width: '12%' },
+        { header: 'SHOP', width: '10%' },
+        { header: 'CATEGORY', width: '10%' },
+        { header: 'SIZE', width: '6%', align: 'center' },
+        { header: 'CUSTOMER TYPE', width: '10%' },
+        ...customFields.map(cf => ({ header: cf.name.toUpperCase(), width: '8%' })),
         { header: 'NOTES' },
-        { header: 'IMAGE', width: '14%', align: 'center' },
-        { header: 'DATE AND TIME', width: '13%' }
+        { header: 'IMAGE', width: '12%', align: 'center' as const },
+        { header: 'DATE AND TIME', width: '11%' }
       ],
       rows,
       orientation: 'landscape',
@@ -715,15 +762,18 @@ export const ReportsPanel = () => {
       // Prepare data for export with embedded images
       const exportData = await Promise.all(
         filteredEntries.map(async (entry) => {
-          const baseData = {
+          const baseData: Record<string, any> = {
             Date: formatTime12Hour(new Date(entry.created_at)),
             Shop: entry.shops.name,
             Category: entry.categories.name,
             Size: entry.sizes.size,
             'Customer Type': entry.customer_types?.name || 'Not specified',
-            Reporter: entry.employee_name || 'Unknown',
-            Notes: entry.notes || '',
           };
+          customFields.forEach(cf => {
+            baseData[cf.name] = entry.customFieldValues?.[cf.id] || 'N/A';
+          });
+          baseData['Reporter'] = entry.employee_name || 'Unknown';
+          baseData['Notes'] = entry.notes || '';
 
           // Process up to 3 images for this entry
           if (entry.gd_entry_images.length > 0) {
@@ -792,9 +842,10 @@ export const ReportsPanel = () => {
           { wch: 15 }, // Category
           { wch: 10 }, // Size
           { wch: 15 }, // Customer Type
+          ...customFields.map(() => ({ wch: 15 })),
           { wch: 15 }, // Reporter
+          { wch: 30 }, // Notes
           { wch: 40 }, // Images (wider for thumbnail info)
-          { wch: 30 }  // Notes
         ];
         ws['!cols'] = colWidths;
 
@@ -810,18 +861,18 @@ export const ReportsPanel = () => {
       XLSX.utils.book_append_sheet(wb, overallWs, 'Overall Report');
 
       // Shop-wise sheets
-      const uniqueShops = [...new Set(exportData.map(d => d.Shop).filter(Boolean))].sort();
+      const uniqueShops = [...new Set((exportData as any[]).map((d: any) => d.Shop).filter(Boolean))].sort();
       for (const shop of uniqueShops) {
-        const shopData = exportData.filter(d => d.Shop === shop);
+        const shopData = (exportData as any[]).filter((d: any) => d.Shop === shop);
         const sheetName = `Shop - ${shop}`.slice(0, 31);
         const ws = createWorksheetWithImageThumbnails(sheetName, shopData);
         XLSX.utils.book_append_sheet(wb, ws, sheetName);
       }
 
       // Category-wise sheets
-      const uniqueCategories = [...new Set(exportData.map(d => d.Category).filter(Boolean))].sort();
+      const uniqueCategories = [...new Set((exportData as any[]).map((d: any) => d.Category).filter(Boolean))].sort();
       for (const category of uniqueCategories) {
-        const categoryData = exportData.filter(d => d.Category === category);
+        const categoryData = (exportData as any[]).filter((d: any) => d.Category === category);
         const sheetName = `Category - ${category}`.slice(0, 31);
         const ws = createWorksheetWithImageThumbnails(sheetName, categoryData);
         XLSX.utils.book_append_sheet(wb, ws, sheetName);
@@ -927,30 +978,39 @@ export const ReportsPanel = () => {
 
     try {
       // Prepare data with image cells
-      const exportData = filteredEntries.map(entry => ({
-        Date: formatTime12Hour(new Date(entry.created_at)),
-        Shop: entry.shops.name,
-        Category: entry.categories.name,
-        Size: entry.sizes.size,
-        'Customer Type': entry.customer_types?.name || 'Not specified',
-        Reporter: entry.employee_name || 'Unknown',
-        Notes: entry.notes || '',
-        Images: makeImageCell((entry.gd_entry_images || []).map(img => img.image_url)),
-      }));
+      const exportData = filteredEntries.map(entry => {
+        const base: Record<string, any> = {
+          Date: formatTime12Hour(new Date(entry.created_at)),
+          Shop: entry.shops.name,
+          Category: entry.categories.name,
+          Size: entry.sizes.size,
+          'Customer Type': entry.customer_types?.name || 'Not specified',
+        };
+        customFields.forEach(cf => {
+          base[cf.name] = entry.customFieldValues?.[cf.id] || 'N/A';
+        });
+        base['Reporter'] = entry.employee_name || 'Unknown';
+        base['Notes'] = entry.notes || '';
+        base['Images'] = makeImageCell((entry.gd_entry_images || []).map(img => img.image_url));
+        return base;
+      });
 
       const columns = [
-        { header: 'DATE', width: '13%' },
-        { header: 'SHOP', width: '10%' },
-        { header: 'CATEGORY', width: '10%' },
-        { header: 'SIZE', width: '7%', align: 'center' as const },
-        { header: 'CUSTOMER TYPE', width: '10%' },
-        { header: 'REPORTER', width: '10%' },
+        { header: 'DATE', width: '11%' },
+        { header: 'SHOP', width: '9%' },
+        { header: 'CATEGORY', width: '9%' },
+        { header: 'SIZE', width: '6%', align: 'center' as const },
+        { header: 'CUSTOMER TYPE', width: '9%' },
+        ...customFields.map(cf => ({ header: cf.name.toUpperCase(), width: '7%' })),
+        { header: 'REPORTER', width: '9%' },
         { header: 'NOTES' },
-        { header: 'IMAGE', width: '14%', align: 'center' as const }
+        { header: 'IMAGE', width: '12%', align: 'center' as const }
       ];
 
-      const toRow = (d: typeof exportData[0]): CellContent[] => [
-        d.Date, d.Shop, d.Category, d.Size, d['Customer Type'], d.Reporter, d.Notes, d.Images
+      const toRow = (d: Record<string, any>): CellContent[] => [
+        d.Date, d.Shop, d.Category, d.Size, d['Customer Type'],
+        ...customFields.map(cf => d[cf.name] || 'N/A'),
+        d.Reporter, d.Notes, d.Images
       ];
 
       // Build sections: Overall + Shop-wise + Category-wise
@@ -1486,6 +1546,11 @@ export const ReportsPanel = () => {
                           sortKey="customerType"
                         />
                       </TableHead>
+                      {customFields.map(cf => (
+                        <TableHead key={cf.id} className="font-semibold text-primary whitespace-nowrap min-w-[100px]">
+                          <div className="flex items-center">{cf.name.toUpperCase()}</div>
+                        </TableHead>
+                      ))}
                       <TableHead className="font-semibold text-primary whitespace-nowrap min-w-[150px] cursor-pointer" onClick={() => handleSort('notes')}>
                         <div className="flex items-center">
                           NOTES
@@ -1522,6 +1587,11 @@ export const ReportsPanel = () => {
                         <TableCell className="whitespace-nowrap text-center">{entry.categories.name}</TableCell>
                         <TableCell className="text-center whitespace-nowrap">{entry.sizes.size}</TableCell>
                         <TableCell className="whitespace-nowrap text-center">{entry.customer_types?.name || 'N/A'}</TableCell>
+                        {customFields.map(cf => (
+                          <TableCell key={cf.id} className="whitespace-nowrap text-center">
+                            {entry.customFieldValues?.[cf.id] || 'N/A'}
+                          </TableCell>
+                        ))}
                         <TableCell className="max-w-[200px]">
                           {entry.notes ? (
                             <NoteViewerModal notes={entry.notes} />
