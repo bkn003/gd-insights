@@ -1696,6 +1696,14 @@ export const ReportsPanel = () => {
                       <Badge variant="outline" className="text-xs">{entry.shops.name}</Badge>
                       <Badge variant="secondary" className="text-xs">{entry.categories.name}</Badge>
                       <Badge variant="outline" className="text-xs">{entry.sizes.size}</Badge>
+                      {customFields.map(cf => {
+                        const val = entry.customFieldValues?.[cf.id];
+                        return val ? (
+                          <Badge key={cf.id} variant="secondary" className="text-xs">
+                            {cf.name}: {val}
+                          </Badge>
+                        ) : null;
+                      })}
                     </div>
                     <span className="text-xs sm:text-sm text-muted-foreground flex-shrink-0">
                       {formatTime12Hour(new Date(entry.created_at))}
