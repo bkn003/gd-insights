@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
-import { UserPlus, Edit, Trash2 } from 'lucide-react';
+import { UserPlus, Edit, Trash2, Pause, Play, KeyRound } from 'lucide-react';
 import { Database } from '@/types/database';
 import { DeleteConfirmationDialog } from '@/components/DeleteConfirmationDialog';
 import { PasswordInput } from '@/components/ui/password-input';
@@ -39,6 +39,9 @@ export const UserManagement = ({ shops: propShops, profiles: propProfiles, onRef
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [deleteUser, setDeleteUser] = useState<Profile | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [credentialsUser, setCredentialsUser] = useState<Profile | null>(null);
+  const [isCredentialsOpen, setIsCredentialsOpen] = useState(false);
+  const [togglingStatus, setTogglingStatus] = useState<string | null>(null);
 
   // Create sub-user state
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -59,7 +62,7 @@ export const UserManagement = ({ shops: propShops, profiles: propProfiles, onRef
     }
   }, [propProfiles, propShops]);
 
-  const fetchCategoriesAndSizes = async () => {
+  const fetchCategoriesAndSizes = useCallback(async () => {
     try {
       const [categoriesRes, sizesRes] = await Promise.all([
         supabase.from('categories').select('*').order('name'),
@@ -72,9 +75,9 @@ export const UserManagement = ({ shops: propShops, profiles: propProfiles, onRef
     } catch (error) {
       console.error('Error fetching categories and sizes:', error);
     }
-  };
+  }, []);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       const { data: profilesData, error: profilesError } = await supabase
@@ -102,9 +105,9 @@ export const UserManagement = ({ shops: propShops, profiles: propProfiles, onRef
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const handleCreateSubUser = async () => {
+  const handleCreateSubUser = useCallback(async () => {
     if (!newUser.name || !newUser.email || !newUser.password) {
       toast.error('Name, email, and password are required');
       return;
@@ -140,9 +143,9 @@ export const UserManagement = ({ shops: propShops, profiles: propProfiles, onRef
     } finally {
       setCreating(false);
     }
-  };
+  }, [newUser, propOnRefresh, fetchData]);
 
-  const handleDelete = async () => {
+  const handleDelete = useCallback(async () => {
     if (!deleteUser) return;
     setIsDeleting(true);
     try {
@@ -161,14 +164,71 @@ export const UserManagement = ({ shops: propShops, profiles: propProfiles, onRef
     } finally {
       setIsDeleting(false);
     }
-  };
+  }, [deleteUser, propOnRefresh, fetchData]);
 
-  const handleEditUser = (user: Profile) => {
+  const handleToggleStatus = useCallback(async (targetUser: Profile) => {
+    const currentStatus = (targetUser as any).status || 'active';
+    const action = currentStatus === 'active' ? 'pause' : 'unpause';
+    
+    setTogglingStatus(targetUser.id);
+    try {
+      const { data, error } = await supabase.functions.invoke('update-sub-user', {
+        body: { user_id: targetUser.id, action },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      toast.success(`User ${action === 'pause' ? 'paused' : 'activated'} successfully`);
+      if (propOnRefresh) propOnRefresh();
+      else fetchData();
+    } catch (error: any) {
+      toast.error(error.message || `Failed to ${action} user`);
+    } finally {
+      setTogglingStatus(null);
+    }
+  }, [propOnRefresh, fetchData]);
+
+  const handleSaveCredentials = useCallback(async (newEmail: string, newPassword: string) => {
+    if (!credentialsUser) return;
+    if (!newEmail && !newPassword) {
+      toast.error('Provide at least an email or password to update');
+      return;
+    }
+
+    try {
+      const body: any = { user_id: credentialsUser.id };
+      if (newEmail && newEmail !== credentialsUser.email) body.email = newEmail;
+      if (newPassword) body.password = newPassword;
+
+      if (!body.email && !body.password) {
+        toast.info('No changes detected');
+        return;
+      }
+
+      const { data, error } = await supabase.functions.invoke('update-sub-user', {
+        body,
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      toast.success('Credentials updated. User has been logged out and must log in with new credentials.');
+      setIsCredentialsOpen(false);
+      setCredentialsUser(null);
+      if (propOnRefresh) propOnRefresh();
+      else fetchData();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to update credentials');
+    }
+  }, [credentialsUser, propOnRefresh, fetchData]);
+
+  const handleEditUser = useCallback((user: Profile) => {
     setEditingUser(user);
     setIsEditDialogOpen(true);
-  };
+  }, []);
 
-  const handleSaveUser = async (userData: Partial<Profile>) => {
+  const handleSaveUser = useCallback(async (userData: Partial<Profile>) => {
     if (!editingUser) return;
     try {
       const { error } = await supabase
@@ -186,11 +246,12 @@ export const UserManagement = ({ shops: propShops, profiles: propProfiles, onRef
     } catch (error: any) {
       toast.error(error.message || 'Failed to update user');
     }
-  };
+  }, [editingUser, user, refreshProfile, propOnRefresh, fetchData]);
 
   // Filter out the current user and super admins from the list
-  const displayProfiles = profiles.filter(p => 
-    p.id !== currentProfile?.id && p.role !== 'super_admin'
+  const displayProfiles = useMemo(() => 
+    profiles.filter(p => p.id !== currentProfile?.id && p.role !== 'super_admin'),
+    [profiles, currentProfile?.id]
   );
 
   if (loading) {
@@ -220,42 +281,68 @@ export const UserManagement = ({ shops: propShops, profiles: propProfiles, onRef
           </CardHeader>
           <CardContent>
             <div className="grid gap-4">
-              {displayProfiles.map((p) => (
-                <div key={p.id} className="border rounded-lg p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="font-medium">{p.name}</div>
-                      <div className="text-sm text-muted-foreground">
-                        {p.email || p.user_id}
+              {displayProfiles.map((p) => {
+                const status = (p as any).status || 'active';
+                const isPaused = status === 'paused';
+                return (
+                  <div key={p.id} className={`border rounded-lg p-4 ${isPaused ? 'opacity-60 bg-muted/30' : ''}`}>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="font-medium">{p.name}</div>
+                        <div className="text-sm text-muted-foreground">
+                          {p.email || p.user_id}
+                        </div>
+                        <div className="mt-1 flex gap-2 flex-wrap">
+                          <Badge variant="secondary">{p.role}</Badge>
+                          <Badge variant={isPaused ? 'destructive' : 'default'}>
+                            {status}
+                          </Badge>
+                        </div>
                       </div>
-                      <div className="mt-1 flex gap-2">
-                        <Badge variant="secondary">{p.role}</Badge>
-                        <Badge variant={(p as any).status === 'active' ? 'default' : 'destructive'}>
-                          {(p as any).status || 'active'}
-                        </Badge>
+                      <div className="flex gap-1.5">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant={isPaused ? 'default' : 'outline'}
+                              size="sm"
+                              className="p-2"
+                              disabled={togglingStatus === p.id}
+                              onClick={() => handleToggleStatus(p)}
+                            >
+                              {isPaused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent><p>{isPaused ? 'Activate user' : 'Pause user'}</p></TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button variant="outline" size="sm" className="p-2" onClick={() => { setCredentialsUser(p); setIsCredentialsOpen(true); }}>
+                              <KeyRound className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent><p>Change email/password</p></TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button variant="outline" size="sm" onClick={() => handleEditUser(p)} className="p-2">
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent><p>Edit user</p></TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button variant="destructive" size="sm" onClick={() => setDeleteUser(p)} className="p-2">
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent><p>Delete user</p></TooltipContent>
+                        </Tooltip>
                       </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button variant="outline" size="sm" onClick={() => handleEditUser(p)} className="p-2">
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent><p>Edit user</p></TooltipContent>
-                      </Tooltip>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button variant="destructive" size="sm" onClick={() => setDeleteUser(p)} className="p-2">
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent><p>Delete user</p></TooltipContent>
-                      </Tooltip>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
               {displayProfiles.length === 0 && (
                 <p className="text-center text-muted-foreground py-4">No sub-users yet. Click "Add User" to create one.</p>
               )}
@@ -352,6 +439,28 @@ export const UserManagement = ({ shops: propShops, profiles: propProfiles, onRef
           </DialogContent>
         </Dialog>
 
+        {/* Change Credentials Dialog */}
+        <Dialog open={isCredentialsOpen} onOpenChange={(open) => { setIsCredentialsOpen(open); if (!open) setCredentialsUser(null); }}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <KeyRound className="h-5 w-5" />
+                Change Credentials
+              </DialogTitle>
+              <DialogDescription>
+                Update email or password for <strong>{credentialsUser?.name}</strong>. The user will be forced to log out and must log in again with the new credentials.
+              </DialogDescription>
+            </DialogHeader>
+            {credentialsUser && (
+              <CredentialsForm
+                currentEmail={credentialsUser.email || ''}
+                onSave={handleSaveCredentials}
+                onCancel={() => { setIsCredentialsOpen(false); setCredentialsUser(null); }}
+              />
+            )}
+          </DialogContent>
+        </Dialog>
+
         <DeleteConfirmationDialog
           open={!!deleteUser}
           onOpenChange={(open) => !open && setDeleteUser(null)}
@@ -363,6 +472,46 @@ export const UserManagement = ({ shops: propShops, profiles: propProfiles, onRef
         />
       </div>
     </TooltipProvider>
+  );
+};
+
+// Credentials form component
+const CredentialsForm = ({ currentEmail, onSave, onCancel }: { currentEmail: string; onSave: (email: string, password: string) => void; onCancel: () => void }) => {
+  const [email, setEmail] = useState(currentEmail);
+  const [password, setPassword] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (password && password.length < 6) {
+      toast.error('Password must be at least 6 characters');
+      return;
+    }
+    setSaving(true);
+    await onSave(email, password);
+    setSaving(false);
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="space-y-2">
+        <Label>New Email</Label>
+        <Input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="user@example.com" />
+      </div>
+      <div className="space-y-2">
+        <Label>New Password <span className="text-xs text-muted-foreground">(leave blank to keep current)</span></Label>
+        <PasswordInput value={password} onChange={e => setPassword(e.target.value)} placeholder="Min 6 characters" />
+      </div>
+      <div className="p-3 bg-destructive/10 rounded-md text-sm text-destructive">
+        ⚠️ The user will be immediately logged out and must log in with the new credentials.
+      </div>
+      <div className="flex gap-2 pt-2">
+        <Button type="submit" disabled={saving} className="flex-1">
+          {saving ? 'Updating...' : 'Update Credentials'}
+        </Button>
+        <Button type="button" variant="outline" className="flex-1" onClick={onCancel}>Cancel</Button>
+      </div>
+    </form>
   );
 };
 
