@@ -365,6 +365,8 @@ export type Database = {
           email: string | null
           id: string
           last_login_at: string | null
+          max_entries: number | null
+          max_images_per_entry: number | null
           max_shops: number | null
           max_users: number | null
           name: string
@@ -383,6 +385,8 @@ export type Database = {
           email?: string | null
           id: string
           last_login_at?: string | null
+          max_entries?: number | null
+          max_images_per_entry?: number | null
           max_shops?: number | null
           max_users?: number | null
           name: string
@@ -401,6 +405,8 @@ export type Database = {
           email?: string | null
           id?: string
           last_login_at?: string | null
+          max_entries?: number | null
+          max_images_per_entry?: number | null
           max_shops?: number | null
           max_users?: number | null
           name?: string

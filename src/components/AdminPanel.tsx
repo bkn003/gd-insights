@@ -8,6 +8,7 @@ import { SizeManagement } from '@/components/admin/SizeManagement';
 import { CustomerTypeManagement } from '@/components/admin/CustomerTypeManagement';
 import { UserManagement } from '@/components/admin/UserManagement';
 import { WhatsAppSettings } from '@/components/admin/WhatsAppSettings';
+import { FieldVisibilitySettings } from '@/components/admin/FieldVisibilitySettings';
 import { CustomFieldManagement } from '@/components/admin/CustomFieldManagement';
 
 type Shop = Database['public']['Tables']['shops']['Row'];
@@ -31,8 +32,6 @@ export const AdminPanel = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
-      
-      // Clear cached data to ensure forms get fresh data
       localStorage.removeItem('gd_app_data');
       
       const [shopsRes, categoriesRes, sizesRes, customerTypesRes, profilesRes] = await Promise.all([
@@ -68,8 +67,11 @@ export const AdminPanel = () => {
 
   return (
     <div className="space-y-6">
-      {/* WhatsApp Settings */}
-      <WhatsAppSettings />
+      {/* Settings Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <WhatsAppSettings />
+        <FieldVisibilitySettings />
+      </div>
       
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6">
         <ShopManagement shops={shops} onRefresh={fetchData} />
@@ -80,7 +82,6 @@ export const AdminPanel = () => {
       
       <UserManagement shops={shops} profiles={profiles} onRefresh={fetchData} />
       
-      {/* Custom Fields */}
       <CustomFieldManagement />
     </div>
   );
