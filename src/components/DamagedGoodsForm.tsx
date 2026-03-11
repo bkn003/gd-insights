@@ -31,6 +31,12 @@ interface CustomFieldOption {
   value: string;
 }
 
+interface FieldVisibility {
+  category: boolean;
+  size: boolean;
+  customer_type: boolean;
+}
+
 export const DamagedGoodsForm = () => {
   const { profile } = useAuth();
   const { categories, sizes, shops, loading: dataLoading } = useCachedData();
@@ -45,7 +51,11 @@ export const DamagedGoodsForm = () => {
   const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>({});
   const [selectedImages, setSelectedImages] = useState<File[]>([]);
   const [voiceNoteFile, setVoiceNoteFile] = useState<File | null>(null);
-  const [whatsappRedirectEnabled, setWhatsappRedirectEnabled] = useState(false);
+  const [whatsappEnabled, setWhatsappEnabled] = useState(false);
+  const [fieldVisibility, setFieldVisibility] = useState<FieldVisibility>({ category: true, size: true, customer_type: true });
+  const [maxImagesPerEntry, setMaxImagesPerEntry] = useState(10);
+  const [maxEntries, setMaxEntries] = useState<number | null>(null);
+  const [currentEntryCount, setCurrentEntryCount] = useState(0);
   const [notes, setNotes] = useState('');
   
   const [formData, setFormData] = useState({
@@ -55,23 +65,53 @@ export const DamagedGoodsForm = () => {
     customer_type_id: ''
   });
 
-  // Fetch WhatsApp redirect setting
-  const fetchWhatsAppSetting = useCallback(async () => {
+  // Fetch settings and limits
+  const fetchSettings = useCallback(async () => {
     try {
-      const { data } = await supabase
-        .from('app_settings')
-        .select('value')
-        .eq('key', 'whatsapp_redirect_enabled')
-        .single();
+      const [waRes, fvRes] = await Promise.all([
+        supabase.from('app_settings').select('value').eq('key', 'whatsapp_redirect_enabled').single(),
+        supabase.from('app_settings').select('value').eq('key', 'field_visibility').single(),
+      ]);
       
-      if (data) {
-        const value = data.value as { enabled?: boolean };
-        setWhatsappRedirectEnabled(value.enabled ?? false);
+      if (waRes.data) {
+        const val = waRes.data.value as { enabled?: boolean };
+        setWhatsappEnabled(val.enabled ?? false);
+      }
+      if (fvRes.data) {
+        const val = fvRes.data.value as Record<string, boolean>;
+        setFieldVisibility({
+          category: val.category ?? true,
+          size: val.size ?? true,
+          customer_type: val.customer_type ?? true,
+        });
+      }
+
+      // Fetch admin's limits
+      const adminId = (profile as any)?.admin_id || profile?.id;
+      if (adminId) {
+        const { data: adminProfile } = await supabase
+          .from('profiles')
+          .select('max_entries, max_images_per_entry')
+          .eq('id', adminId)
+          .single();
+        
+        if (adminProfile) {
+          setMaxEntries((adminProfile as any).max_entries ?? null);
+          setMaxImagesPerEntry((adminProfile as any).max_images_per_entry ?? 10);
+        }
+
+        // Count current entries
+        const { count } = await supabase
+          .from('goods_damaged_entries')
+          .select('id', { count: 'exact', head: true })
+          .eq('admin_id', adminId);
+        
+        setCurrentEntryCount(count || 0);
       }
     } catch (error) {
-      console.error('Error fetching WhatsApp setting:', error);
+      console.error('Error fetching settings:', error);
     }
-  }, []);
+  }, [profile]);
 
   useEffect(() => {
     const fetchFormData = async () => {
@@ -99,8 +139,8 @@ export const DamagedGoodsForm = () => {
       }
     };
     fetchFormData();
-    fetchWhatsAppSetting();
-  }, [fetchWhatsAppSetting]);
+    fetchSettings();
+  }, [fetchSettings]);
 
   useEffect(() => {
     if (profile?.shop_id) {
@@ -112,46 +152,29 @@ export const DamagedGoodsForm = () => {
       }));
       if (shops.length > 0) {
         const shop = shops.find(s => s.id === profile.shop_id);
-        if (shop) {
-          setUserShop(shop);
-        }
+        if (shop) setUserShop(shop);
       }
     }
   }, [profile, shops]);
 
-  // Auto-focus notes input when component mounts or updates
   useEffect(() => {
     const notesInput = document.querySelector('textarea#notes') as HTMLTextAreaElement;
     if (notesInput && !dataLoading) {
-      setTimeout(() => {
-        notesInput.focus();
-      }, 100);
+      setTimeout(() => notesInput.focus(), 100);
     }
   }, [dataLoading]);
+
   const uploadImages = async (entryId: string) => {
     if (selectedImages.length === 0) return;
     const uploadPromises = selectedImages.map(async (file, index) => {
       const fileName = `${entryId}/${Date.now()}-${index}-${file.name}`;
-      const {
-        data,
-        error
-      } = await supabase.storage.from('gd-entry-images').upload(fileName, file, {
+      const { data, error } = await supabase.storage.from('gd-entry-images').upload(fileName, file, {
         cacheControl: '3600',
         upsert: false
       });
       if (error) throw error;
-
-      // Get public URL
-      const {
-        data: {
-          publicUrl
-        }
-      } = supabase.storage.from('gd-entry-images').getPublicUrl(data.path);
-
-      // Save image record to database
-      const {
-        error: dbError
-      } = await supabase.from('gd_entry_images').insert({
+      const { data: { publicUrl } } = supabase.storage.from('gd-entry-images').getPublicUrl(data.path);
+      const { error: dbError } = await supabase.from('gd_entry_images').insert({
         gd_entry_id: entryId,
         image_url: publicUrl,
         image_name: file.name,
@@ -165,33 +188,60 @@ export const DamagedGoodsForm = () => {
 
   const uploadVoiceNote = async (entryId: string): Promise<string | null> => {
     if (!voiceNoteFile) return null;
-
     const fileName = `${entryId}/${Date.now()}-${voiceNoteFile.name}`;
     const { data, error } = await supabase.storage
       .from('gd-voice-notes')
-      .upload(fileName, voiceNoteFile, {
-        cacheControl: '3600',
-        upsert: false
-      });
-
+      .upload(fileName, voiceNoteFile, { cacheControl: '3600', upsert: false });
     if (error) throw error;
-
-    const { data: { publicUrl } } = supabase.storage
-      .from('gd-voice-notes')
-      .getPublicUrl(data.path);
-
+    const { data: { publicUrl } } = supabase.storage.from('gd-voice-notes').getPublicUrl(data.path);
     return publicUrl;
   };
+
+  const buildWhatsAppMessage = () => {
+    const categoryName = categories.find(c => c.id === formData.category_id)?.name || '';
+    const sizeName = sizes.find(s => s.id === formData.size_id)?.size || '';
+    const shopName = userShop?.name || '';
+    const ctName = customerTypes.find(ct => ct.id === formData.customer_type_id)?.name || '';
+    
+    let msg = `📋 *GD Report*\n`;
+    msg += `👤 ${profile?.name || ''}\n`;
+    if (shopName) msg += `🏪 Shop: ${shopName}\n`;
+    if (categoryName && fieldVisibility.category) msg += `📦 Category: ${categoryName}\n`;
+    if (sizeName && fieldVisibility.size) msg += `📏 Size: ${sizeName}\n`;
+    if (ctName && fieldVisibility.customer_type) msg += `👥 Customer: ${ctName}\n`;
+    
+    // Custom field values
+    customFields.forEach(field => {
+      const optId = customFieldValues[field.id];
+      if (optId) {
+        const opts = customFieldOptions[field.id] || [];
+        const opt = opts.find(o => o.id === optId);
+        if (opt) msg += `🏷️ ${field.name}: ${opt.value}\n`;
+      }
+    });
+    
+    if (notes.trim()) msg += `📝 Notes: ${notes.trim()}\n`;
+    msg += `📅 ${new Date().toLocaleDateString()}`;
+    
+    return encodeURIComponent(msg);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!profile) return;
 
-    // Validation: Notes OR Voice Note is required
     const hasNotes = notes.trim().length > 0;
     const hasVoiceNote = voiceNoteFile !== null;
 
-    if (formData.category_id === 'none' || formData.size_id === 'none' || formData.shop_id === 'none' || !formData.customer_type_id) {
-      toast.error('Please fill in all required fields including customer type');
+    // Validate visible required fields
+    const missingFields: string[] = [];
+    if (fieldVisibility.category && formData.category_id === 'none') missingFields.push('Category');
+    if (fieldVisibility.size && formData.size_id === 'none') missingFields.push('Size');
+    if (formData.shop_id === 'none') missingFields.push('Shop');
+    if (fieldVisibility.customer_type && !formData.customer_type_id) missingFields.push('Customer Type');
+
+    if (missingFields.length > 0) {
+      toast.error(`Please fill in: ${missingFields.join(', ')}`);
       return;
     }
 
@@ -204,8 +254,13 @@ export const DamagedGoodsForm = () => {
       return;
     }
 
-    // Validate UUIDs to prevent injection
-    if (!isValidUUID(formData.category_id) || !isValidUUID(formData.size_id) || !isValidUUID(formData.shop_id) || (formData.customer_type_id && !isValidUUID(formData.customer_type_id))) {
+    // Validate UUIDs
+    const uuidsToCheck = [formData.shop_id];
+    if (fieldVisibility.category && formData.category_id !== 'none') uuidsToCheck.push(formData.category_id);
+    if (fieldVisibility.size && formData.size_id !== 'none') uuidsToCheck.push(formData.size_id);
+    if (formData.customer_type_id) uuidsToCheck.push(formData.customer_type_id);
+    
+    if (uuidsToCheck.some(id => !isValidUUID(id))) {
       toast.error('Invalid form data. Please refresh and try again.');
       return;
     }
@@ -215,47 +270,55 @@ export const DamagedGoodsForm = () => {
       return;
     }
 
+    // Check entry limit
+    if (maxEntries !== null && currentEntryCount >= maxEntries) {
+      toast.error(`Entry limit reached (${maxEntries}). Contact your administrator to increase the limit.`);
+      return;
+    }
+
+    // Check image limit
+    if (selectedImages.length > maxImagesPerEntry) {
+      toast.error(`Maximum ${maxImagesPerEntry} images per entry allowed.`);
+      return;
+    }
+
     setLoading(true);
 
     const sanitizedNotes = sanitizeNotes(notes.trim(), 1000);
 
-    const entryData = {
-      category_id: formData.category_id,
-      size_id: formData.size_id,
+    const entryData: any = {
       shop_id: formData.shop_id,
-      customer_type_id: formData.customer_type_id,
       employee_id: profile.id,
       employee_name: profile.name,
       notes: sanitizedNotes || 'Voice note attached',
       admin_id: (profile as any)?.admin_id || profile.id,
     };
+    
+    // Only include visible fields
+    if (fieldVisibility.category && formData.category_id !== 'none') {
+      entryData.category_id = formData.category_id;
+    } else {
+      // Use first category as default if hidden
+      entryData.category_id = categories.length > 0 ? categories[0].id : formData.category_id;
+    }
+    if (fieldVisibility.size && formData.size_id !== 'none') {
+      entryData.size_id = formData.size_id;
+    } else {
+      entryData.size_id = sizes.length > 0 ? sizes[0].id : formData.size_id;
+    }
+    if (fieldVisibility.customer_type && formData.customer_type_id) {
+      entryData.customer_type_id = formData.customer_type_id;
+    }
 
     try {
-      // If offline, save to IndexedDB
       if (!isOnline) {
         const saved = await saveOfflineEntry(entryData, selectedImages);
         if (saved) {
-          // Reset form
-          setFormData({
-            category_id: (profile as any)?.default_category_id || 'none',
-            size_id: (profile as any)?.default_size_id || 'none',
-            shop_id: profile?.shop_id || 'none',
-            customer_type_id: ''
-          });
-          setNotes('');
-          setSelectedImages([]);
-          setVoiceNoteFile(null);
-          setCustomFieldValues({});
-
-          setTimeout(() => {
-            const notesInput = document.querySelector('textarea#notes') as HTMLTextAreaElement;
-            if (notesInput) notesInput.focus();
-          }, 100);
+          resetForm();
         }
         return;
       }
 
-      // Online: Save directly to Supabase
       const { data: createdEntry, error: entryError } = await supabase
         .from('goods_damaged_entries')
         .insert(entryData)
@@ -264,20 +327,14 @@ export const DamagedGoodsForm = () => {
 
       if (entryError) throw entryError;
 
-      // Upload voice note if any
       let voiceNoteUrl: string | null = null;
       if (voiceNoteFile) {
         voiceNoteUrl = await uploadVoiceNote(createdEntry.id);
         if (voiceNoteUrl) {
-          // Update entry with voice note URL
-          await supabase
-            .from('goods_damaged_entries')
-            .update({ voice_note_url: voiceNoteUrl })
-            .eq('id', createdEntry.id);
+          await supabase.from('goods_damaged_entries').update({ voice_note_url: voiceNoteUrl }).eq('id', createdEntry.id);
         }
       }
 
-      // Upload images if any
       if (selectedImages.length > 0) {
         await uploadImages(createdEntry.id);
       }
@@ -291,22 +348,18 @@ export const DamagedGoodsForm = () => {
           custom_field_option_id: optionId,
         }));
       if (customValueInserts.length > 0) {
-        const { error: cvError } = await (supabase.from('gd_entry_custom_values') as any)
-          .insert(customValueInserts);
+        const { error: cvError } = await (supabase.from('gd_entry_custom_values') as any).insert(customValueInserts);
         if (cvError) console.error('Error saving custom field values:', cvError);
       }
 
       const successParts = [];
       if (selectedImages.length > 0) successParts.push(`${selectedImages.length} image(s)`);
       if (voiceNoteUrl) successParts.push('voice note');
+      toast.success(successParts.length > 0
+        ? `GD entry created with ${successParts.join(' and ')}!`
+        : 'GD entry created successfully!'
+      );
 
-      if (successParts.length > 0) {
-        toast.success(`GD entry created with ${successParts.join(' and ')}!`);
-      } else {
-        toast.success('GD entry created successfully!');
-      }
-
-      // Send notification to service worker for admin users
       if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
         navigator.serviceWorker.controller.postMessage({
           type: 'NEW_GD_ENTRY',
@@ -316,37 +369,19 @@ export const DamagedGoodsForm = () => {
         });
       }
 
-      // Invalidate relevant queries to refresh Dashboard and Reports
       await queryClient.invalidateQueries({ queryKey: ['dashboard-entries'] });
       await queryClient.invalidateQueries({ queryKey: ['reports-data'] });
 
-      // Reset form
-      setFormData({
-        category_id: (profile as any)?.default_category_id || 'none',
-        size_id: (profile as any)?.default_size_id || 'none',
-        shop_id: profile?.shop_id || 'none',
-        customer_type_id: ''
-      });
-      setNotes('');
-      setSelectedImages([]);
-      setVoiceNoteFile(null);
-      setCustomFieldValues({});
-
-      // WhatsApp redirect if enabled and shop has a group link
-      if (whatsappRedirectEnabled && userShop?.whatsapp_group_link) {
-        toast.success('Redirecting to WhatsApp group...');
-        setTimeout(() => {
-          window.open(userShop.whatsapp_group_link, '_blank');
-        }, 1000);
+      // WhatsApp deep share
+      if (whatsappEnabled) {
+        const msg = buildWhatsAppMessage();
+        const whatsappUrl = `https://wa.me/?text=${msg}`;
+        toast.success('Opening WhatsApp to share...');
+        setTimeout(() => window.open(whatsappUrl, '_blank'), 800);
       }
 
-      // Refocus notes input after successful submission
-      setTimeout(() => {
-        const notesInput = document.querySelector('textarea#notes') as HTMLTextAreaElement;
-        if (notesInput) {
-          notesInput.focus();
-        }
-      }, 100);
+      setCurrentEntryCount(prev => prev + 1);
+      resetForm();
     } catch (error: any) {
       console.error('Error creating entry:', error);
       toast.error(error.message || 'Failed to create entry');
@@ -354,133 +389,168 @@ export const DamagedGoodsForm = () => {
       setLoading(false);
     }
   };
-  const handleInputChange = (field: string, value: string) => {
+
+  const resetForm = () => {
     setFormData({
-      ...formData,
-      [field]: value
+      category_id: (profile as any)?.default_category_id || 'none',
+      size_id: (profile as any)?.default_size_id || 'none',
+      shop_id: profile?.shop_id || 'none',
+      customer_type_id: ''
     });
+    setNotes('');
+    setSelectedImages([]);
+    setVoiceNoteFile(null);
+    setCustomFieldValues({});
+    setTimeout(() => {
+      const notesInput = document.querySelector('textarea#notes') as HTMLTextAreaElement;
+      if (notesInput) notesInput.focus();
+    }, 100);
   };
+
+  const handleInputChange = (field: string, value: string) => {
+    setFormData({ ...formData, [field]: value });
+  };
+
   if (dataLoading) {
     return <div className="flex justify-center items-center h-64">Loading form data...</div>;
   }
-  return <Card className="w-full max-w-2xl mx-auto">
-    <CardHeader>
-      <CardTitle className="flex items-center justify-between">
-        <span>Report GD</span>
-        <div className="flex items-center gap-2 text-sm font-normal">
-          {!isOnline && (
-            <span className="text-orange-500 flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse"></span>
-              Offline Mode
-            </span>
-          )}
-          {pendingCount > 0 && (
-            <span className="text-blue-500">
-              {pendingCount} pending
-            </span>
-          )}
-        </div>
-      </CardTitle>
-      <CardDescription>
-        Fill out this form to report GD in your store
-      </CardDescription>
-    </CardHeader>
-    <CardContent>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="category">Category *</Label>
-            <Select value={formData.category_id} onValueChange={value => handleInputChange('category_id', value)} required>
-              <SelectTrigger>
-                <SelectValue placeholder="Select a category" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">Select a category</SelectItem>
-                {categories.map(category => <SelectItem key={category.id} value={category.id}>
-                  {category.name}
-                </SelectItem>)}
-              </SelectContent>
-            </Select>
+
+  const entryLimitReached = maxEntries !== null && currentEntryCount >= maxEntries;
+
+  return (
+    <Card className="w-full max-w-2xl mx-auto">
+      <CardHeader>
+        <CardTitle className="flex items-center justify-between">
+          <span>Report GD</span>
+          <div className="flex items-center gap-2 text-sm font-normal">
+            {entryLimitReached && (
+              <span className="text-destructive flex items-center gap-1">
+                Entry limit reached
+              </span>
+            )}
+            {maxEntries !== null && !entryLimitReached && (
+              <span className="text-muted-foreground">
+                {currentEntryCount}/{maxEntries}
+              </span>
+            )}
+            {!isOnline && (
+              <span className="text-orange-500 flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse"></span>
+                Offline Mode
+              </span>
+            )}
+            {pendingCount > 0 && (
+              <span className="text-blue-500">{pendingCount} pending</span>
+            )}
+          </div>
+        </CardTitle>
+        <CardDescription>Fill out this form to report GD in your store</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {fieldVisibility.category && (
+              <div className="space-y-2">
+                <Label htmlFor="category">Category *</Label>
+                <Select value={formData.category_id} onValueChange={value => handleInputChange('category_id', value)} required>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Select a category</SelectItem>
+                    {categories.map(category => (
+                      <SelectItem key={category.id} value={category.id}>{category.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {fieldVisibility.size && (
+              <div className="space-y-2">
+                <Label htmlFor="size">Size *</Label>
+                <Select value={formData.size_id} onValueChange={value => handleInputChange('size_id', value)} required>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a size" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Select a size</SelectItem>
+                    {sizes.map(size => (
+                      <SelectItem key={size.id} value={size.id}>{size.size}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="size">Size *</Label>
-            <Select value={formData.size_id} onValueChange={value => handleInputChange('size_id', value)} required>
-              <SelectTrigger>
-                <SelectValue placeholder="Select a size" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">Select a size</SelectItem>
-                {sizes.map(size => <SelectItem key={size.id} value={size.id}>
-                  {size.size}
-                </SelectItem>)}
-              </SelectContent>
-            </Select>
+            <Label htmlFor="shop">Shop *</Label>
+            <Input value={userShop?.name || (profile?.shop_id ? 'Loading shop...' : 'No shop assigned')} disabled className="bg-muted cursor-not-allowed" />
+            <p className="text-sm text-muted-foreground">
+              Shop is automatically assigned based on your profile
+            </p>
           </div>
-        </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="shop">Shop *</Label>
-          <Input value={userShop?.name || (profile?.shop_id ? 'Loading shop...' : 'No shop assigned')} disabled className="bg-gray-100 cursor-not-allowed" />
-          <p className="text-sm text-muted-foreground">
-            Shop is automatically assigned based on your profile
-          </p>
-        </div>
-
-        <div className="space-y-3">
-          <Label>Type of Customer *</Label>
-          <RadioGroup value={formData.customer_type_id} onValueChange={value => handleInputChange('customer_type_id', value)} required>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {customerTypes.map(type => <div key={type.id} className="flex items-center space-x-2 border rounded-md p-3 hover:bg-accent cursor-pointer">
-                <RadioGroupItem value={type.id} id={type.id} />
-                <Label htmlFor={type.id} className="cursor-pointer flex-1">{type.name}</Label>
-              </div>)}
-            </div>
-          </RadioGroup>
-          {customerTypes.length === 0 && <p className="text-sm text-muted-foreground">No customer types available. Please contact admin.</p>}
-        </div>
-
-        {/* Custom Fields */}
-        {customFields.map((field) => {
-          const fieldOptions = customFieldOptions[field.id] || [];
-          if (fieldOptions.length === 0) return null;
-          return (
-            <div key={field.id} className="space-y-2">
-              <Label>{field.name} {field.is_mandatory && '*'}</Label>
-              <Select
-                value={customFieldValues[field.id] || ''}
-                onValueChange={(value) => setCustomFieldValues(prev => ({ ...prev, [field.id]: value }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder={`Select ${field.name.toLowerCase()}`} />
-                </SelectTrigger>
-                <SelectContent>
-                  {fieldOptions.map((opt) => (
-                    <SelectItem key={opt.id} value={opt.id}>{opt.value}</SelectItem>
+          {fieldVisibility.customer_type && (
+            <div className="space-y-3">
+              <Label>Type of Customer *</Label>
+              <RadioGroup value={formData.customer_type_id} onValueChange={value => handleInputChange('customer_type_id', value)} required>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {customerTypes.map(type => (
+                    <div key={type.id} className="flex items-center space-x-2 border rounded-md p-3 hover:bg-accent cursor-pointer">
+                      <RadioGroupItem value={type.id} id={type.id} />
+                      <Label htmlFor={type.id} className="cursor-pointer flex-1">{type.name}</Label>
+                    </div>
                   ))}
-                </SelectContent>
-              </Select>
+                </div>
+              </RadioGroup>
+              {customerTypes.length === 0 && <p className="text-sm text-muted-foreground">No customer types available. Please contact admin.</p>}
             </div>
-          );
-        })}
+          )}
 
-        <div className="space-y-2">
-          <Label>Notes / Voice / Images {!voiceNoteFile && !notes.trim() && '*'}</Label>
-          <WhatsAppInputBar
-            notes={notes}
-            onNotesChange={setNotes}
-            onImagesChange={setSelectedImages}
-            onVoiceNoteChange={setVoiceNoteFile}
-            voiceNoteFile={voiceNoteFile}
-            maxImages={10}
-            disabled={loading}
-          />
-        </div>
+          {/* Custom Fields */}
+          {customFields.map((field) => {
+            const fieldOptions = customFieldOptions[field.id] || [];
+            if (fieldOptions.length === 0) return null;
+            return (
+              <div key={field.id} className="space-y-2">
+                <Label>{field.name} {field.is_mandatory && '*'}</Label>
+                <Select
+                  value={customFieldValues[field.id] || ''}
+                  onValueChange={(value) => setCustomFieldValues(prev => ({ ...prev, [field.id]: value }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={`Select ${field.name.toLowerCase()}`} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {fieldOptions.map((opt) => (
+                      <SelectItem key={opt.id} value={opt.id}>{opt.value}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            );
+          })}
 
-        <Button type="submit" className="w-full" disabled={loading}>
-          {loading ? 'Submitting...' : 'Submit Report'}
-        </Button>
-      </form>
-    </CardContent>
-  </Card>;
+          <div className="space-y-2">
+            <Label>Notes / Voice / Images {!voiceNoteFile && !notes.trim() && '*'}</Label>
+            <WhatsAppInputBar
+              notes={notes}
+              onNotesChange={setNotes}
+              onImagesChange={setSelectedImages}
+              onVoiceNoteChange={setVoiceNoteFile}
+              voiceNoteFile={voiceNoteFile}
+              maxImages={maxImagesPerEntry}
+              disabled={loading}
+            />
+          </div>
+
+          <Button type="submit" className="w-full" disabled={loading || entryLimitReached}>
+            {loading ? 'Submitting...' : entryLimitReached ? 'Entry Limit Reached' : 'Submit Report'}
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
+  );
 };
