@@ -9,7 +9,6 @@ interface VoiceNotePlayerProps {
 
 const PLAYBACK_SPEEDS = [0.5, 1, 1.5, 2];
 
-// Format seconds to M:SS
 const formatTime = (seconds: number): string => {
   if (isNaN(seconds) || !isFinite(seconds)) return '0:00';
   const mins = Math.floor(seconds / 60);
@@ -23,8 +22,6 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
   const [isLoaded, setIsLoaded] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
-  
-  // Use ref for immediate progress updates (no re-render delay)
   const [progressPercent, setProgressPercent] = useState(0);
   const [displayTime, setDisplayTime] = useState(0);
   
@@ -32,8 +29,13 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
   const waveformRef = useRef<HTMLDivElement | null>(null);
   const waveformCompactRef = useRef<HTMLDivElement | null>(null);
   const animationFrameRef = useRef<number | null>(null);
+  const isPlayingRef = useRef(false);
+  const isDraggingRef = useRef(false);
 
-  // Generate pseudo-waveform bars (consistent pattern per URL)
+  // Keep refs in sync with state to avoid stale closures
+  useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
+  useEffect(() => { isDraggingRef.current = isDragging; }, [isDragging]);
+
   const waveformBars = useMemo(() => {
     const bars: number[] = [];
     const numBars = compact ? 35 : 50;
@@ -49,85 +51,90 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
     return bars;
   }, [voiceUrl, compact]);
 
-  // Animation frame update for smooth progress
+  // Animation frame loop using refs to avoid stale closures
   const updateProgressFrame = useCallback(() => {
-    if (audioRef.current && !isDragging) {
+    if (audioRef.current && !isDraggingRef.current) {
       const currentTime = audioRef.current.currentTime;
       const audioDuration = audioRef.current.duration || 1;
-      const percent = (currentTime / audioDuration) * 100;
-      
-      setProgressPercent(percent);
+      setProgressPercent((currentTime / audioDuration) * 100);
       setDisplayTime(currentTime);
     }
     
-    if (isPlaying && !isDragging) {
+    if (isPlayingRef.current && !isDraggingRef.current) {
       animationFrameRef.current = requestAnimationFrame(updateProgressFrame);
     }
-  }, [isPlaying, isDragging]);
+  }, []);
 
-  // Start/stop animation frame loop based on play state
-  useEffect(() => {
-    if (isPlaying && !isDragging) {
-      animationFrameRef.current = requestAnimationFrame(updateProgressFrame);
+  const startAnimationLoop = useCallback(() => {
+    if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+    animationFrameRef.current = requestAnimationFrame(updateProgressFrame);
+  }, [updateProgressFrame]);
+
+  const stopAnimationLoop = useCallback(() => {
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
     }
-    
+  }, []);
+
+  // Cleanup on unmount
+  useEffect(() => {
     return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-        animationFrameRef.current = null;
+      stopAnimationLoop();
+      if (audioRef.current) {
+        audioRef.current.pause();
       }
     };
-  }, [isPlaying, isDragging, updateProgressFrame]);
+  }, [stopAnimationLoop]);
 
-  // Update playback speed when changed
   useEffect(() => {
     if (audioRef.current) {
       audioRef.current.playbackRate = playbackSpeed;
     }
   }, [playbackSpeed]);
 
-  const cyclePlaybackSpeed = () => {
+  const cyclePlaybackSpeed = useCallback(() => {
     const currentIndex = PLAYBACK_SPEEDS.indexOf(playbackSpeed);
     const nextIndex = (currentIndex + 1) % PLAYBACK_SPEEDS.length;
     setPlaybackSpeed(PLAYBACK_SPEEDS[nextIndex]);
-  };
+  }, [playbackSpeed]);
 
-  const togglePlay = () => {
-    if (audioRef.current) {
-      if (isPlaying) {
-        audioRef.current.pause();
-        setIsPlaying(false);
-        if (animationFrameRef.current) {
-          cancelAnimationFrame(animationFrameRef.current);
-        }
-      } else {
-        audioRef.current.play().catch(console.error);
+  const togglePlay = useCallback(() => {
+    if (!audioRef.current) return;
+    
+    if (isPlayingRef.current) {
+      audioRef.current.pause();
+      setIsPlaying(false);
+      isPlayingRef.current = false;
+      stopAnimationLoop();
+    } else {
+      audioRef.current.play().then(() => {
         setIsPlaying(true);
-      }
+        isPlayingRef.current = true;
+        startAnimationLoop();
+      }).catch(console.error);
     }
-  };
+  }, [startAnimationLoop, stopAnimationLoop]);
 
-  const handleLoadedMetadata = () => {
+  const handleLoadedMetadata = useCallback(() => {
     if (audioRef.current) {
       setDuration(audioRef.current.duration);
       setIsLoaded(true);
       audioRef.current.playbackRate = playbackSpeed;
     }
-  };
+  }, [playbackSpeed]);
 
-  const handleEnded = () => {
+  const handleEnded = useCallback(() => {
     setIsPlaying(false);
+    isPlayingRef.current = false;
+    stopAnimationLoop();
     if (audioRef.current) {
       audioRef.current.currentTime = 0;
     }
     setProgressPercent(0);
     setDisplayTime(0);
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-    }
-  };
+  }, [stopAnimationLoop]);
 
-  // Calculate new time from click/touch position
   const getTimeFromPosition = useCallback((clientX: number): number => {
     const ref = compact ? waveformCompactRef.current : waveformRef.current;
     if (!ref || !duration) return 0;
@@ -136,27 +143,25 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
     return position * duration;
   }, [compact, duration]);
 
-  // Seek to position and update UI immediately
   const seekTo = useCallback((newTime: number) => {
     if (audioRef.current && duration > 0) {
       const clampedTime = Math.max(0, Math.min(newTime, duration));
       audioRef.current.currentTime = clampedTime;
-      const percent = (clampedTime / duration) * 100;
-      setProgressPercent(percent);
+      setProgressPercent((clampedTime / duration) * 100);
       setDisplayTime(clampedTime);
     }
   }, [duration]);
 
-  // Mouse/Touch handlers for drag seeking (also handles click-to-seek)
-  const handlePointerDown = (e: React.MouseEvent | React.TouchEvent) => {
+  const handlePointerDown = useCallback((e: React.MouseEvent | React.TouchEvent) => {
     if (!isLoaded || !duration) return;
     e.preventDefault();
-    e.stopPropagation(); // Prevent ScrollArea/Dialog from intercepting
+    e.stopPropagation();
     setIsDragging(true);
+    isDraggingRef.current = true;
+    stopAnimationLoop();
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-    const newTime = getTimeFromPosition(clientX);
-    seekTo(newTime);
-  };
+    seekTo(getTimeFromPosition(clientX));
+  }, [isLoaded, duration, getTimeFromPosition, seekTo, stopAnimationLoop]);
 
   useEffect(() => {
     if (!isDragging) return;
@@ -169,9 +174,9 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
 
     const handleUp = () => {
       setIsDragging(false);
-      // Restart animation if playing
-      if (isPlaying) {
-        animationFrameRef.current = requestAnimationFrame(updateProgressFrame);
+      isDraggingRef.current = false;
+      if (isPlayingRef.current) {
+        startAnimationLoop();
       }
     };
 
@@ -186,9 +191,9 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
       window.removeEventListener('touchmove', handleMove);
       window.removeEventListener('touchend', handleUp);
     };
-  }, [isDragging, isPlaying, updateProgressFrame, getTimeFromPosition, seekTo]);
+  }, [isDragging, getTimeFromPosition, seekTo, startAnimationLoop]);
 
-  // Compact mode for table cells (like WhatsApp)
+  // Compact mode
   if (compact) {
     return (
       <div className="flex items-center gap-1.5 min-w-[180px] max-w-[240px] mx-auto bg-muted/40 rounded-full px-1.5 py-1">
@@ -199,8 +204,6 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
           onLoadedMetadata={handleLoadedMetadata}
           onEnded={handleEnded}
         />
-
-        {/* Play/Pause Button */}
         <Button
           type="button"
           variant="ghost"
@@ -208,21 +211,14 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
           onClick={togglePlay}
           className="h-7 w-7 shrink-0 rounded-full bg-primary text-primary-foreground hover:bg-primary/90"
         >
-          {isPlaying ? (
-            <Pause className="h-3 w-3 fill-current" />
-          ) : (
-            <Play className="h-3 w-3 fill-current ml-0.5" />
-          )}
+          {isPlaying ? <Pause className="h-3 w-3 fill-current" /> : <Play className="h-3 w-3 fill-current ml-0.5" />}
         </Button>
-
-        {/* Waveform with Seek Bar */}
         <div
           ref={waveformCompactRef}
           className="flex-1 h-8 cursor-pointer relative select-none overflow-hidden touch-none"
           onMouseDown={handlePointerDown}
           onTouchStart={handlePointerDown}
         >
-          {/* Waveform Bars */}
           <div className="absolute inset-0 flex items-center gap-px pointer-events-none">
             {waveformBars.map((height, index) => {
               const barPercent = ((index + 0.5) / waveformBars.length) * 100;
@@ -235,16 +231,12 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
                     height: `${height * 100}%`,
                     minWidth: '2px',
                     maxWidth: '3px',
-                    backgroundColor: isPlayed
-                      ? 'hsl(var(--primary))'
-                      : 'hsl(var(--muted-foreground) / 0.3)',
+                    backgroundColor: isPlayed ? 'hsl(var(--primary))' : 'hsl(var(--muted-foreground) / 0.3)',
                   }}
                 />
               );
             })}
           </div>
-
-          {/* Seek Dot/Circle (WhatsApp style) */}
           <div
             className="absolute top-1/2 z-20 pointer-events-none"
             style={{
@@ -253,18 +245,12 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
               transition: isDragging ? 'none' : 'left 0.05s linear'
             }}
           >
-            <div
-              className="w-3 h-3 rounded-full bg-primary shadow-md border-2 border-background"
-            />
+            <div className="w-3 h-3 rounded-full bg-primary shadow-md border-2 border-background" />
           </div>
         </div>
-
-        {/* Time display */}
         <span className="text-[10px] text-muted-foreground tabular-nums min-w-[24px] text-right">
           {isPlaying || displayTime > 0 ? formatTime(displayTime) : formatTime(duration)}
         </span>
-
-        {/* Speed Control Button */}
         <Button
           type="button"
           variant="ghost"
@@ -278,7 +264,7 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
     );
   }
 
-  // Full mode for card view
+  // Full mode
   return (
     <div className="flex items-center gap-3 p-3 bg-muted/30 rounded-2xl border border-border/50">
       <audio
@@ -288,8 +274,6 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
         onLoadedMetadata={handleLoadedMetadata}
         onEnded={handleEnded}
       />
-
-      {/* Play/Pause Button */}
       <Button
         type="button"
         variant="ghost"
@@ -297,21 +281,14 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
         onClick={togglePlay}
         className="h-11 w-11 shrink-0 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 shadow-md"
       >
-        {isPlaying ? (
-          <Pause className="h-5 w-5 fill-current" />
-        ) : (
-          <Play className="h-5 w-5 fill-current ml-0.5" />
-        )}
+        {isPlaying ? <Pause className="h-5 w-5 fill-current" /> : <Play className="h-5 w-5 fill-current ml-0.5" />}
       </Button>
-
-      {/* Waveform with Seek Bar */}
       <div
         ref={waveformRef}
         className="flex-1 h-10 cursor-pointer relative select-none overflow-hidden touch-none"
         onMouseDown={handlePointerDown}
         onTouchStart={handlePointerDown}
       >
-        {/* Waveform Bars */}
         <div className="absolute inset-0 flex items-center gap-[1px] pointer-events-none">
           {waveformBars.map((height, index) => {
             const barPercent = ((index + 0.5) / waveformBars.length) * 100;
@@ -324,16 +301,12 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
                   height: `${height * 100}%`,
                   minWidth: '2px',
                   maxWidth: '4px',
-                  backgroundColor: isPlayed
-                    ? 'hsl(var(--primary))'
-                    : 'hsl(var(--muted-foreground) / 0.3)',
+                  backgroundColor: isPlayed ? 'hsl(var(--primary))' : 'hsl(var(--muted-foreground) / 0.3)',
                 }}
               />
             );
           })}
         </div>
-
-        {/* Seek Dot/Circle (WhatsApp style) */}
         <div
           className="absolute top-1/2 z-20 pointer-events-none"
           style={{
@@ -342,13 +315,9 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
             transition: isDragging ? 'none' : 'left 0.05s linear'
           }}
         >
-          <div
-            className="w-4 h-4 rounded-full bg-primary shadow-lg border-2 border-background"
-          />
+          <div className="w-4 h-4 rounded-full bg-primary shadow-lg border-2 border-background" />
         </div>
       </div>
-
-      {/* Time display */}
       <div className="flex flex-col items-end min-w-[36px]">
         <span className="text-sm text-foreground tabular-nums font-medium">
           {isPlaying || displayTime > 0 ? formatTime(displayTime) : formatTime(duration)}
@@ -359,8 +328,6 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
           </span>
         )}
       </div>
-
-      {/* Speed Control Button */}
       <Button
         type="button"
         variant="outline"

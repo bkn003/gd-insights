@@ -35,6 +35,7 @@ interface FieldVisibility {
   category: boolean;
   size: boolean;
   customer_type: boolean;
+  shops: boolean;
 }
 
 export const DamagedGoodsForm = () => {
@@ -52,7 +53,7 @@ export const DamagedGoodsForm = () => {
   const [selectedImages, setSelectedImages] = useState<File[]>([]);
   const [voiceNoteFile, setVoiceNoteFile] = useState<File | null>(null);
   const [whatsappEnabled, setWhatsappEnabled] = useState(false);
-  const [fieldVisibility, setFieldVisibility] = useState<FieldVisibility>({ category: true, size: true, customer_type: true });
+  const [fieldVisibility, setFieldVisibility] = useState<FieldVisibility>({ category: true, size: true, customer_type: true, shops: true });
   const [maxImagesPerEntry, setMaxImagesPerEntry] = useState(10);
   const [maxEntries, setMaxEntries] = useState<number | null>(null);
   const [currentEntryCount, setCurrentEntryCount] = useState(0);
@@ -65,12 +66,15 @@ export const DamagedGoodsForm = () => {
     customer_type_id: ''
   });
 
+  const adminId = (profile as any)?.admin_id || profile?.id;
+
   // Fetch settings and limits
   const fetchSettings = useCallback(async () => {
+    if (!adminId) return;
     try {
       const [waRes, fvRes] = await Promise.all([
-        supabase.from('app_settings').select('value').eq('key', 'whatsapp_redirect_enabled').single(),
-        supabase.from('app_settings').select('value').eq('key', 'field_visibility').single(),
+        supabase.from('app_settings').select('value').eq('key', 'whatsapp_redirect_enabled').eq('admin_id', adminId).maybeSingle(),
+        supabase.from('app_settings').select('value').eq('key', 'field_visibility').eq('admin_id', adminId).maybeSingle(),
       ]);
       
       if (waRes.data) {
@@ -83,35 +87,33 @@ export const DamagedGoodsForm = () => {
           category: val.category ?? true,
           size: val.size ?? true,
           customer_type: val.customer_type ?? true,
+          shops: val.shops ?? true,
         });
       }
 
       // Fetch admin's limits
-      const adminId = (profile as any)?.admin_id || profile?.id;
-      if (adminId) {
-        const { data: adminProfile } = await supabase
-          .from('profiles')
-          .select('max_entries, max_images_per_entry')
-          .eq('id', adminId)
-          .single();
-        
-        if (adminProfile) {
-          setMaxEntries((adminProfile as any).max_entries ?? null);
-          setMaxImagesPerEntry((adminProfile as any).max_images_per_entry ?? 10);
-        }
-
-        // Count current entries
-        const { count } = await supabase
-          .from('goods_damaged_entries')
-          .select('id', { count: 'exact', head: true })
-          .eq('admin_id', adminId);
-        
-        setCurrentEntryCount(count || 0);
+      const { data: adminProfile } = await supabase
+        .from('profiles')
+        .select('max_entries, max_images_per_entry')
+        .eq('id', adminId)
+        .single();
+      
+      if (adminProfile) {
+        setMaxEntries((adminProfile as any).max_entries ?? null);
+        setMaxImagesPerEntry((adminProfile as any).max_images_per_entry ?? 10);
       }
+
+      // Count current entries
+      const { count } = await supabase
+        .from('goods_damaged_entries')
+        .select('id', { count: 'exact', head: true })
+        .eq('admin_id', adminId);
+      
+      setCurrentEntryCount(count || 0);
     } catch (error) {
       console.error('Error fetching settings:', error);
     }
-  }, [profile]);
+  }, [adminId]);
 
   useEffect(() => {
     const fetchFormData = async () => {
@@ -200,7 +202,7 @@ export const DamagedGoodsForm = () => {
   const buildWhatsAppMessage = () => {
     const categoryName = categories.find(c => c.id === formData.category_id)?.name || '';
     const sizeName = sizes.find(s => s.id === formData.size_id)?.size || '';
-    const shopName = userShop?.name || '';
+    const shopName = userShop?.name || shops.find(s => s.id === formData.shop_id)?.name || '';
     const ctName = customerTypes.find(ct => ct.id === formData.customer_type_id)?.name || '';
     
     let msg = `📋 *GD Report*\n`;
@@ -237,7 +239,8 @@ export const DamagedGoodsForm = () => {
     const missingFields: string[] = [];
     if (fieldVisibility.category && formData.category_id === 'none') missingFields.push('Category');
     if (fieldVisibility.size && formData.size_id === 'none') missingFields.push('Size');
-    if (formData.shop_id === 'none') missingFields.push('Shop');
+    if (fieldVisibility.shops && formData.shop_id === 'none') missingFields.push('Shop');
+    if (!fieldVisibility.shops && !profile.shop_id) missingFields.push('Shop (not assigned)');
     if (fieldVisibility.customer_type && !formData.customer_type_id) missingFields.push('Customer Type');
 
     if (missingFields.length > 0) {
@@ -291,14 +294,13 @@ export const DamagedGoodsForm = () => {
       employee_id: profile.id,
       employee_name: profile.name,
       notes: sanitizedNotes || 'Voice note attached',
-      admin_id: (profile as any)?.admin_id || profile.id,
+      admin_id: adminId,
     };
     
     // Only include visible fields
     if (fieldVisibility.category && formData.category_id !== 'none') {
       entryData.category_id = formData.category_id;
     } else {
-      // Use first category as default if hidden
       entryData.category_id = categories.length > 0 ? categories[0].id : formData.category_id;
     }
     if (fieldVisibility.size && formData.size_id !== 'none') {
@@ -417,6 +419,9 @@ export const DamagedGoodsForm = () => {
 
   const entryLimitReached = maxEntries !== null && currentEntryCount >= maxEntries;
 
+  // Determine effective shop - either from form (if shops visible) or profile assignment
+  const effectiveShopId = fieldVisibility.shops ? formData.shop_id : (profile?.shop_id || 'none');
+
   return (
     <Card className="w-full max-w-2xl mx-auto">
       <CardHeader>
@@ -484,13 +489,35 @@ export const DamagedGoodsForm = () => {
             )}
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="shop">Shop *</Label>
-            <Input value={userShop?.name || (profile?.shop_id ? 'Loading shop...' : 'No shop assigned')} disabled className="bg-muted cursor-not-allowed" />
-            <p className="text-sm text-muted-foreground">
-              Shop is automatically assigned based on your profile
-            </p>
-          </div>
+          {/* Shop field - visible or auto-assigned */}
+          {fieldVisibility.shops ? (
+            <div className="space-y-2">
+              <Label htmlFor="shop">Shop *</Label>
+              {profile?.shop_id ? (
+                <>
+                  <Input value={userShop?.name || 'Loading shop...'} disabled className="bg-muted cursor-not-allowed" />
+                  <p className="text-sm text-muted-foreground">Shop is automatically assigned based on your profile</p>
+                </>
+              ) : (
+                <Select value={formData.shop_id} onValueChange={value => handleInputChange('shop_id', value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a shop" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Select a shop</SelectItem>
+                    {shops.map(shop => (
+                      <SelectItem key={shop.id} value={shop.id}>{shop.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <Label>Shop</Label>
+              <Input value={userShop?.name || (profile?.shop_id ? 'Loading...' : 'Auto-assigned')} disabled className="bg-muted cursor-not-allowed" />
+            </div>
+          )}
 
           {fieldVisibility.customer_type && (
             <div className="space-y-3">

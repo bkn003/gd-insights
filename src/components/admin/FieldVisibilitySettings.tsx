@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
@@ -11,39 +11,44 @@ interface FieldVisibility {
   category: boolean;
   size: boolean;
   customer_type: boolean;
+  shops: boolean;
 }
 
 const DEFAULT_VISIBILITY: FieldVisibility = {
   category: true,
   size: true,
   customer_type: true,
+  shops: true,
 };
 
 export const FieldVisibilitySettings = () => {
   const { profile } = useAuth();
   const [visibility, setVisibility] = useState<FieldVisibility>(DEFAULT_VISIBILITY);
   const [loading, setLoading] = useState(true);
+  const [settingId, setSettingId] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchSettings();
-  }, []);
+  const adminId = (profile as any)?.role === 'admin' ? profile?.id : (profile as any)?.admin_id;
 
-  const fetchSettings = async () => {
+  const fetchSettings = useCallback(async () => {
+    if (!adminId) return;
     try {
       const { data, error } = await supabase
         .from('app_settings')
         .select('*')
         .eq('key', 'field_visibility')
-        .single();
+        .eq('admin_id', adminId)
+        .maybeSingle();
 
-      if (error && error.code !== 'PGRST116') throw error;
+      if (error) throw error;
 
       if (data) {
+        setSettingId(data.id);
         const value = data.value as Record<string, boolean>;
         setVisibility({
           category: value.category ?? true,
           size: value.size ?? true,
           customer_type: value.customer_type ?? true,
+          shops: value.shops ?? true,
         });
       }
     } catch (error) {
@@ -51,26 +56,41 @@ export const FieldVisibilitySettings = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [adminId]);
+
+  useEffect(() => {
+    fetchSettings();
+  }, [fetchSettings]);
 
   const handleToggle = async (field: keyof FieldVisibility, newValue: boolean) => {
+    if (!adminId) return;
     const updated = { ...visibility, [field]: newValue };
     setVisibility(updated);
 
     try {
-      const { error } = await (supabase.from('app_settings') as any).upsert(
-        {
-          key: 'field_visibility',
-          value: updated,
-          admin_id: (profile as any)?.admin_id || profile?.id,
-        },
-        { onConflict: 'key' }
-      );
-
-      if (error) throw error;
-      toast.success(`${field.replace('_', ' ')} field ${newValue ? 'shown' : 'hidden'} in GD form`);
+      if (settingId) {
+        const { error } = await supabase
+          .from('app_settings')
+          .update({ value: updated as any, updated_at: new Date().toISOString() })
+          .eq('id', settingId);
+        if (error) throw error;
+      } else {
+        const { data, error } = await supabase
+          .from('app_settings')
+          .insert({
+            key: 'field_visibility',
+            value: updated as any,
+            admin_id: adminId,
+          })
+          .select()
+          .single();
+        if (error) throw error;
+        if (data) setSettingId(data.id);
+      }
+      const label = field === 'customer_type' ? 'Customer Type' : field === 'shops' ? 'Shops' : field.charAt(0).toUpperCase() + field.slice(1);
+      toast.success(`${label} ${newValue ? 'shown' : 'hidden'} in GD form`);
     } catch (error: any) {
-      setVisibility({ ...visibility });
+      setVisibility(visibility);
       toast.error(error.message || 'Failed to update setting');
     }
   };
@@ -89,6 +109,7 @@ export const FieldVisibilitySettings = () => {
     { key: 'category', label: 'Category', desc: 'Show category selection in GD form' },
     { key: 'size', label: 'Size', desc: 'Show size selection in GD form' },
     { key: 'customer_type', label: 'Customer Type', desc: 'Show customer type selection in GD form' },
+    { key: 'shops', label: 'Shops', desc: 'Show shop selection in GD form (otherwise auto-assigned)' },
   ];
 
   return (

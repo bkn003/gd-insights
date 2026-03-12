@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -8,7 +8,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { toast } from 'sonner';
 import { Play, Pause, Trash2, Settings, Users, Building, Shield, Search, ChevronDown, ChevronRight, Image } from 'lucide-react';
 import { DeleteConfirmationDialog } from './DeleteConfirmationDialog';
@@ -36,6 +35,7 @@ export const SuperAdminDashboard = () => {
   const [allProfiles, setAllProfiles] = useState<AdminProfile[]>([]);
   const [allShops, setAllShops] = useState<any[]>([]);
   const [entryCounts, setEntryCounts] = useState<Record<string, number>>({});
+  const [imageCounts, setImageCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [selectedAdmin, setSelectedAdmin] = useState<AdminProfile | null>(null);
   const [limitsDialogOpen, setLimitsDialogOpen] = useState(false);
@@ -48,11 +48,7 @@ export const SuperAdminDashboard = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedAdmins, setExpandedAdmins] = useState<Set<string>>(new Set());
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       const [profilesRes, shopsRes] = await Promise.all([
@@ -81,6 +77,33 @@ export const SuperAdminDashboard = () => {
           });
           setEntryCounts(counts);
         }
+
+        // Fetch image counts per admin (via entries -> images)
+        const { data: images } = await supabase
+          .from('gd_entry_images')
+          .select('gd_entry_id');
+
+        if (images && entries) {
+          const entryAdminMap: Record<string, string> = {};
+          entries.forEach((e: any) => { if (e.admin_id) entryAdminMap[e.admin_id] = e.admin_id; });
+          
+          // Build entry-to-admin mapping
+          const { data: entryDetails } = await supabase
+            .from('goods_damaged_entries')
+            .select('id, admin_id');
+          
+          if (entryDetails) {
+            const entryToAdmin: Record<string, string> = {};
+            entryDetails.forEach((e: any) => { if (e.admin_id) entryToAdmin[e.id] = e.admin_id; });
+            
+            const imgCounts: Record<string, number> = {};
+            images.forEach((img: any) => {
+              const adminId = entryToAdmin[img.gd_entry_id];
+              if (adminId) imgCounts[adminId] = (imgCounts[adminId] || 0) + 1;
+            });
+            setImageCounts(imgCounts);
+          }
+        }
       }
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -88,7 +111,31 @@ export const SuperAdminDashboard = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  // Realtime subscription for instant updates
+  useEffect(() => {
+    const profileChannel = supabase
+      .channel('sa-profiles-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
+        fetchData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'shops' }, () => {
+        fetchData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'goods_damaged_entries' }, () => {
+        fetchData();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(profileChannel);
+    };
+  }, [fetchData]);
 
   const admins = useMemo(() => allProfiles.filter(p => p.role === 'admin'), [allProfiles]);
 
@@ -98,25 +145,26 @@ export const SuperAdminDashboard = () => {
     (a.email || '').toLowerCase().includes(searchQuery.toLowerCase())
   ), [admins, searchQuery]);
 
-  const getSubUsers = (adminId: string) =>
-    allProfiles.filter(p => p.admin_id === adminId && p.id !== adminId);
+  const getSubUsers = useCallback((adminId: string) =>
+    allProfiles.filter(p => p.admin_id === adminId && p.id !== adminId),
+  [allProfiles]);
 
-  const getAdminStats = (adminId: string) => {
+  const getAdminStats = useCallback((adminId: string) => {
     const shopCount = allShops.filter((s: any) => s.admin_id === adminId).length;
     const userCount = allProfiles.filter((p: any) => p.admin_id === adminId && p.id !== adminId).length;
     return { shopCount, userCount };
-  };
+  }, [allShops, allProfiles]);
 
-  const toggleExpand = (adminId: string) => {
+  const toggleExpand = useCallback((adminId: string) => {
     setExpandedAdmins(prev => {
       const next = new Set(prev);
       if (next.has(adminId)) next.delete(adminId);
       else next.add(adminId);
       return next;
     });
-  };
+  }, []);
 
-  const handleRoleChange = async (profile: AdminProfile, newRole: string) => {
+  const handleRoleChange = useCallback(async (profile: AdminProfile, newRole: string) => {
     if (profile.id === user?.id) {
       toast.error("You cannot change your own role");
       return;
@@ -144,13 +192,12 @@ export const SuperAdminDashboard = () => {
       if (error) throw error;
 
       toast.success(`${profile.name}'s role changed to ${newRole}`);
-      fetchData();
     } catch (error: any) {
       toast.error(error.message || 'Failed to change role');
     }
-  };
+  }, [user?.id]);
 
-  const handleActivate = async (admin: AdminProfile) => {
+  const handleActivate = useCallback(async (admin: AdminProfile) => {
     try {
       const { error } = await (supabase.from('profiles') as any)
         .update({ status: 'active' })
@@ -163,24 +210,38 @@ export const SuperAdminDashboard = () => {
         .neq('id', admin.id);
 
       toast.success(`${admin.name} activated successfully`);
-      fetchData();
     } catch (error: any) {
       toast.error(error.message || 'Failed to activate');
     }
-  };
+  }, []);
 
-  const handlePause = async (admin: AdminProfile) => {
+  const handlePause = useCallback(async (admin: AdminProfile) => {
     try {
       await (supabase.from('profiles') as any).update({ status: 'paused' }).eq('id', admin.id);
       await (supabase.from('profiles') as any).update({ status: 'paused' }).eq('admin_id', admin.id);
-      toast.success(`${admin.name} and all sub-users paused.`);
-      fetchData();
+      
+      // Force logout the admin and all sub-users via edge function
+      try {
+        await supabase.functions.invoke('update-sub-user', {
+          body: { user_id: admin.id, action: 'pause' },
+        });
+        const subUsers = getSubUsers(admin.id);
+        for (const sub of subUsers) {
+          await supabase.functions.invoke('update-sub-user', {
+            body: { user_id: sub.id, action: 'pause' },
+          });
+        }
+      } catch (e) {
+        console.warn('Force logout via edge function failed:', e);
+      }
+      
+      toast.success(`${admin.name} and all sub-users paused & logged out.`);
     } catch (error: any) {
       toast.error(error.message || 'Failed to pause');
     }
-  };
+  }, [getSubUsers]);
 
-  const handleDelete = async () => {
+  const handleDelete = useCallback(async () => {
     if (!deleteAdmin) return;
     setIsDeleting(true);
     try {
@@ -203,15 +264,14 @@ export const SuperAdminDashboard = () => {
 
       toast.success(`${deleteAdmin.name} and ALL associated data deleted.`);
       setDeleteAdmin(null);
-      fetchData();
     } catch (error: any) {
       toast.error(error.message || 'Failed to delete admin');
     } finally {
       setIsDeleting(false);
     }
-  };
+  }, [deleteAdmin]);
 
-  const handleSetLimits = async () => {
+  const handleSetLimits = useCallback(async () => {
     if (!selectedAdmin) return;
     try {
       const { error } = await (supabase.from('profiles') as any)
@@ -226,20 +286,19 @@ export const SuperAdminDashboard = () => {
 
       toast.success('Limits updated successfully');
       setLimitsDialogOpen(false);
-      fetchData();
     } catch (error: any) {
       toast.error(error.message || 'Failed to update limits');
     }
-  };
+  }, [selectedAdmin, maxShops, maxUsers, maxEntries, maxImagesPerEntry]);
 
-  const openLimitsDialog = (admin: AdminProfile) => {
+  const openLimitsDialog = useCallback((admin: AdminProfile) => {
     setSelectedAdmin(admin);
     setMaxShops(admin.max_shops || 5);
     setMaxUsers(admin.max_users || 10);
     setMaxEntries(admin.max_entries ?? '');
     setMaxImagesPerEntry(admin.max_images_per_entry ?? 10);
     setLimitsDialogOpen(true);
-  };
+  }, []);
 
   if (loading) {
     return <div className="flex justify-center items-center h-64">Loading admin management...</div>;
@@ -251,14 +310,42 @@ export const SuperAdminDashboard = () => {
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
-          placeholder="Search by name, email, or role..."
+          placeholder="Search by name or email..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="pl-9"
         />
       </div>
 
-      {/* Tenant Admin Cards with nested sub-users */}
+      {/* Summary Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="p-4 text-center">
+            <div className="text-2xl font-bold">{admins.length}</div>
+            <div className="text-sm text-muted-foreground">Total Admins</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center">
+            <div className="text-2xl font-bold">{allProfiles.filter(p => p.role !== 'admin' && p.role !== 'super_admin').length}</div>
+            <div className="text-sm text-muted-foreground">Total Sub-Users</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center">
+            <div className="text-2xl font-bold">{allShops.length}</div>
+            <div className="text-sm text-muted-foreground">Total Shops</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center">
+            <div className="text-2xl font-bold">{Object.values(entryCounts).reduce((a, b) => a + b, 0)}</div>
+            <div className="text-sm text-muted-foreground">Total Entries</div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Tenant Admin Cards */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -266,7 +353,7 @@ export const SuperAdminDashboard = () => {
             Tenant Admin Management
           </CardTitle>
           <CardDescription>
-            {admins.length} registered admin(s). Click an admin row to see their sub-users.
+            {admins.length} registered admin(s). Click to expand and see sub-users.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -283,6 +370,7 @@ export const SuperAdminDashboard = () => {
                   <TableHead>Shops</TableHead>
                   <TableHead>Users</TableHead>
                   <TableHead>Entries</TableHead>
+                  <TableHead>Images</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -292,108 +380,30 @@ export const SuperAdminDashboard = () => {
                   const subUsers = getSubUsers(admin.id);
                   const isExpanded = expandedAdmins.has(admin.id);
                   const entryCount = entryCounts[admin.id] || 0;
+                  const imageCount = imageCounts[admin.id] || 0;
 
                   return (
-                    <>
-                      <TableRow key={admin.id} className="cursor-pointer hover:bg-muted/50" onClick={() => toggleExpand(admin.id)}>
-                        <TableCell>
-                          {subUsers.length > 0 ? (
-                            isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />
-                          ) : null}
-                        </TableCell>
-                        <TableCell className="font-medium">{admin.name}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground">{admin.email || '-'}</TableCell>
-                        <TableCell>
-                          <Badge variant={admin.status === 'active' ? 'default' : 'destructive'}>{admin.status}</Badge>
-                        </TableCell>
-                        <TableCell className="text-sm">{format(new Date(admin.created_at), 'PP')}</TableCell>
-                        <TableCell className="text-sm">
-                          {admin.last_login_at ? format(new Date(admin.last_login_at), 'PP p') : 'Never'}
-                        </TableCell>
-                        <TableCell>
-                          <span className="flex items-center gap-1 text-sm">
-                            <Building className="h-3 w-3" /> {stats.shopCount}/{admin.max_shops ?? '∞'}
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          <span className="flex items-center gap-1 text-sm">
-                            <Users className="h-3 w-3" /> {stats.userCount}/{admin.max_users ?? '∞'}
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          <span className="text-sm">{entryCount}/{admin.max_entries ?? '∞'}</span>
-                        </TableCell>
-                        <TableCell onClick={(e) => e.stopPropagation()}>
-                          <div className="flex gap-1">
-                            {admin.status === 'paused' ? (
-                              <Button size="sm" variant="outline" onClick={() => handleActivate(admin)} title="Activate">
-                                <Play className="h-3 w-3" />
-                              </Button>
-                            ) : (
-                              <Button size="sm" variant="outline" onClick={() => handlePause(admin)} title="Pause">
-                                <Pause className="h-3 w-3" />
-                              </Button>
-                            )}
-                            <Button size="sm" variant="outline" onClick={() => openLimitsDialog(admin)} title="Set limits">
-                              <Settings className="h-3 w-3" />
-                            </Button>
-                            <Button size="sm" variant="destructive" onClick={() => setDeleteAdmin(admin)} title="Delete">
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                      {/* Sub-users nested under admin */}
-                      {isExpanded && subUsers.map(sub => (
-                        <TableRow key={sub.id} className="bg-muted/20">
-                          <TableCell></TableCell>
-                          <TableCell className="pl-8 text-sm">
-                            ↳ {sub.name}
-                          </TableCell>
-                          <TableCell className="text-sm text-muted-foreground">{sub.email || '-'}</TableCell>
-                          <TableCell>
-                            <Badge variant={sub.status === 'active' ? 'default' : 'destructive'} className="text-xs">{sub.status}</Badge>
-                          </TableCell>
-                          <TableCell className="text-sm">{format(new Date(sub.created_at), 'PP')}</TableCell>
-                          <TableCell className="text-sm">
-                            {sub.last_login_at ? format(new Date(sub.last_login_at), 'PP p') : 'Never'}
-                          </TableCell>
-                          <TableCell colSpan={2}>
-                            <Badge variant="outline" className="text-xs">{sub.role}</Badge>
-                          </TableCell>
-                          <TableCell></TableCell>
-                          <TableCell>
-                            {sub.id !== user?.id && (
-                              <Select
-                                value={sub.role}
-                                onValueChange={(val) => handleRoleChange(sub, val)}
-                              >
-                                <SelectTrigger className="w-[110px] h-7 text-xs">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="manager">Manager</SelectItem>
-                                  <SelectItem value="user">Staff</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                      {isExpanded && subUsers.length === 0 && (
-                        <TableRow className="bg-muted/20">
-                          <TableCell></TableCell>
-                          <TableCell colSpan={9} className="text-sm text-muted-foreground italic">
-                            No sub-users for this admin
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </>
+                    <AdminRow
+                      key={admin.id}
+                      admin={admin}
+                      stats={stats}
+                      subUsers={subUsers}
+                      isExpanded={isExpanded}
+                      entryCount={entryCount}
+                      imageCount={imageCount}
+                      currentUserId={user?.id}
+                      onToggleExpand={toggleExpand}
+                      onActivate={handleActivate}
+                      onPause={handlePause}
+                      onDelete={setDeleteAdmin}
+                      onLimits={openLimitsDialog}
+                      onRoleChange={handleRoleChange}
+                    />
                   );
                 })}
                 {filteredAdmins.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={11} className="text-center text-muted-foreground py-8">
                       No admins found.
                     </TableCell>
                   </TableRow>
@@ -404,7 +414,7 @@ export const SuperAdminDashboard = () => {
         </CardContent>
       </Card>
 
-      {/* Super Admins only section */}
+      {/* Super Admins section */}
       {allProfiles.filter(p => p.role === 'super_admin').length > 0 && (
         <Card>
           <CardHeader>
@@ -467,6 +477,9 @@ export const SuperAdminDashboard = () => {
                 Max Images Per Entry
               </Label>
               <Input type="number" min={0} max={20} value={maxImagesPerEntry} onChange={e => setMaxImagesPerEntry(Number(e.target.value))} />
+              <p className="text-xs text-muted-foreground">
+                Total images stored: {imageCounts[selectedAdmin?.id || ''] || 0}
+              </p>
             </div>
             <div className="flex gap-2 justify-end">
               <Button variant="outline" onClick={() => setLimitsDialogOpen(false)}>Cancel</Button>
@@ -489,3 +502,123 @@ export const SuperAdminDashboard = () => {
     </div>
   );
 };
+
+// Extracted admin row component for performance
+interface AdminRowProps {
+  admin: AdminProfile;
+  stats: { shopCount: number; userCount: number };
+  subUsers: AdminProfile[];
+  isExpanded: boolean;
+  entryCount: number;
+  imageCount: number;
+  currentUserId?: string;
+  onToggleExpand: (id: string) => void;
+  onActivate: (admin: AdminProfile) => void;
+  onPause: (admin: AdminProfile) => void;
+  onDelete: (admin: AdminProfile) => void;
+  onLimits: (admin: AdminProfile) => void;
+  onRoleChange: (profile: AdminProfile, role: string) => void;
+}
+
+const AdminRow = ({
+  admin, stats, subUsers, isExpanded, entryCount, imageCount,
+  currentUserId, onToggleExpand, onActivate, onPause, onDelete, onLimits, onRoleChange
+}: AdminRowProps) => (
+  <>
+    <TableRow className="cursor-pointer hover:bg-muted/50" onClick={() => onToggleExpand(admin.id)}>
+      <TableCell>
+        {subUsers.length > 0 ? (
+          isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />
+        ) : null}
+      </TableCell>
+      <TableCell className="font-medium">{admin.name}</TableCell>
+      <TableCell className="text-sm text-muted-foreground">{admin.email || '-'}</TableCell>
+      <TableCell>
+        <Badge variant={admin.status === 'active' ? 'default' : 'destructive'}>{admin.status}</Badge>
+      </TableCell>
+      <TableCell className="text-sm">{format(new Date(admin.created_at), 'PP')}</TableCell>
+      <TableCell className="text-sm">
+        {admin.last_login_at ? format(new Date(admin.last_login_at), 'PP p') : 'Never'}
+      </TableCell>
+      <TableCell>
+        <span className="flex items-center gap-1 text-sm">
+          <Building className="h-3 w-3" /> {stats.shopCount}/{admin.max_shops ?? '∞'}
+        </span>
+      </TableCell>
+      <TableCell>
+        <span className="flex items-center gap-1 text-sm">
+          <Users className="h-3 w-3" /> {stats.userCount}/{admin.max_users ?? '∞'}
+        </span>
+      </TableCell>
+      <TableCell>
+        <span className="text-sm">{entryCount}/{admin.max_entries ?? '∞'}</span>
+      </TableCell>
+      <TableCell>
+        <span className="flex items-center gap-1 text-sm">
+          <Image className="h-3 w-3" /> {imageCount}
+        </span>
+      </TableCell>
+      <TableCell onClick={(e) => e.stopPropagation()}>
+        <div className="flex gap-1">
+          {admin.status === 'paused' ? (
+            <Button size="sm" variant="outline" onClick={() => onActivate(admin)} title="Activate">
+              <Play className="h-3 w-3" />
+            </Button>
+          ) : (
+            <Button size="sm" variant="outline" onClick={() => onPause(admin)} title="Pause">
+              <Pause className="h-3 w-3" />
+            </Button>
+          )}
+          <Button size="sm" variant="outline" onClick={() => onLimits(admin)} title="Set limits">
+            <Settings className="h-3 w-3" />
+          </Button>
+          <Button size="sm" variant="destructive" onClick={() => onDelete(admin)} title="Delete">
+            <Trash2 className="h-3 w-3" />
+          </Button>
+        </div>
+      </TableCell>
+    </TableRow>
+    {isExpanded && subUsers.map(sub => (
+      <TableRow key={sub.id} className="bg-muted/20">
+        <TableCell></TableCell>
+        <TableCell className="pl-8 text-sm">↳ {sub.name}</TableCell>
+        <TableCell className="text-sm text-muted-foreground">{sub.email || '-'}</TableCell>
+        <TableCell>
+          <Badge variant={sub.status === 'active' ? 'default' : 'destructive'} className="text-xs">{sub.status}</Badge>
+        </TableCell>
+        <TableCell className="text-sm">{format(new Date(sub.created_at), 'PP')}</TableCell>
+        <TableCell className="text-sm">
+          {sub.last_login_at ? format(new Date(sub.last_login_at), 'PP p') : 'Never'}
+        </TableCell>
+        <TableCell colSpan={3}>
+          <Badge variant="outline" className="text-xs">{sub.role}</Badge>
+        </TableCell>
+        <TableCell></TableCell>
+        <TableCell>
+          {sub.id !== currentUserId && (
+            <Select
+              value={sub.role}
+              onValueChange={(val) => onRoleChange(sub, val)}
+            >
+              <SelectTrigger className="w-[110px] h-7 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="manager">Manager</SelectItem>
+                <SelectItem value="user">Staff</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+        </TableCell>
+      </TableRow>
+    ))}
+    {isExpanded && subUsers.length === 0 && (
+      <TableRow className="bg-muted/20">
+        <TableCell></TableCell>
+        <TableCell colSpan={10} className="text-sm text-muted-foreground italic">
+          No sub-users for this admin
+        </TableCell>
+      </TableRow>
+    )}
+  </>
+);
