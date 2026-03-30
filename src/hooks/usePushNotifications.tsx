@@ -24,7 +24,7 @@ export const usePushNotifications = () => {
 
   const requestPermission = async () => {
     if (!isSupported) {
-      console.log('Push notifications are not supported');
+      if (import.meta.env.DEV) console.log('Push notifications are not supported');
       return false;
     }
 
@@ -33,18 +33,18 @@ export const usePushNotifications = () => {
       setPermission(result);
       
       if (result === 'granted') {
-        console.log('Notification permission granted');
+        if (import.meta.env.DEV) console.log('Notification permission granted');
         
         // Register service worker if not already registered
         if ('serviceWorker' in navigator) {
           const registration = await navigator.serviceWorker.ready;
-          console.log('Service Worker is ready:', registration);
+          if (import.meta.env.DEV) console.log('Service Worker is ready:', registration);
         }
       }
       
       return result === 'granted';
     } catch (error) {
-      console.error('Error requesting notification permission:', error);
+      if (import.meta.env.DEV) console.error('Error requesting notification permission:', error);
       return false;
     }
   };
@@ -65,7 +65,7 @@ export const usePushNotifications = () => {
         return true;
       }
     } catch (error) {
-      console.error('Error sending notification:', error);
+      if (import.meta.env.DEV) console.error('Error sending notification:', error);
       return false;
     }
   };

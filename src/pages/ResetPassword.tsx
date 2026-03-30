@@ -58,7 +58,7 @@ export const ResetPassword = () => {
 
       setSessionReady(true);
     } catch (err) {
-      console.error('Error setting up session:', err);
+      if (import.meta.env.DEV) console.error('Error setting up session:', err);
       setError('Reset link is invalid. Please request a new one.');
     }
   };

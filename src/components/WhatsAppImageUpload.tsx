@@ -47,7 +47,7 @@ export const WhatsAppImageUpload = ({ onImagesChange, maxImages = 10 }: WhatsApp
       
       return compressedFile;
     } catch (error) {
-      console.error('Error compressing image:', error);
+      if (import.meta.env.DEV) console.error('Error compressing image:', error);
       throw new Error('Failed to compress image');
     }
   };
@@ -95,7 +95,7 @@ export const WhatsAppImageUpload = ({ onImagesChange, maxImages = 10 }: WhatsApp
       
       toast.success(`${newImages.length} image(s) added and compressed to ${newImages.map(img => `${(img.file.size / 1024).toFixed(0)}KB`).join(', ')}`);
     } catch (error) {
-      console.error('Error processing images:', error);
+      if (import.meta.env.DEV) console.error('Error processing images:', error);
       toast.error('Failed to process images');
     }
   };

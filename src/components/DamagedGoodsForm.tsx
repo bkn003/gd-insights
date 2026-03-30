@@ -55,6 +55,8 @@ export const DamagedGoodsForm = () => {
   const [whatsappEnabled, setWhatsappEnabled] = useState(false);
   const [fieldVisibility, setFieldVisibility] = useState<FieldVisibility>({ category: true, size: true, customer_type: true, shops: true });
   const [maxImagesPerEntry, setMaxImagesPerEntry] = useState(10);
+  const [maxImagesTotal, setMaxImagesTotal] = useState<number | null>(null);
+  const [currentImageCount, setCurrentImageCount] = useState(0);
   const [maxEntries, setMaxEntries] = useState<number | null>(null);
   const [currentEntryCount, setCurrentEntryCount] = useState(0);
   const [notes, setNotes] = useState('');
@@ -94,24 +96,26 @@ export const DamagedGoodsForm = () => {
       // Fetch admin's limits
       const { data: adminProfile } = await supabase
         .from('profiles')
-        .select('max_entries, max_images_per_entry')
+        .select('max_entries, max_images_per_entry, max_images_total')
         .eq('id', adminId)
         .single();
       
       if (adminProfile) {
         setMaxEntries((adminProfile as any).max_entries ?? null);
         setMaxImagesPerEntry((adminProfile as any).max_images_per_entry ?? 10);
+        setMaxImagesTotal((adminProfile as any).max_images_total ?? null);
       }
 
-      // Count current entries
-      const { count } = await supabase
-        .from('goods_damaged_entries')
-        .select('id', { count: 'exact', head: true })
-        .eq('admin_id', adminId);
+      // Count current entries and images
+      const [entryCountRes, imageCountRes] = await Promise.all([
+        supabase.from('goods_damaged_entries').select('id', { count: 'exact', head: true }).eq('admin_id', adminId),
+        supabase.from('gd_entry_images').select('id', { count: 'exact', head: true }),
+      ]);
       
-      setCurrentEntryCount(count || 0);
+      setCurrentEntryCount(entryCountRes.count || 0);
+      setCurrentImageCount(imageCountRes.count || 0);
     } catch (error) {
-      console.error('Error fetching settings:', error);
+      if (import.meta.env.DEV) console.error('Error fetching settings:', error);
     }
   }, [adminId]);
 
@@ -175,15 +179,17 @@ export const DamagedGoodsForm = () => {
         upsert: false
       });
       if (error) throw error;
-      const { data: { publicUrl } } = supabase.storage.from('gd-entry-images').getPublicUrl(data.path);
+      // Store the signed URL (bucket is private)
+      const { data: signedData } = await supabase.storage.from('gd-entry-images').createSignedUrl(data.path, 3600);
+      const imageUrl = signedData?.signedUrl || data.path;
       const { error: dbError } = await supabase.from('gd_entry_images').insert({
         gd_entry_id: entryId,
-        image_url: publicUrl,
+        image_url: imageUrl,
         image_name: file.name,
         file_size: file.size
       });
       if (dbError) throw dbError;
-      return publicUrl;
+      return imageUrl;
     });
     await Promise.all(uploadPromises);
   };
@@ -195,8 +201,8 @@ export const DamagedGoodsForm = () => {
       .from('gd-voice-notes')
       .upload(fileName, voiceNoteFile, { cacheControl: '3600', upsert: false });
     if (error) throw error;
-    const { data: { publicUrl } } = supabase.storage.from('gd-voice-notes').getPublicUrl(data.path);
-    return publicUrl;
+    const { data: signedData } = await supabase.storage.from('gd-voice-notes').createSignedUrl(data.path, 3600);
+    return signedData?.signedUrl || data.path;
   };
 
   const buildWhatsAppMessage = () => {
@@ -279,9 +285,15 @@ export const DamagedGoodsForm = () => {
       return;
     }
 
-    // Check image limit
+    // Check image limit per entry
     if (selectedImages.length > maxImagesPerEntry) {
       toast.error(`Maximum ${maxImagesPerEntry} images per entry allowed.`);
+      return;
+    }
+
+    // Check total image limit for tenant
+    if (maxImagesTotal !== null && (currentImageCount + selectedImages.length) > maxImagesTotal) {
+      toast.error(`Total image limit reached (${maxImagesTotal}). Contact your administrator.`);
       return;
     }
 
@@ -351,7 +363,7 @@ export const DamagedGoodsForm = () => {
         }));
       if (customValueInserts.length > 0) {
         const { error: cvError } = await (supabase.from('gd_entry_custom_values') as any).insert(customValueInserts);
-        if (cvError) console.error('Error saving custom field values:', cvError);
+        if (cvError && import.meta.env.DEV) console.error('Error saving custom field values:', cvError);
       }
 
       const successParts = [];
@@ -385,7 +397,7 @@ export const DamagedGoodsForm = () => {
       setCurrentEntryCount(prev => prev + 1);
       resetForm();
     } catch (error: any) {
-      console.error('Error creating entry:', error);
+      if (import.meta.env.DEV) console.error('Error creating entry:', error);
       toast.error(error.message || 'Failed to create entry');
     } finally {
       setLoading(false);

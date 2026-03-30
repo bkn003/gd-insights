@@ -98,7 +98,7 @@ export const CustomFieldManagement = () => {
         setOptions({});
       }
     } catch (error: any) {
-      console.error('Error fetching custom fields:', error);
+      if (import.meta.env.DEV) console.error('Error fetching custom fields:', error);
       toast.error('Failed to load custom fields');
     } finally {
       setLoading(false);

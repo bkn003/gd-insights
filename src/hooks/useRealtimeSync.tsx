@@ -2,13 +2,14 @@ import { useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
 import { RealtimeChannel } from '@supabase/supabase-js';
+import { toast } from 'sonner';
 
 type TableName = 'goods_damaged_entries' | 'profiles' | 'shops' | 'categories' | 'sizes' | 'customer_types' | 'gd_entry_images' | 'app_settings';
 
 interface UseRealtimeSyncOptions {
   tables: TableName[];
   onProfileDeleted?: (userId: string) => void;
-  onProfilePaused?: (userId: string) => void;
+  onProfilePaused?: (userId: string, adminId?: string | null) => void;
   enabled?: boolean;
 }
 
@@ -62,38 +63,27 @@ export const useRealtimeSync = ({
     if (!enabled) return;
 
     const channel = supabase.channel('realtime-sync', {
-      config: {
-        broadcast: { self: true },
-      },
+      config: { broadcast: { self: true } },
     });
 
     tables.forEach((table) => {
       channel.on(
         'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table,
-        },
+        { event: '*', schema: 'public', table },
         (payload) => {
-          console.log(`Realtime update on ${table}:`, payload.eventType);
+          if (import.meta.env.DEV) console.log(`Realtime update on ${table}:`, payload.eventType);
           
-          // Handle profile changes for force logout
           if (table === 'profiles') {
             if (payload.eventType === 'DELETE') {
               const deletedId = (payload.old as any)?.id;
-              if (deletedId && onProfileDeleted) {
-                onProfileDeleted(deletedId);
-              }
+              if (deletedId && onProfileDeleted) onProfileDeleted(deletedId);
             } else if (payload.eventType === 'UPDATE') {
               const updatedProfile = payload.new as any;
-              // Force logout on soft delete
               if (updatedProfile?.deleted_at && onProfileDeleted) {
                 onProfileDeleted(updatedProfile.id);
               }
-              // Force logout on pause
               if (updatedProfile?.status === 'paused' && onProfilePaused) {
-                onProfilePaused(updatedProfile.id);
+                onProfilePaused(updatedProfile.id, updatedProfile.admin_id);
               }
             }
           }
@@ -103,12 +93,7 @@ export const useRealtimeSync = ({
       );
     });
 
-    channel.subscribe((status) => {
-      if (status === 'SUBSCRIBED') {
-        console.log('Realtime sync connected for:', tables.join(', '));
-      }
-    });
-
+    channel.subscribe();
     channelRef.current = channel;
 
     return () => {
@@ -135,7 +120,7 @@ export const useForceLogoutOnDelete = (
   const handleProfileDeleted = useCallback(
     async (deletedUserId: string) => {
       if (currentUserId && deletedUserId === currentUserId) {
-        console.log('Current user was deleted, forcing logout...');
+        toast.error('Your account has been removed.');
         await signOut();
         window.location.href = '/';
       }
@@ -144,10 +129,19 @@ export const useForceLogoutOnDelete = (
   );
 
   const handleProfilePaused = useCallback(
-    async (pausedUserId: string) => {
-      // Force logout if current user is paused OR if their admin is paused
-      if (currentUserId && (pausedUserId === currentUserId || pausedUserId === currentAdminId)) {
-        console.log('User or admin was paused, forcing logout...');
+    async (pausedUserId: string, pausedAdminId?: string | null) => {
+      if (!currentUserId) return;
+      
+      // Force logout if:
+      // 1. Current user is directly paused
+      // 2. Current user's admin is paused (sub-user of paused admin)
+      const isCurrentUser = pausedUserId === currentUserId;
+      const isMyAdmin = pausedUserId === currentAdminId;
+      // Also handle: current user is a sub-user whose admin_id matches the paused user
+      const isPausedAdminOfMe = currentAdminId && pausedUserId === currentAdminId;
+      
+      if (isCurrentUser || isMyAdmin || isPausedAdminOfMe) {
+        toast.error('Your account has been paused. Please contact the administrator.', { duration: 8000 });
         await signOut();
         window.location.href = '/';
       }

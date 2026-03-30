@@ -58,11 +58,11 @@ export const Dashboard = () => {
 
   // Effect to force shop selection for manager
   useEffect(() => {
-    console.log('Dashboard Manager check:', { isManager, userShopId, selectedShop });
+    if (import.meta.env.DEV) console.log('Dashboard Manager check:', { isManager, userShopId, selectedShop });
     if (isManager && userShopId) {
       // Always force manager to their shop
       if (selectedShop === 'all' || selectedShop !== userShopId) {
-        console.log('Setting manager shop to:', userShopId);
+        if (import.meta.env.DEV) console.log('Setting manager shop to:', userShopId);
         setSelectedShop(userShopId);
       }
     }
@@ -91,7 +91,7 @@ export const Dashboard = () => {
   const { data: allEntries, isLoading, refetch } = useQuery<GDEntry[]>({
     queryKey: ['dashboard-entries', userShopId],
     queryFn: async () => {
-      console.log('Fetching dashboard entries...');
+      if (import.meta.env.DEV) console.log('Fetching dashboard entries...');
 
       // Fetch entries without images first
       const { data: entriesData, error: entriesError } = await supabase
@@ -113,7 +113,7 @@ export const Dashboard = () => {
         .order('created_at', { ascending: false });
 
       if (entriesError) {
-        console.error('Dashboard fetch error:', entriesError);
+        if (import.meta.env.DEV) console.error('Dashboard fetch error:', entriesError);
         throw entriesError;
       }
 
@@ -129,14 +129,14 @@ export const Dashboard = () => {
           .order('created_at', { ascending: true });
 
         if (imagesError) {
-          console.error('Dashboard images fetch error:', imagesError);
+          if (import.meta.env.DEV) console.error('Dashboard images fetch error:', imagesError);
           // Continue without images rather than failing
         } else {
           imagesData = imgData || [];
         }
       }
 
-      console.log('Fetched entries:', entriesData?.length || 0, 'images:', imagesData.length);
+      if (import.meta.env.DEV) console.log('Fetched entries:', entriesData?.length || 0, 'images:', imagesData.length);
 
       // Join images to entries
       const entriesWithImages = entriesData?.map(entry => ({
@@ -265,7 +265,7 @@ export const Dashboard = () => {
           table: 'goods_damaged_entries'
         },
         () => {
-          console.log('GD entry changed, refreshing dashboard...');
+          if (import.meta.env.DEV) console.log('GD entry changed, refreshing dashboard...');
           refetch();
         }
       )

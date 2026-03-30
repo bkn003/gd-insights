@@ -31,7 +31,7 @@ export const WhatsAppSettings = () => {
         setEnabled(value.enabled ?? false);
       }
     } catch (error) {
-      console.error('Error fetching WhatsApp setting:', error);
+      if (import.meta.env.DEV) console.error('Error fetching WhatsApp setting:', error);
     } finally {
       setLoading(false);
     }

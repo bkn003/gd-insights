@@ -1,9 +1,10 @@
-import { ReactNode } from 'react';
+import { ReactNode, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { LogOut, Package } from 'lucide-react';
 import { toast } from 'sonner';
 import { NotificationBell } from './NotificationBell';
+import { DeleteConfirmationDialog } from './DeleteConfirmationDialog';
 
 interface LayoutProps {
   children: ReactNode;
@@ -11,20 +12,25 @@ interface LayoutProps {
 
 export const Layout = ({ children }: LayoutProps) => {
   const { profile, signOut, isSuperAdmin, isAdmin, isManager } = useAuth();
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   const handleSignOut = async () => {
+    setLoggingOut(true);
     const { error } = await signOut();
     if (error) {
       toast.error('Error signing out');
     } else {
       toast.success('Signed out successfully');
     }
+    setLoggingOut(false);
+    setShowLogoutConfirm(false);
   };
 
   const getRoleBadge = () => {
-    if (isSuperAdmin) return { label: 'Super Admin', className: 'bg-red-600 text-white' };
+    if (isSuperAdmin) return { label: 'Super Admin', className: 'bg-destructive text-destructive-foreground' };
     if (isAdmin) return { label: 'Admin', className: 'bg-primary text-primary-foreground' };
-    if (isManager) return { label: 'Manager', className: 'bg-blue-600 text-white' };
+    if (isManager) return { label: 'Manager', className: 'bg-accent text-accent-foreground' };
     return null;
   };
 
@@ -60,7 +66,7 @@ export const Layout = ({ children }: LayoutProps) => {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={handleSignOut}
+                onClick={() => setShowLogoutConfirm(true)}
                 className="flex items-center gap-1 sm:gap-2 flex-shrink-0"
               >
                 <LogOut className="h-3 w-3 sm:h-4 sm:w-4" />
@@ -74,6 +80,15 @@ export const Layout = ({ children }: LayoutProps) => {
       <main className="max-w-7xl mx-auto py-4 sm:py-6 px-3 sm:px-4 lg:px-8 w-full min-w-0">
         {children}
       </main>
+
+      <DeleteConfirmationDialog
+        open={showLogoutConfirm}
+        onOpenChange={setShowLogoutConfirm}
+        onConfirm={handleSignOut}
+        title="Sign Out"
+        description="Are you sure you want to sign out?"
+        loading={loggingOut}
+      />
     </div>
   );
 };

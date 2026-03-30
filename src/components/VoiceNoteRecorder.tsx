@@ -92,7 +92,7 @@ export const VoiceNoteRecorder = ({ onVoiceNoteChange, onTranscriptionChange, ex
         toast.success('Voice note transcribed!');
       }
     } catch (error: any) {
-      console.error('Transcription error:', error);
+      if (import.meta.env.DEV) console.error('Transcription error:', error);
       toast.error(error.message || 'Failed to transcribe voice note');
     } finally {
       setIsTranscribing(false);
@@ -143,7 +143,7 @@ export const VoiceNoteRecorder = ({ onVoiceNoteChange, onTranscriptionChange, ex
       }, 1000);
 
     } catch (error) {
-      console.error('Error accessing microphone:', error);
+      if (import.meta.env.DEV) console.error('Error accessing microphone:', error);
       toast.error('Could not access microphone. Please grant permission.');
     }
   };

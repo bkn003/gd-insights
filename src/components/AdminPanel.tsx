@@ -54,7 +54,7 @@ export const AdminPanel = () => {
       setCustomerTypes(customerTypesRes.data);
       setProfiles(profilesRes.data as Profile[]);
     } catch (error) {
-      console.error('Error fetching data:', error);
+      if (import.meta.env.DEV) console.error('Error fetching data:', error);
       toast.error('Failed to load data');
     } finally {
       setLoading(false);

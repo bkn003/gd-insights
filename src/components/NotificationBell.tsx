@@ -47,7 +47,7 @@ export const NotificationBell = () => {
           table: 'goods_damaged_entries'
         },
         async (payload) => {
-          console.log('New GD entry notification:', payload);
+          if (import.meta.env.DEV) console.log('New GD entry notification:', payload);
           
           const newEntry = payload.new as any;
           

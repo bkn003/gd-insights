@@ -46,7 +46,7 @@ export const VoiceMicButton = ({ language, mode, value, onChange, className }: V
     };
 
     recognitionInstance.onerror = (event: any) => {
-      console.error('Speech recognition error:', event.error);
+      if (import.meta.env.DEV) console.error('Speech recognition error:', event.error);
       setIsListening(false);
       
       if (event.error === 'no-speech') {
@@ -83,7 +83,7 @@ export const VoiceMicButton = ({ language, mode, value, onChange, className }: V
         setIsListening(true);
         toast.info(`🎤 Listening in ${language === 'en-IN' ? 'English' : 'Tamil'}...`);
       } catch (error) {
-        console.error('Error starting recognition:', error);
+        if (import.meta.env.DEV) console.error('Error starting recognition:', error);
         toast.error('Failed to start voice recognition');
       }
     }

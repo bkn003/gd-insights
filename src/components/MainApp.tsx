@@ -41,14 +41,13 @@ export const MainApp = () => {
   // Update active tab when user role changes
   useEffect(() => {
     if (isSuperAdmin) {
-      // Super admin can only access super_admin and profile tabs
-      if (activeTab !== 'super_admin' && activeTab !== 'profile') {
+      // Super admin only has super_admin tab - no profile
+      if (activeTab !== 'super_admin') {
         setActiveTab('super_admin');
       }
     } else if (!isAdmin && !isManager && activeTab !== 'gd') {
       setActiveTab('gd');
     }
-    // Managers should not access admin tab
     if (isManager && !isAdmin && activeTab === 'admin') {
       setActiveTab('dashboard');
     }
@@ -59,9 +58,7 @@ export const MainApp = () => {
     if (activeTab === 'gd') {
       setTimeout(() => {
         const notesInput = document.querySelector('textarea#notes') as HTMLTextAreaElement;
-        if (notesInput) {
-          notesInput.focus();
-        }
+        if (notesInput) notesInput.focus();
       }, 100);
     }
   }, [activeTab]);
@@ -79,9 +76,9 @@ export const MainApp = () => {
           <Suspense fallback={<LoadingSpinner />}><SuperAdminDashboard /></Suspense>
         ) : <div className="text-center text-muted-foreground">Access denied</div>;
       case 'profile':
-        return (
+        return !isSuperAdmin ? (
           <Suspense fallback={<LoadingSpinner />}><UserProfile /></Suspense>
-        );
+        ) : <div className="text-center text-muted-foreground">Access denied</div>;
       case 'gd':
         return !isSuperAdmin ? <DamagedGoodsForm /> : <div className="text-center text-muted-foreground">Access denied</div>;
       case 'dashboard':
@@ -103,101 +100,65 @@ export const MainApp = () => {
     }
   };
 
-  if (!user) {
-    return null;
-  }
+  if (!user) return null;
 
   return (
     <>
       <PWAInstallPrompt />
       <Layout>
         <div className="space-y-4 sm:space-y-6 pb-20 md:pb-6 w-full min-w-0">
-          {/* Desktop Navigation - hidden on mobile */}
+          {/* Desktop Navigation */}
           <div className="hidden md:flex flex-wrap gap-2 border-b overflow-x-auto pb-2">
-            {/* Super Admin tabs - only SA + Profile */}
+            {/* Super Admin: only SA tab, no profile */}
             {isSuperAdmin && (
-              <>
-                <Button
-                  variant={activeTab === 'super_admin' ? 'default' : 'ghost'}
-                  onClick={() => setActiveTab('super_admin')}
-                  className="flex items-center gap-2 flex-shrink-0"
-                >
-                  <Shield className="h-4 w-4" />
-                  Super Admin
-                </Button>
-                <Button
-                  variant={activeTab === 'profile' ? 'default' : 'ghost'}
-                  onClick={() => setActiveTab('profile')}
-                  className="flex items-center gap-2 flex-shrink-0"
-                >
-                  <User className="h-4 w-4" />
-                  Profile
-                </Button>
-              </>
+              <Button
+                variant={activeTab === 'super_admin' ? 'default' : 'ghost'}
+                onClick={() => setActiveTab('super_admin')}
+                className="flex items-center gap-2 flex-shrink-0"
+              >
+                <Shield className="h-4 w-4" />
+                Super Admin
+              </Button>
             )}
 
-            {/* Regular user tabs - hidden for super admin */}
+            {/* Regular user tabs */}
             {!isSuperAdmin && (
               <>
-                <Button
-                  variant={activeTab === 'gd' ? 'default' : 'ghost'}
-                  onClick={() => setActiveTab('gd')}
-                  className="flex items-center gap-2 flex-shrink-0"
-                >
-                  <Plus className="h-4 w-4" />
-                  GD
+                <Button variant={activeTab === 'gd' ? 'default' : 'ghost'} onClick={() => setActiveTab('gd')}
+                  className="flex items-center gap-2 flex-shrink-0">
+                  <Plus className="h-4 w-4" />GD
                 </Button>
-
                 {(isAdmin || isManager) && (
-                  <Button
-                    variant={activeTab === 'profile' ? 'default' : 'ghost'}
-                    onClick={() => setActiveTab('profile')}
-                    className="flex items-center gap-2 flex-shrink-0"
-                  >
-                    <User className="h-4 w-4" />
-                    Profile
+                  <Button variant={activeTab === 'profile' ? 'default' : 'ghost'} onClick={() => setActiveTab('profile')}
+                    className="flex items-center gap-2 flex-shrink-0">
+                    <User className="h-4 w-4" />Profile
                   </Button>
                 )}
                 {(isAdmin || isManager) && (
-                  <Button
-                    variant={activeTab === 'dashboard' ? 'default' : 'ghost'}
-                    onClick={() => setActiveTab('dashboard')}
-                    className="flex items-center gap-2 flex-shrink-0"
-                  >
-                    <BarChart3 className="h-4 w-4" />
-                    Dashboard
+                  <Button variant={activeTab === 'dashboard' ? 'default' : 'ghost'} onClick={() => setActiveTab('dashboard')}
+                    className="flex items-center gap-2 flex-shrink-0">
+                    <BarChart3 className="h-4 w-4" />Dashboard
                   </Button>
                 )}
                 {(isAdmin || isManager) && (
-                  <Button
-                    variant={activeTab === 'reports' ? 'default' : 'ghost'}
-                    onClick={() => setActiveTab('reports')}
-                    className="flex items-center gap-2 flex-shrink-0"
-                  >
-                    <FileText className="h-4 w-4" />
-                    Reports
+                  <Button variant={activeTab === 'reports' ? 'default' : 'ghost'} onClick={() => setActiveTab('reports')}
+                    className="flex items-center gap-2 flex-shrink-0">
+                    <FileText className="h-4 w-4" />Reports
                   </Button>
                 )}
                 {isAdmin && (
-                  <Button
-                    variant={activeTab === 'admin' ? 'default' : 'ghost'}
-                    onClick={() => setActiveTab('admin')}
-                    className="flex items-center gap-2 flex-shrink-0"
-                  >
-                    <Settings className="h-4 w-4" />
-                    Admin Panel
+                  <Button variant={activeTab === 'admin' ? 'default' : 'ghost'} onClick={() => setActiveTab('admin')}
+                    className="flex items-center gap-2 flex-shrink-0">
+                    <Settings className="h-4 w-4" />Admin Panel
                   </Button>
                 )}
               </>
             )}
           </div>
 
-          <div className="w-full min-w-0">
-            {renderContent()}
-          </div>
+          <div className="w-full min-w-0">{renderContent()}</div>
         </div>
 
-        {/* Mobile Bottom Navigation */}
         <MobileBottomNav
           activeTab={activeTab}
           setActiveTab={setActiveTab}
