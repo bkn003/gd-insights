@@ -111,7 +111,7 @@ export const DamagedGoodsForm = () => {
       
       setCurrentEntryCount(count || 0);
     } catch (error) {
-      console.error('Error fetching settings:', error);
+      if (import.meta.env.DEV) console.error('Error fetching settings:', error);
     }
   }, [adminId]);
 
@@ -175,15 +175,17 @@ export const DamagedGoodsForm = () => {
         upsert: false
       });
       if (error) throw error;
-      const { data: { publicUrl } } = supabase.storage.from('gd-entry-images').getPublicUrl(data.path);
+      // Store the signed URL (bucket is private)
+      const { data: signedData } = await supabase.storage.from('gd-entry-images').createSignedUrl(data.path, 3600);
+      const imageUrl = signedData?.signedUrl || data.path;
       const { error: dbError } = await supabase.from('gd_entry_images').insert({
         gd_entry_id: entryId,
-        image_url: publicUrl,
+        image_url: imageUrl,
         image_name: file.name,
         file_size: file.size
       });
       if (dbError) throw dbError;
-      return publicUrl;
+      return imageUrl;
     });
     await Promise.all(uploadPromises);
   };
@@ -195,8 +197,8 @@ export const DamagedGoodsForm = () => {
       .from('gd-voice-notes')
       .upload(fileName, voiceNoteFile, { cacheControl: '3600', upsert: false });
     if (error) throw error;
-    const { data: { publicUrl } } = supabase.storage.from('gd-voice-notes').getPublicUrl(data.path);
-    return publicUrl;
+    const { data: signedData } = await supabase.storage.from('gd-voice-notes').createSignedUrl(data.path, 3600);
+    return signedData?.signedUrl || data.path;
   };
 
   const buildWhatsAppMessage = () => {
@@ -351,7 +353,7 @@ export const DamagedGoodsForm = () => {
         }));
       if (customValueInserts.length > 0) {
         const { error: cvError } = await (supabase.from('gd_entry_custom_values') as any).insert(customValueInserts);
-        if (cvError) console.error('Error saving custom field values:', cvError);
+        if (cvError && import.meta.env.DEV) console.error('Error saving custom field values:', cvError);
       }
 
       const successParts = [];
@@ -385,7 +387,7 @@ export const DamagedGoodsForm = () => {
       setCurrentEntryCount(prev => prev + 1);
       resetForm();
     } catch (error: any) {
-      console.error('Error creating entry:', error);
+      if (import.meta.env.DEV) console.error('Error creating entry:', error);
       toast.error(error.message || 'Failed to create entry');
     } finally {
       setLoading(false);
