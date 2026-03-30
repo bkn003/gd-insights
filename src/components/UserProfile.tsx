@@ -45,7 +45,7 @@ export const UserProfile = () => {
       setCategories(categoriesRes.data);
       setSizes(sizesRes.data);
     } catch (error) {
-      console.error('Error fetching data:', error);
+      if (import.meta.env.DEV) console.error('Error fetching data:', error);
       toast.error('Failed to load form data');
     }
   };

@@ -27,7 +27,7 @@ export const syncService = {
 
             toast.success('Offline data synced successfully!');
         } catch (error) {
-            console.error('Sync failed:', error);
+            if (import.meta.env.DEV) console.error('Sync failed:', error);
             toast.error('Sync failed for some entries. Will retry later.');
         } finally {
             this.isSyncing = false;
@@ -100,7 +100,7 @@ export const syncService = {
             await offlineStore.deleteEntry(entry.id);
 
         } catch (error: any) {
-            console.error(`Failed to sync entry ${entry.id}:`, error);
+            if (import.meta.env.DEV) console.error(`Failed to sync entry ${entry.id}:`, error);
             await offlineStore.updateEntryStatus(entry.id, 'error', error.message || 'Unknown error');
         }
     }

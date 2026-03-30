@@ -73,7 +73,7 @@ export const UserManagement = ({ shops: propShops, profiles: propProfiles, onRef
       setCategories(categoriesRes.data);
       setSizes(sizesRes.data);
     } catch (error) {
-      console.error('Error fetching categories and sizes:', error);
+      if (import.meta.env.DEV) console.error('Error fetching categories and sizes:', error);
     }
   }, []);
 
@@ -100,7 +100,7 @@ export const UserManagement = ({ shops: propShops, profiles: propProfiles, onRef
       setCategories(categoriesRes.data);
       setSizes(sizesRes.data);
     } catch (error) {
-      console.error('Error fetching data:', error);
+      if (import.meta.env.DEV) console.error('Error fetching data:', error);
       toast.error('Failed to load user management data');
     } finally {
       setLoading(false);
@@ -138,7 +138,7 @@ export const UserManagement = ({ shops: propShops, profiles: propProfiles, onRef
       if (propOnRefresh) propOnRefresh();
       else fetchData();
     } catch (error: any) {
-      console.error('Error creating sub-user:', error);
+      if (import.meta.env.DEV) console.error('Error creating sub-user:', error);
       toast.error(error.message || 'Failed to create sub-user');
     } finally {
       setCreating(false);

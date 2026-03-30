@@ -31,7 +31,7 @@ class OfflineStore {
             const request = indexedDB.open(DB_NAME, DB_VERSION);
 
             request.onerror = (event) => {
-                console.error('IndexedDB error:', event);
+                if (import.meta.env.DEV) console.error('IndexedDB error:', event);
                 reject('Failed to open database');
             };
 

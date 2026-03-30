@@ -104,7 +104,7 @@ export const ReportsPanel = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
-      console.log('Starting to fetch data...', { isManager, userShopId });
+      if (import.meta.env.DEV) console.log('Starting to fetch data...', { isManager, userShopId });
 
       // Fetch entries with images
       let query = supabase
@@ -113,18 +113,18 @@ export const ReportsPanel = () => {
         .order('created_at', { ascending: false });
 
       if (isManager && userShopId) {
-        console.log('Filtering by manager shop:', userShopId);
+        if (import.meta.env.DEV) console.log('Filtering by manager shop:', userShopId);
         query = query.eq('shop_id', userShopId);
       }
 
       const { data: entriesData, error: entriesError } = await query;
 
       if (entriesError) {
-        console.error('Error fetching entries:', entriesError);
+        if (import.meta.env.DEV) console.error('Error fetching entries:', entriesError);
         throw entriesError;
       }
 
-      console.log('Fetched entries:', entriesData);
+      if (import.meta.env.DEV) console.log('Fetched entries:', entriesData);
 
       // Get entry IDs to filter images
       const entryIds = entriesData.map(e => e.id);
@@ -139,14 +139,14 @@ export const ReportsPanel = () => {
           .order('created_at', { ascending: true });
 
         if (imagesError) {
-          console.error('Error fetching images:', imagesError);
+          if (import.meta.env.DEV) console.error('Error fetching images:', imagesError);
           // Don't throw - just log and continue with empty images
         } else {
           imagesData = imgData || [];
         }
       }
 
-      console.log('Fetched images for entries:', imagesData);
+      if (import.meta.env.DEV) console.log('Fetched images for entries:', imagesData);
 
 
       // Fetch related data separately (including custom fields)
@@ -159,19 +159,19 @@ export const ReportsPanel = () => {
       ]);
 
       if (shopsRes.error) {
-        console.error('Error fetching shops:', shopsRes.error);
+        if (import.meta.env.DEV) console.error('Error fetching shops:', shopsRes.error);
         throw shopsRes.error;
       }
       if (categoriesRes.error) {
-        console.error('Error fetching categories:', categoriesRes.error);
+        if (import.meta.env.DEV) console.error('Error fetching categories:', categoriesRes.error);
         throw categoriesRes.error;
       }
       if (sizesRes.error) {
-        console.error('Error fetching sizes:', sizesRes.error);
+        if (import.meta.env.DEV) console.error('Error fetching sizes:', sizesRes.error);
         throw sizesRes.error;
       }
       if (customerTypesRes.error) {
-        console.error('Error fetching customer types:', customerTypesRes.error);
+        if (import.meta.env.DEV) console.error('Error fetching customer types:', customerTypesRes.error);
         throw customerTypesRes.error;
       }
 
@@ -220,7 +220,7 @@ export const ReportsPanel = () => {
         };
       });
 
-      console.log('Enriched entries with images:', enrichedEntries);
+      if (import.meta.env.DEV) console.log('Enriched entries with images:', enrichedEntries);
 
       setEntries(enrichedEntries);
       setShops(shopsRes.data);
@@ -229,7 +229,7 @@ export const ReportsPanel = () => {
       setCustomerTypes(customerTypesRes.data);
       setCustomFields(visibleFields);
     } catch (error) {
-      console.error('Error fetching data:', error);
+      if (import.meta.env.DEV) console.error('Error fetching data:', error);
       toast.error('Failed to load reports data');
     } finally {
       setLoading(false);
@@ -621,7 +621,7 @@ export const ReportsPanel = () => {
       setSelectedEntries(new Set());
       fetchData();
     } catch (error: any) {
-      console.error('Bulk delete error:', error);
+      if (import.meta.env.DEV) console.error('Bulk delete error:', error);
       toast.error(error.message || 'Failed to delete entries');
     } finally {
       setIsDeleting(false);
@@ -742,7 +742,7 @@ export const ReportsPanel = () => {
         reader.readAsDataURL(blob);
       });
     } catch (error) {
-      console.error('Error fetching image:', error);
+      if (import.meta.env.DEV) console.error('Error fetching image:', error);
       return null;
     }
   };
@@ -804,7 +804,7 @@ export const ReportsPanel = () => {
                 };
               }
             } catch (error) {
-              console.error('Error processing images for entry:', entry.id, error);
+              if (import.meta.env.DEV) console.error('Error processing images for entry:', entry.id, error);
             }
           }
 
@@ -883,7 +883,7 @@ export const ReportsPanel = () => {
 
       toast.success(`Excel report exported with embedded image thumbnails! ${filteredEntries.length} entries across multiple sheets`);
     } catch (error) {
-      console.error('Error exporting Excel:', error);
+      if (import.meta.env.DEV) console.error('Error exporting Excel:', error);
       toast.error('Failed to export Excel. Please try again.');
     }
   };
@@ -937,7 +937,7 @@ export const ReportsPanel = () => {
 
       toast.success(`Excel exported with ${filteredEntries.length} entries and embedded images!`);
     } catch (error) {
-      console.error('Error with advanced export:', error);
+      if (import.meta.env.DEV) console.error('Error with advanced export:', error);
       toast.error('Failed to export with images. Using fallback method...');
       exportExcelMulti();
     } finally {
@@ -965,7 +965,7 @@ export const ReportsPanel = () => {
         toast.info('No shops exceeded the threshold. No alerts sent.');
       }
     } catch (error: any) {
-      console.error('Error sending alert:', error);
+      if (import.meta.env.DEV) console.error('Error sending alert:', error);
       toast.error(error.message || 'Failed to send alert');
     }
   };
@@ -1054,7 +1054,7 @@ export const ReportsPanel = () => {
 
       toast.success(`PDF report opened! ${filteredEntries.length} entries across ${sections.length} sections`);
     } catch (error) {
-      console.error('Error exporting multi-sheet PDF:', error);
+      if (import.meta.env.DEV) console.error('Error exporting multi-sheet PDF:', error);
       toast.error('Failed to export PDF. Please try again.');
     }
   };

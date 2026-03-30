@@ -52,7 +52,7 @@ export const FieldVisibilitySettings = () => {
         });
       }
     } catch (error) {
-      console.error('Error fetching field visibility:', error);
+      if (import.meta.env.DEV) console.error('Error fetching field visibility:', error);
     } finally {
       setLoading(false);
     }

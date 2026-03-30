@@ -54,7 +54,7 @@ export const useOfflineSync = () => {
       toast.info('Entry saved offline. Will sync when online.');
       return true;
     } catch (error) {
-      console.error('Error saving offline entry:', error);
+      if (import.meta.env.DEV) console.error('Error saving offline entry:', error);
       toast.error('Failed to save entry offline');
       return false;
     }
@@ -73,7 +73,7 @@ export const useOfflineSync = () => {
         request.onerror = () => reject(request.error);
       });
     } catch (error) {
-      console.error('Error getting pending entries:', error);
+      if (import.meta.env.DEV) console.error('Error getting pending entries:', error);
       return [];
     }
   }, [openDB]);
@@ -86,7 +86,7 @@ export const useOfflineSync = () => {
       const store = transaction.objectStore(STORE_NAME);
       await store.delete(id);
     } catch (error) {
-      console.error('Error deleting entry:', error);
+      if (import.meta.env.DEV) console.error('Error deleting entry:', error);
     }
   }, [openDB]);
 
@@ -153,7 +153,7 @@ export const useOfflineSync = () => {
         successCount++;
 
       } catch (error) {
-        console.error('Error syncing entry:', error);
+        if (import.meta.env.DEV) console.error('Error syncing entry:', error);
         failCount++;
       }
     }
