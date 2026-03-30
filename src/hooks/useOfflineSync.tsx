@@ -133,13 +133,13 @@ export const useOfflineSync = () => {
 
             if (error) throw error;
 
-            const { data: { publicUrl } } = supabase.storage
+            const { data: signedData } = await supabase.storage
               .from('gd-entry-images')
-              .getPublicUrl(data.path);
+              .createSignedUrl(data.path, 3600);
 
             await supabase.from('gd_entry_images').insert({
               gd_entry_id: entryData.id,
-              image_url: publicUrl,
+              image_url: signedData?.signedUrl || data.path,
               image_name: file.name,
               file_size: file.size
             });

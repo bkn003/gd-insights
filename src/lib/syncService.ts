@@ -49,11 +49,11 @@ export const syncService = {
 
                 if (voiceError) throw new Error(`Voice upload failed: ${voiceError.message}`);
 
-                const { data: { publicUrl } } = supabase.storage
+                const { data: signedData } = await supabase.storage
                     .from('voice_notes')
-                    .getPublicUrl(fileName);
+                    .createSignedUrl(fileName, 3600);
 
-                voiceNoteUrl = publicUrl;
+                voiceNoteUrl = signedData?.signedUrl || fileName;
             }
 
             // 2. Insert Entry to Database
@@ -83,13 +83,13 @@ export const syncService = {
                         .from('gd_images')
                         .upload(fileName, imageBlob);
 
-                    if (imageError) console.error('Image upload failed:', imageError);
-                    else {
-                        const { data: { publicUrl } } = supabase.storage.from('gd_images').getPublicUrl(fileName);
-                        // Insert into gd_entry_images table
+                    if (imageError) {
+                        if (import.meta.env.DEV) console.error('Image upload failed:', imageError);
+                    } else {
+                        const { data: signedData } = await supabase.storage.from('gd_images').createSignedUrl(fileName, 3600);
                         await supabase.from('gd_entry_images').insert({
                             gd_entry_id: insertedEntry.id,
-                            image_url: publicUrl,
+                            image_url: signedData?.signedUrl || fileName,
                             image_name: 'Offline Image'
                         });
                     }
