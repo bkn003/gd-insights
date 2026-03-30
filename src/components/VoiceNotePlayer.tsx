@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Play, Pause } from 'lucide-react';
+import { useSignedUrl } from '@/hooks/useSignedUrl';
 
 interface VoiceNotePlayerProps {
   voiceUrl: string;
@@ -17,6 +18,7 @@ const formatTime = (seconds: number): string => {
 };
 
 export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerProps) => {
+  const resolvedUrl = useSignedUrl(voiceUrl);
   const [isPlaying, setIsPlaying] = useState(false);
   const [duration, setDuration] = useState(0);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -32,7 +34,6 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
   const isPlayingRef = useRef(false);
   const isDraggingRef = useRef(false);
 
-  // Keep refs in sync with state to avoid stale closures
   useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
   useEffect(() => { isDraggingRef.current = isDragging; }, [isDragging]);
 
@@ -51,7 +52,6 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
     return bars;
   }, [voiceUrl, compact]);
 
-  // Animation frame loop using refs to avoid stale closures
   const updateProgressFrame = useCallback(() => {
     if (audioRef.current && !isDraggingRef.current) {
       const currentTime = audioRef.current.currentTime;
@@ -59,7 +59,6 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
       setProgressPercent((currentTime / audioDuration) * 100);
       setDisplayTime(currentTime);
     }
-    
     if (isPlayingRef.current && !isDraggingRef.current) {
       animationFrameRef.current = requestAnimationFrame(updateProgressFrame);
     }
@@ -77,20 +76,15 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
     }
   }, []);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       stopAnimationLoop();
-      if (audioRef.current) {
-        audioRef.current.pause();
-      }
+      if (audioRef.current) audioRef.current.pause();
     };
   }, [stopAnimationLoop]);
 
   useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.playbackRate = playbackSpeed;
-    }
+    if (audioRef.current) audioRef.current.playbackRate = playbackSpeed;
   }, [playbackSpeed]);
 
   const cyclePlaybackSpeed = useCallback(() => {
@@ -101,7 +95,6 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
 
   const togglePlay = useCallback(() => {
     if (!audioRef.current) return;
-    
     if (isPlayingRef.current) {
       audioRef.current.pause();
       setIsPlaying(false);
@@ -112,7 +105,7 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
         setIsPlaying(true);
         isPlayingRef.current = true;
         startAnimationLoop();
-      }).catch(console.error);
+      }).catch(() => {});
     }
   }, [startAnimationLoop, stopAnimationLoop]);
 
@@ -128,9 +121,7 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
     setIsPlaying(false);
     isPlayingRef.current = false;
     stopAnimationLoop();
-    if (audioRef.current) {
-      audioRef.current.currentTime = 0;
-    }
+    if (audioRef.current) audioRef.current.currentTime = 0;
     setProgressPercent(0);
     setDisplayTime(0);
   }, [stopAnimationLoop]);
@@ -165,26 +156,20 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
 
   useEffect(() => {
     if (!isDragging) return;
-
     const handleMove = (e: MouseEvent | TouchEvent) => {
       e.preventDefault();
       const clientX = 'touches' in e ? e.touches[0].clientX : (e as MouseEvent).clientX;
       seekTo(getTimeFromPosition(clientX));
     };
-
     const handleUp = () => {
       setIsDragging(false);
       isDraggingRef.current = false;
-      if (isPlayingRef.current) {
-        startAnimationLoop();
-      }
+      if (isPlayingRef.current) startAnimationLoop();
     };
-
     window.addEventListener('mousemove', handleMove);
     window.addEventListener('mouseup', handleUp);
     window.addEventListener('touchmove', handleMove, { passive: false });
     window.addEventListener('touchend', handleUp);
-
     return () => {
       window.removeEventListener('mousemove', handleMove);
       window.removeEventListener('mouseup', handleUp);
@@ -197,67 +182,37 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
   if (compact) {
     return (
       <div className="flex items-center gap-1.5 min-w-[180px] max-w-[240px] mx-auto bg-muted/40 rounded-full px-1.5 py-1">
-        <audio
-          ref={audioRef}
-          src={voiceUrl}
-          preload="metadata"
-          onLoadedMetadata={handleLoadedMetadata}
-          onEnded={handleEnded}
-        />
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          onClick={togglePlay}
-          className="h-7 w-7 shrink-0 rounded-full bg-primary text-primary-foreground hover:bg-primary/90"
-        >
+        <audio ref={audioRef} src={resolvedUrl} preload="metadata"
+          onLoadedMetadata={handleLoadedMetadata} onEnded={handleEnded} />
+        <Button type="button" variant="ghost" size="icon" onClick={togglePlay}
+          className="h-7 w-7 shrink-0 rounded-full bg-primary text-primary-foreground hover:bg-primary/90">
           {isPlaying ? <Pause className="h-3 w-3 fill-current" /> : <Play className="h-3 w-3 fill-current ml-0.5" />}
         </Button>
-        <div
-          ref={waveformCompactRef}
+        <div ref={waveformCompactRef}
           className="flex-1 h-8 cursor-pointer relative select-none overflow-hidden touch-none"
-          onMouseDown={handlePointerDown}
-          onTouchStart={handlePointerDown}
-        >
+          onMouseDown={handlePointerDown} onTouchStart={handlePointerDown}>
           <div className="absolute inset-0 flex items-center gap-px pointer-events-none">
             {waveformBars.map((height, index) => {
               const barPercent = ((index + 0.5) / waveformBars.length) * 100;
               const isPlayed = barPercent <= progressPercent;
               return (
-                <div
-                  key={index}
-                  className="flex-1 rounded-full transition-colors duration-75"
-                  style={{
-                    height: `${height * 100}%`,
-                    minWidth: '2px',
-                    maxWidth: '3px',
-                    backgroundColor: isPlayed ? 'hsl(var(--primary))' : 'hsl(var(--muted-foreground) / 0.3)',
-                  }}
-                />
+                <div key={index} className="flex-1 rounded-full transition-colors duration-75"
+                  style={{ height: `${height * 100}%`, minWidth: '2px', maxWidth: '3px',
+                    backgroundColor: isPlayed ? 'hsl(var(--primary))' : 'hsl(var(--muted-foreground) / 0.3)' }} />
               );
             })}
           </div>
-          <div
-            className="absolute top-1/2 z-20 pointer-events-none"
-            style={{
-              left: `${progressPercent}%`,
-              transform: 'translate(-50%, -50%)',
-              transition: isDragging ? 'none' : 'left 0.05s linear'
-            }}
-          >
+          <div className="absolute top-1/2 z-20 pointer-events-none"
+            style={{ left: `${progressPercent}%`, transform: 'translate(-50%, -50%)',
+              transition: isDragging ? 'none' : 'left 0.05s linear' }}>
             <div className="w-3 h-3 rounded-full bg-primary shadow-md border-2 border-background" />
           </div>
         </div>
         <span className="text-[10px] text-muted-foreground tabular-nums min-w-[24px] text-right">
           {isPlaying || displayTime > 0 ? formatTime(displayTime) : formatTime(duration)}
         </span>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={cyclePlaybackSpeed}
-          className="h-5 px-1 text-[9px] font-medium text-muted-foreground hover:text-foreground shrink-0"
-        >
+        <Button type="button" variant="ghost" size="sm" onClick={cyclePlaybackSpeed}
+          className="h-5 px-1 text-[9px] font-medium text-muted-foreground hover:text-foreground shrink-0">
           {playbackSpeed}x
         </Button>
       </div>
@@ -267,54 +222,29 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
   // Full mode
   return (
     <div className="flex items-center gap-3 p-3 bg-muted/30 rounded-2xl border border-border/50">
-      <audio
-        ref={audioRef}
-        src={voiceUrl}
-        preload="metadata"
-        onLoadedMetadata={handleLoadedMetadata}
-        onEnded={handleEnded}
-      />
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        onClick={togglePlay}
-        className="h-11 w-11 shrink-0 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 shadow-md"
-      >
+      <audio ref={audioRef} src={resolvedUrl} preload="metadata"
+        onLoadedMetadata={handleLoadedMetadata} onEnded={handleEnded} />
+      <Button type="button" variant="ghost" size="icon" onClick={togglePlay}
+        className="h-11 w-11 shrink-0 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 shadow-md">
         {isPlaying ? <Pause className="h-5 w-5 fill-current" /> : <Play className="h-5 w-5 fill-current ml-0.5" />}
       </Button>
-      <div
-        ref={waveformRef}
+      <div ref={waveformRef}
         className="flex-1 h-10 cursor-pointer relative select-none overflow-hidden touch-none"
-        onMouseDown={handlePointerDown}
-        onTouchStart={handlePointerDown}
-      >
+        onMouseDown={handlePointerDown} onTouchStart={handlePointerDown}>
         <div className="absolute inset-0 flex items-center gap-[1px] pointer-events-none">
           {waveformBars.map((height, index) => {
             const barPercent = ((index + 0.5) / waveformBars.length) * 100;
             const isPlayed = barPercent <= progressPercent;
             return (
-              <div
-                key={index}
-                className="flex-1 rounded-full transition-colors duration-75"
-                style={{
-                  height: `${height * 100}%`,
-                  minWidth: '2px',
-                  maxWidth: '4px',
-                  backgroundColor: isPlayed ? 'hsl(var(--primary))' : 'hsl(var(--muted-foreground) / 0.3)',
-                }}
-              />
+              <div key={index} className="flex-1 rounded-full transition-colors duration-75"
+                style={{ height: `${height * 100}%`, minWidth: '2px', maxWidth: '4px',
+                  backgroundColor: isPlayed ? 'hsl(var(--primary))' : 'hsl(var(--muted-foreground) / 0.3)' }} />
             );
           })}
         </div>
-        <div
-          className="absolute top-1/2 z-20 pointer-events-none"
-          style={{
-            left: `${progressPercent}%`,
-            transform: 'translate(-50%, -50%)',
-            transition: isDragging ? 'none' : 'left 0.05s linear'
-          }}
-        >
+        <div className="absolute top-1/2 z-20 pointer-events-none"
+          style={{ left: `${progressPercent}%`, transform: 'translate(-50%, -50%)',
+            transition: isDragging ? 'none' : 'left 0.05s linear' }}>
           <div className="w-4 h-4 rounded-full bg-primary shadow-lg border-2 border-background" />
         </div>
       </div>
@@ -323,20 +253,11 @@ export const VoiceNotePlayer = ({ voiceUrl, compact = false }: VoiceNotePlayerPr
           {isPlaying || displayTime > 0 ? formatTime(displayTime) : formatTime(duration)}
         </span>
         {duration > 0 && (isPlaying || displayTime > 0) && (
-          <span className="text-[10px] text-muted-foreground tabular-nums">
-            / {formatTime(duration)}
-          </span>
+          <span className="text-[10px] text-muted-foreground tabular-nums">/ {formatTime(duration)}</span>
         )}
       </div>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        onClick={cyclePlaybackSpeed}
-        className="h-7 px-2 text-xs font-medium shrink-0"
-      >
-        {playbackSpeed}x
-      </Button>
+      <Button type="button" variant="outline" size="sm" onClick={cyclePlaybackSpeed}
+        className="h-7 px-2 text-xs font-medium shrink-0">{playbackSpeed}x</Button>
     </div>
   );
 };
