@@ -285,9 +285,15 @@ export const DamagedGoodsForm = () => {
       return;
     }
 
-    // Check image limit
+    // Check image limit per entry
     if (selectedImages.length > maxImagesPerEntry) {
       toast.error(`Maximum ${maxImagesPerEntry} images per entry allowed.`);
+      return;
+    }
+
+    // Check total image limit for tenant
+    if (maxImagesTotal !== null && (currentImageCount + selectedImages.length) > maxImagesTotal) {
+      toast.error(`Total image limit reached (${maxImagesTotal}). Contact your administrator.`);
       return;
     }
 
