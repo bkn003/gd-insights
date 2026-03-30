@@ -55,6 +55,8 @@ export const DamagedGoodsForm = () => {
   const [whatsappEnabled, setWhatsappEnabled] = useState(false);
   const [fieldVisibility, setFieldVisibility] = useState<FieldVisibility>({ category: true, size: true, customer_type: true, shops: true });
   const [maxImagesPerEntry, setMaxImagesPerEntry] = useState(10);
+  const [maxImagesTotal, setMaxImagesTotal] = useState<number | null>(null);
+  const [currentImageCount, setCurrentImageCount] = useState(0);
   const [maxEntries, setMaxEntries] = useState<number | null>(null);
   const [currentEntryCount, setCurrentEntryCount] = useState(0);
   const [notes, setNotes] = useState('');
@@ -94,13 +96,14 @@ export const DamagedGoodsForm = () => {
       // Fetch admin's limits
       const { data: adminProfile } = await supabase
         .from('profiles')
-        .select('max_entries, max_images_per_entry')
+        .select('max_entries, max_images_per_entry, max_images_total')
         .eq('id', adminId)
         .single();
       
       if (adminProfile) {
         setMaxEntries((adminProfile as any).max_entries ?? null);
         setMaxImagesPerEntry((adminProfile as any).max_images_per_entry ?? 10);
+        setMaxImagesTotal((adminProfile as any).max_images_total ?? null);
       }
 
       // Count current entries
