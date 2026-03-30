@@ -106,13 +106,14 @@ export const DamagedGoodsForm = () => {
         setMaxImagesTotal((adminProfile as any).max_images_total ?? null);
       }
 
-      // Count current entries
-      const { count } = await supabase
-        .from('goods_damaged_entries')
-        .select('id', { count: 'exact', head: true })
-        .eq('admin_id', adminId);
+      // Count current entries and images
+      const [entryCountRes, imageCountRes] = await Promise.all([
+        supabase.from('goods_damaged_entries').select('id', { count: 'exact', head: true }).eq('admin_id', adminId),
+        supabase.from('gd_entry_images').select('id', { count: 'exact', head: true }),
+      ]);
       
-      setCurrentEntryCount(count || 0);
+      setCurrentEntryCount(entryCountRes.count || 0);
+      setCurrentImageCount(imageCountRes.count || 0);
     } catch (error) {
       if (import.meta.env.DEV) console.error('Error fetching settings:', error);
     }
