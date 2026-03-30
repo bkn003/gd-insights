@@ -17,6 +17,8 @@ interface DeleteConfirmationDialogProps {
   description?: string;
   itemName?: string;
   loading?: boolean;
+  confirmLabel?: string;
+  confirmVariant?: 'destructive' | 'default';
 }
 
 export const DeleteConfirmationDialog = ({
@@ -27,10 +29,15 @@ export const DeleteConfirmationDialog = ({
   description,
   itemName,
   loading = false,
+  confirmLabel,
+  confirmVariant = 'destructive',
 }: DeleteConfirmationDialogProps) => {
   const defaultDescription = itemName
     ? `Are you sure you want to delete "${itemName}"? This action cannot be undone.`
     : 'Are you sure you want to delete this item? This action cannot be undone.';
+
+  const defaultConfirmLabel = confirmLabel || (title.toLowerCase().includes('sign out') || title.toLowerCase().includes('log out') ? 'Sign Out' : 'Delete');
+  const isDestructive = confirmVariant === 'destructive';
 
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
@@ -49,9 +56,9 @@ export const DeleteConfirmationDialog = ({
               onConfirm();
             }}
             disabled={loading}
-            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            className={isDestructive ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : ""}
           >
-            {loading ? 'Deleting...' : 'Delete'}
+            {loading ? 'Processing...' : defaultConfirmLabel}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
