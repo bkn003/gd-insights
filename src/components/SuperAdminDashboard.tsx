@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { Play, Pause, Trash2, Settings, Users, Building, Shield, Search, ChevronDown, ChevronRight, Image } from 'lucide-react';
+import { Play, Pause, Trash2, Settings, Users, Building, Shield, Search, ChevronDown, ChevronRight, Image, CheckCircle, XCircle } from 'lucide-react';
 import { DeleteConfirmationDialog } from './DeleteConfirmationDialog';
 import { format } from 'date-fns';
 import { useAuth } from '@/hooks/useAuth';
@@ -23,6 +23,7 @@ interface AdminProfile {
   max_users: number;
   max_entries: number | null;
   max_images_per_entry: number | null;
+  max_images_total: number | null;
   created_at: string;
   last_login_at: string | null;
   admin_id: string | null;
@@ -45,8 +46,13 @@ export const SuperAdminDashboard = () => {
   const [maxUsers, setMaxUsers] = useState(10);
   const [maxEntries, setMaxEntries] = useState<number | ''>('');
   const [maxImagesPerEntry, setMaxImagesPerEntry] = useState<number>(10);
+  const [maxImagesTotal, setMaxImagesTotal] = useState<number | ''>('');
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedAdmins, setExpandedAdmins] = useState<Set<string>>(new Set());
+  // Confirmation state for pause/activate actions
+  const [pauseTarget, setPauseTarget] = useState<AdminProfile | null>(null);
+  const [activateTarget, setActivateTarget] = useState<AdminProfile | null>(null);
+  const [bulkAction, setBulkAction] = useState<'pause' | 'activate' | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -63,39 +69,22 @@ export const SuperAdminDashboard = () => {
       setAllProfiles(profiles);
       setAllShops(shopsRes.data || []);
 
-      // Fetch entry counts per admin
       const adminIds = profiles.filter(p => p.role === 'admin').map(p => p.id);
       if (adminIds.length > 0) {
-        const { data: entries } = await supabase
-          .from('goods_damaged_entries')
-          .select('admin_id');
-        
+        const { data: entries } = await supabase.from('goods_damaged_entries').select('admin_id');
         if (entries) {
           const counts: Record<string, number> = {};
-          entries.forEach((e: any) => {
-            if (e.admin_id) counts[e.admin_id] = (counts[e.admin_id] || 0) + 1;
-          });
+          entries.forEach((e: any) => { if (e.admin_id) counts[e.admin_id] = (counts[e.admin_id] || 0) + 1; });
           setEntryCounts(counts);
         }
 
-        // Fetch image counts per admin (via entries -> images)
-        const { data: images } = await supabase
-          .from('gd_entry_images')
-          .select('gd_entry_id');
+        const { data: entryDetails } = await supabase.from('goods_damaged_entries').select('id, admin_id');
+        if (entryDetails) {
+          const entryToAdmin: Record<string, string> = {};
+          entryDetails.forEach((e: any) => { if (e.admin_id) entryToAdmin[e.id] = e.admin_id; });
 
-        if (images && entries) {
-          const entryAdminMap: Record<string, string> = {};
-          entries.forEach((e: any) => { if (e.admin_id) entryAdminMap[e.admin_id] = e.admin_id; });
-          
-          // Build entry-to-admin mapping
-          const { data: entryDetails } = await supabase
-            .from('goods_damaged_entries')
-            .select('id, admin_id');
-          
-          if (entryDetails) {
-            const entryToAdmin: Record<string, string> = {};
-            entryDetails.forEach((e: any) => { if (e.admin_id) entryToAdmin[e.id] = e.admin_id; });
-            
+          const { data: images } = await supabase.from('gd_entry_images').select('gd_entry_id');
+          if (images) {
             const imgCounts: Record<string, number> = {};
             images.forEach((img: any) => {
               const adminId = entryToAdmin[img.gd_entry_id];
@@ -106,38 +95,29 @@ export const SuperAdminDashboard = () => {
         }
       }
     } catch (error) {
-      console.error('Error fetching data:', error);
+      if (import.meta.env.DEV) console.error('Error fetching data:', error);
       toast.error('Failed to load admin data');
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
-  // Realtime subscription for instant updates
   useEffect(() => {
-    const profileChannel = supabase
+    const channel = supabase
       .channel('sa-profiles-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
-        fetchData();
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'shops' }, () => {
-        fetchData();
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'goods_damaged_entries' }, () => {
-        fetchData();
-      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'shops' }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'goods_damaged_entries' }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'gd_entry_images' }, () => fetchData())
       .subscribe();
-
-    return () => {
-      supabase.removeChannel(profileChannel);
-    };
+    return () => { supabase.removeChannel(channel); };
   }, [fetchData]);
 
   const admins = useMemo(() => allProfiles.filter(p => p.role === 'admin'), [allProfiles]);
+  const activeAdmins = useMemo(() => admins.filter(a => a.status === 'active'), [admins]);
+  const pausedAdmins = useMemo(() => admins.filter(a => a.status === 'paused'), [admins]);
 
   const filteredAdmins = useMemo(() => admins.filter(a =>
     !searchQuery ||
@@ -146,8 +126,7 @@ export const SuperAdminDashboard = () => {
   ), [admins, searchQuery]);
 
   const getSubUsers = useCallback((adminId: string) =>
-    allProfiles.filter(p => p.admin_id === adminId && p.id !== adminId),
-  [allProfiles]);
+    allProfiles.filter(p => p.admin_id === adminId && p.id !== adminId), [allProfiles]);
 
   const getAdminStats = useCallback((adminId: string) => {
     const shopCount = allShops.filter((s: any) => s.admin_id === adminId).length;
@@ -158,88 +137,78 @@ export const SuperAdminDashboard = () => {
   const toggleExpand = useCallback((adminId: string) => {
     setExpandedAdmins(prev => {
       const next = new Set(prev);
-      if (next.has(adminId)) next.delete(adminId);
-      else next.add(adminId);
+      if (next.has(adminId)) next.delete(adminId); else next.add(adminId);
       return next;
     });
   }, []);
 
   const handleRoleChange = useCallback(async (profile: AdminProfile, newRole: string) => {
-    if (profile.id === user?.id) {
-      toast.error("You cannot change your own role");
-      return;
-    }
+    if (profile.id === user?.id) { toast.error("You cannot change your own role"); return; }
     try {
       const updateData: any = { role: newRole };
-      if (newRole === 'admin') {
-        updateData.admin_id = profile.id;
-        updateData.status = 'paused';
-      }
-      if (newRole === 'super_admin') {
-        updateData.admin_id = null;
-        updateData.status = 'active';
-      }
+      if (newRole === 'admin') { updateData.admin_id = profile.id; updateData.status = 'paused'; }
+      if (newRole === 'super_admin') { updateData.admin_id = null; updateData.status = 'active'; }
       if (newRole === 'manager' || newRole === 'user') {
         if (!profile.admin_id || profile.admin_id === profile.id) {
-          toast.error("Cannot demote to sub-user role without an admin parent.");
-          return;
+          toast.error("Cannot demote to sub-user role without an admin parent."); return;
         }
       }
-
-      const { error } = await (supabase.from('profiles') as any)
-        .update(updateData)
-        .eq('id', profile.id);
+      const { error } = await (supabase.from('profiles') as any).update(updateData).eq('id', profile.id);
       if (error) throw error;
-
       toast.success(`${profile.name}'s role changed to ${newRole}`);
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to change role');
-    }
+    } catch (error: any) { toast.error(error.message || 'Failed to change role'); }
   }, [user?.id]);
 
-  const handleActivate = useCallback(async (admin: AdminProfile) => {
+  const handleActivateConfirmed = useCallback(async (admin: AdminProfile) => {
     try {
-      const { error } = await (supabase.from('profiles') as any)
-        .update({ status: 'active' })
-        .eq('id', admin.id);
+      const { error } = await (supabase.from('profiles') as any).update({ status: 'active' }).eq('id', admin.id);
       if (error) throw error;
-
-      await (supabase.from('profiles') as any)
-        .update({ status: 'active' })
-        .eq('admin_id', admin.id)
-        .neq('id', admin.id);
-
+      await (supabase.from('profiles') as any).update({ status: 'active' }).eq('admin_id', admin.id).neq('id', admin.id);
       toast.success(`${admin.name} activated successfully`);
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to activate');
-    }
+    } catch (error: any) { toast.error(error.message || 'Failed to activate'); }
+    setActivateTarget(null);
   }, []);
 
-  const handlePause = useCallback(async (admin: AdminProfile) => {
+  const handlePauseConfirmed = useCallback(async (admin: AdminProfile) => {
     try {
       await (supabase.from('profiles') as any).update({ status: 'paused' }).eq('id', admin.id);
       await (supabase.from('profiles') as any).update({ status: 'paused' }).eq('admin_id', admin.id);
-      
-      // Force logout the admin and all sub-users via edge function
+      // Force logout via edge function
       try {
-        await supabase.functions.invoke('update-sub-user', {
-          body: { user_id: admin.id, action: 'pause' },
-        });
+        await supabase.functions.invoke('update-sub-user', { body: { user_id: admin.id, action: 'pause' } });
         const subUsers = getSubUsers(admin.id);
         for (const sub of subUsers) {
-          await supabase.functions.invoke('update-sub-user', {
-            body: { user_id: sub.id, action: 'pause' },
-          });
+          await supabase.functions.invoke('update-sub-user', { body: { user_id: sub.id, action: 'pause' } });
         }
       } catch (e) {
-        console.warn('Force logout via edge function failed:', e);
+        if (import.meta.env.DEV) console.warn('Force logout via edge function failed:', e);
       }
-      
       toast.success(`${admin.name} and all sub-users paused & logged out.`);
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to pause');
-    }
+    } catch (error: any) { toast.error(error.message || 'Failed to pause'); }
+    setPauseTarget(null);
   }, [getSubUsers]);
+
+  const handleBulkActionConfirmed = useCallback(async () => {
+    if (!bulkAction) return;
+    const newStatus = bulkAction === 'pause' ? 'paused' : 'active';
+    try {
+      for (const admin of admins) {
+        await (supabase.from('profiles') as any).update({ status: newStatus }).eq('id', admin.id);
+        await (supabase.from('profiles') as any).update({ status: newStatus }).eq('admin_id', admin.id);
+        if (bulkAction === 'pause') {
+          try {
+            await supabase.functions.invoke('update-sub-user', { body: { user_id: admin.id, action: 'pause' } });
+            const subs = getSubUsers(admin.id);
+            for (const sub of subs) {
+              await supabase.functions.invoke('update-sub-user', { body: { user_id: sub.id, action: 'pause' } });
+            }
+          } catch {}
+        }
+      }
+      toast.success(`All admins ${newStatus === 'active' ? 'activated' : 'paused'} successfully.`);
+    } catch (error: any) { toast.error(error.message || 'Bulk action failed'); }
+    setBulkAction(null);
+  }, [bulkAction, admins, getSubUsers]);
 
   const handleDelete = useCallback(async () => {
     if (!deleteAdmin) return;
@@ -254,42 +223,30 @@ export const SuperAdminDashboard = () => {
         (supabase.from('customer_types') as any).update({ deleted_at: new Date().toISOString() }).eq('admin_id', adminId),
         (supabase.from('custom_fields') as any).update({ deleted_at: new Date().toISOString() }).eq('admin_id', adminId),
       ]);
-      await (supabase.from('profiles') as any)
-        .update({ deleted_at: new Date().toISOString(), status: 'paused' })
-        .eq('admin_id', adminId).neq('id', adminId);
-      await (supabase.from('profiles') as any)
-        .update({ deleted_at: new Date().toISOString(), status: 'paused' })
-        .eq('id', adminId);
+      await (supabase.from('profiles') as any).update({ deleted_at: new Date().toISOString(), status: 'paused' }).eq('admin_id', adminId).neq('id', adminId);
+      await (supabase.from('profiles') as any).update({ deleted_at: new Date().toISOString(), status: 'paused' }).eq('id', adminId);
       await (supabase.from('app_settings') as any).delete().eq('admin_id', adminId);
-
       toast.success(`${deleteAdmin.name} and ALL associated data deleted.`);
       setDeleteAdmin(null);
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to delete admin');
-    } finally {
-      setIsDeleting(false);
-    }
+    } catch (error: any) { toast.error(error.message || 'Failed to delete admin'); }
+    finally { setIsDeleting(false); }
   }, [deleteAdmin]);
 
   const handleSetLimits = useCallback(async () => {
     if (!selectedAdmin) return;
     try {
-      const { error } = await (supabase.from('profiles') as any)
-        .update({
-          max_shops: maxShops,
-          max_users: maxUsers,
-          max_entries: maxEntries === '' ? null : maxEntries,
-          max_images_per_entry: maxImagesPerEntry,
-        })
-        .eq('id', selectedAdmin.id);
+      const { error } = await (supabase.from('profiles') as any).update({
+        max_shops: maxShops,
+        max_users: maxUsers,
+        max_entries: maxEntries === '' ? null : maxEntries,
+        max_images_per_entry: maxImagesPerEntry,
+        max_images_total: maxImagesTotal === '' ? null : maxImagesTotal,
+      }).eq('id', selectedAdmin.id);
       if (error) throw error;
-
       toast.success('Limits updated successfully');
       setLimitsDialogOpen(false);
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to update limits');
-    }
-  }, [selectedAdmin, maxShops, maxUsers, maxEntries, maxImagesPerEntry]);
+    } catch (error: any) { toast.error(error.message || 'Failed to update limits'); }
+  }, [selectedAdmin, maxShops, maxUsers, maxEntries, maxImagesPerEntry, maxImagesTotal]);
 
   const openLimitsDialog = useCallback((admin: AdminProfile) => {
     setSelectedAdmin(admin);
@@ -297,6 +254,7 @@ export const SuperAdminDashboard = () => {
     setMaxUsers(admin.max_users || 10);
     setMaxEntries(admin.max_entries ?? '');
     setMaxImagesPerEntry(admin.max_images_per_entry ?? 10);
+    setMaxImagesTotal(admin.max_images_total ?? '');
     setLimitsDialogOpen(true);
   }, []);
 
@@ -309,52 +267,53 @@ export const SuperAdminDashboard = () => {
       {/* Search */}
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Search by name or email..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-9"
-        />
+        <Input placeholder="Search by name or email..." value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)} className="pl-9" />
       </div>
 
-      {/* Summary Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold">{admins.length}</div>
-            <div className="text-sm text-muted-foreground">Total Admins</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold">{allProfiles.filter(p => p.role !== 'admin' && p.role !== 'super_admin').length}</div>
-            <div className="text-sm text-muted-foreground">Total Sub-Users</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold">{allShops.length}</div>
-            <div className="text-sm text-muted-foreground">Total Shops</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold">{Object.values(entryCounts).reduce((a, b) => a + b, 0)}</div>
-            <div className="text-sm text-muted-foreground">Total Entries</div>
-          </CardContent>
-        </Card>
+      {/* Summary Stats with active/paused counts */}
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+        <Card><CardContent className="p-4 text-center">
+          <div className="text-2xl font-bold">{admins.length}</div>
+          <div className="text-sm text-muted-foreground">Total Admins</div>
+        </CardContent></Card>
+        <Card><CardContent className="p-4 text-center">
+          <div className="text-2xl font-bold text-primary">{activeAdmins.length}</div>
+          <div className="text-sm text-muted-foreground flex items-center justify-center gap-1"><CheckCircle className="h-3 w-3" /> Active</div>
+        </CardContent></Card>
+        <Card><CardContent className="p-4 text-center">
+          <div className="text-2xl font-bold text-destructive">{pausedAdmins.length}</div>
+          <div className="text-sm text-muted-foreground flex items-center justify-center gap-1"><XCircle className="h-3 w-3" /> Paused</div>
+        </CardContent></Card>
+        <Card><CardContent className="p-4 text-center">
+          <div className="text-2xl font-bold">{allProfiles.filter(p => p.role !== 'admin' && p.role !== 'super_admin').length}</div>
+          <div className="text-sm text-muted-foreground">Total Sub-Users</div>
+        </CardContent></Card>
+        <Card><CardContent className="p-4 text-center">
+          <div className="text-2xl font-bold">{allShops.length}</div>
+          <div className="text-sm text-muted-foreground">Total Shops</div>
+        </CardContent></Card>
+        <Card><CardContent className="p-4 text-center">
+          <div className="text-2xl font-bold">{Object.values(entryCounts).reduce((a, b) => a + b, 0)}</div>
+          <div className="text-sm text-muted-foreground">Total Entries</div>
+        </CardContent></Card>
       </div>
 
-      {/* Tenant Admin Cards */}
+      {/* Bulk Actions */}
+      <div className="flex gap-2">
+        <Button variant="outline" size="sm" onClick={() => setBulkAction('activate')} className="flex items-center gap-1">
+          <Play className="h-3 w-3" /> Activate All
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => setBulkAction('pause')} className="flex items-center gap-1">
+          <Pause className="h-3 w-3" /> Pause All
+        </Button>
+      </div>
+
+      {/* Tenant Admin Table */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Shield className="h-5 w-5" />
-            Tenant Admin Management
-          </CardTitle>
-          <CardDescription>
-            {admins.length} registered admin(s). Click to expand and see sub-users.
-          </CardDescription>
+          <CardTitle className="flex items-center gap-2"><Shield className="h-5 w-5" /> Tenant Admin Management</CardTitle>
+          <CardDescription>{admins.length} registered admin(s). Click to expand and see sub-users.</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -383,30 +342,15 @@ export const SuperAdminDashboard = () => {
                   const imageCount = imageCounts[admin.id] || 0;
 
                   return (
-                    <AdminRow
-                      key={admin.id}
-                      admin={admin}
-                      stats={stats}
-                      subUsers={subUsers}
-                      isExpanded={isExpanded}
-                      entryCount={entryCount}
-                      imageCount={imageCount}
-                      currentUserId={user?.id}
-                      onToggleExpand={toggleExpand}
-                      onActivate={handleActivate}
-                      onPause={handlePause}
-                      onDelete={setDeleteAdmin}
-                      onLimits={openLimitsDialog}
-                      onRoleChange={handleRoleChange}
-                    />
+                    <AdminRow key={admin.id} admin={admin} stats={stats} subUsers={subUsers}
+                      isExpanded={isExpanded} entryCount={entryCount} imageCount={imageCount}
+                      currentUserId={user?.id} onToggleExpand={toggleExpand}
+                      onActivate={(a) => setActivateTarget(a)} onPause={(a) => setPauseTarget(a)}
+                      onDelete={setDeleteAdmin} onLimits={openLimitsDialog} onRoleChange={handleRoleChange} />
                   );
                 })}
                 {filteredAdmins.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={11} className="text-center text-muted-foreground py-8">
-                      No admins found.
-                    </TableCell>
-                  </TableRow>
+                  <TableRow><TableCell colSpan={11} className="text-center text-muted-foreground py-8">No admins found.</TableCell></TableRow>
                 )}
               </TableBody>
             </Table>
@@ -417,12 +361,7 @@ export const SuperAdminDashboard = () => {
       {/* Super Admins section */}
       {allProfiles.filter(p => p.role === 'super_admin').length > 0 && (
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Shield className="h-5 w-5" />
-              Super Admins
-            </CardTitle>
-          </CardHeader>
+          <CardHeader><CardTitle className="flex items-center gap-2"><Shield className="h-5 w-5" /> Super Admins</CardTitle></CardHeader>
           <CardContent>
             <div className="space-y-2">
               {allProfiles.filter(p => p.role === 'super_admin').map(sa => (
@@ -445,9 +384,7 @@ export const SuperAdminDashboard = () => {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Set Limits for {selectedAdmin?.name}</DialogTitle>
-            <DialogDescription>
-              Configure resource limits for this admin tenant.
-            </DialogDescription>
+            <DialogDescription>Configure resource limits for this admin tenant.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
@@ -460,26 +397,19 @@ export const SuperAdminDashboard = () => {
             </div>
             <div className="space-y-2">
               <Label>Maximum GD Entries <span className="text-xs text-muted-foreground">(blank = unlimited)</span></Label>
-              <Input
-                type="number"
-                min={0}
-                value={maxEntries}
-                onChange={e => setMaxEntries(e.target.value === '' ? '' : Number(e.target.value))}
-                placeholder="Unlimited"
-              />
-              <p className="text-xs text-muted-foreground">
-                Current usage: {entryCounts[selectedAdmin?.id || ''] || 0} entries
-              </p>
+              <Input type="number" min={0} value={maxEntries}
+                onChange={e => setMaxEntries(e.target.value === '' ? '' : Number(e.target.value))} placeholder="Unlimited" />
+              <p className="text-xs text-muted-foreground">Current usage: {entryCounts[selectedAdmin?.id || ''] || 0} entries</p>
             </div>
             <div className="space-y-2">
-              <Label className="flex items-center gap-2">
-                <Image className="h-4 w-4" />
-                Max Images Per Entry
-              </Label>
+              <Label className="flex items-center gap-2"><Image className="h-4 w-4" /> Max Images Per Entry</Label>
               <Input type="number" min={0} max={20} value={maxImagesPerEntry} onChange={e => setMaxImagesPerEntry(Number(e.target.value))} />
-              <p className="text-xs text-muted-foreground">
-                Total images stored: {imageCounts[selectedAdmin?.id || ''] || 0}
-              </p>
+            </div>
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2"><Image className="h-4 w-4" /> Max Images Total <span className="text-xs text-muted-foreground">(blank = unlimited)</span></Label>
+              <Input type="number" min={0} value={maxImagesTotal}
+                onChange={e => setMaxImagesTotal(e.target.value === '' ? '' : Number(e.target.value))} placeholder="Unlimited" />
+              <p className="text-xs text-muted-foreground">Current usage: {imageCounts[selectedAdmin?.id || ''] || 0} images</p>
             </div>
             <div className="flex gap-2 justify-end">
               <Button variant="outline" onClick={() => setLimitsDialogOpen(false)}>Cancel</Button>
@@ -490,20 +420,37 @@ export const SuperAdminDashboard = () => {
       </Dialog>
 
       {/* Delete Confirmation */}
-      <DeleteConfirmationDialog
-        open={!!deleteAdmin}
-        onOpenChange={open => !open && setDeleteAdmin(null)}
-        onConfirm={handleDelete}
-        title="Delete Admin & All Data"
-        itemName={deleteAdmin?.name}
+      <DeleteConfirmationDialog open={!!deleteAdmin} onOpenChange={open => !open && setDeleteAdmin(null)}
+        onConfirm={handleDelete} title="Delete Admin & All Data" itemName={deleteAdmin?.name}
         description={`Are you sure you want to delete "${deleteAdmin?.name}"? This will permanently delete the admin, ALL their sub-users, shops, categories, sizes, customer types, GD entries, and settings.`}
-        loading={isDeleting}
-      />
+        loading={isDeleting} />
+
+      {/* Pause Confirmation */}
+      <DeleteConfirmationDialog open={!!pauseTarget} onOpenChange={open => !open && setPauseTarget(null)}
+        onConfirm={() => pauseTarget && handlePauseConfirmed(pauseTarget)} title="Pause Admin"
+        description={`Are you sure you want to pause "${pauseTarget?.name}" and all their sub-users? They will be immediately logged out.`}
+        confirmLabel="Pause" />
+
+      {/* Activate Confirmation */}
+      <DeleteConfirmationDialog open={!!activateTarget} onOpenChange={open => !open && setActivateTarget(null)}
+        onConfirm={() => activateTarget && handleActivateConfirmed(activateTarget)} title="Activate Admin"
+        description={`Activate "${activateTarget?.name}" and all their sub-users?`}
+        confirmLabel="Activate" confirmVariant="default" />
+
+      {/* Bulk Action Confirmation */}
+      <DeleteConfirmationDialog open={!!bulkAction} onOpenChange={open => !open && setBulkAction(null)}
+        onConfirm={handleBulkActionConfirmed}
+        title={bulkAction === 'pause' ? 'Pause All Admins' : 'Activate All Admins'}
+        description={bulkAction === 'pause'
+          ? `Are you sure you want to pause ALL ${admins.length} admin(s) and their sub-users? They will all be immediately logged out.`
+          : `Are you sure you want to activate ALL ${admins.length} admin(s) and their sub-users?`}
+        confirmLabel={bulkAction === 'pause' ? 'Pause All' : 'Activate All'}
+        confirmVariant={bulkAction === 'pause' ? 'destructive' : 'default'} />
     </div>
   );
 };
 
-// Extracted admin row component for performance
+// Extracted admin row component
 interface AdminRowProps {
   admin: AdminProfile;
   stats: { shopCount: number; userCount: number };
@@ -527,54 +474,26 @@ const AdminRow = ({
   <>
     <TableRow className="cursor-pointer hover:bg-muted/50" onClick={() => onToggleExpand(admin.id)}>
       <TableCell>
-        {subUsers.length > 0 ? (
-          isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />
-        ) : null}
+        {subUsers.length > 0 ? (isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />) : null}
       </TableCell>
       <TableCell className="font-medium">{admin.name}</TableCell>
       <TableCell className="text-sm text-muted-foreground">{admin.email || '-'}</TableCell>
-      <TableCell>
-        <Badge variant={admin.status === 'active' ? 'default' : 'destructive'}>{admin.status}</Badge>
-      </TableCell>
+      <TableCell><Badge variant={admin.status === 'active' ? 'default' : 'destructive'}>{admin.status}</Badge></TableCell>
       <TableCell className="text-sm">{format(new Date(admin.created_at), 'PP')}</TableCell>
-      <TableCell className="text-sm">
-        {admin.last_login_at ? format(new Date(admin.last_login_at), 'PP p') : 'Never'}
-      </TableCell>
-      <TableCell>
-        <span className="flex items-center gap-1 text-sm">
-          <Building className="h-3 w-3" /> {stats.shopCount}/{admin.max_shops ?? '∞'}
-        </span>
-      </TableCell>
-      <TableCell>
-        <span className="flex items-center gap-1 text-sm">
-          <Users className="h-3 w-3" /> {stats.userCount}/{admin.max_users ?? '∞'}
-        </span>
-      </TableCell>
-      <TableCell>
-        <span className="text-sm">{entryCount}/{admin.max_entries ?? '∞'}</span>
-      </TableCell>
-      <TableCell>
-        <span className="flex items-center gap-1 text-sm">
-          <Image className="h-3 w-3" /> {imageCount}
-        </span>
-      </TableCell>
+      <TableCell className="text-sm">{admin.last_login_at ? format(new Date(admin.last_login_at), 'PP p') : 'Never'}</TableCell>
+      <TableCell><span className="flex items-center gap-1 text-sm"><Building className="h-3 w-3" /> {stats.shopCount}/{admin.max_shops ?? '∞'}</span></TableCell>
+      <TableCell><span className="flex items-center gap-1 text-sm"><Users className="h-3 w-3" /> {stats.userCount}/{admin.max_users ?? '∞'}</span></TableCell>
+      <TableCell><span className="text-sm">{entryCount}/{admin.max_entries ?? '∞'}</span></TableCell>
+      <TableCell><span className="flex items-center gap-1 text-sm"><Image className="h-3 w-3" /> {imageCount}/{admin.max_images_total ?? '∞'}</span></TableCell>
       <TableCell onClick={(e) => e.stopPropagation()}>
         <div className="flex gap-1">
           {admin.status === 'paused' ? (
-            <Button size="sm" variant="outline" onClick={() => onActivate(admin)} title="Activate">
-              <Play className="h-3 w-3" />
-            </Button>
+            <Button size="sm" variant="outline" onClick={() => onActivate(admin)} title="Activate"><Play className="h-3 w-3" /></Button>
           ) : (
-            <Button size="sm" variant="outline" onClick={() => onPause(admin)} title="Pause">
-              <Pause className="h-3 w-3" />
-            </Button>
+            <Button size="sm" variant="outline" onClick={() => onPause(admin)} title="Pause"><Pause className="h-3 w-3" /></Button>
           )}
-          <Button size="sm" variant="outline" onClick={() => onLimits(admin)} title="Set limits">
-            <Settings className="h-3 w-3" />
-          </Button>
-          <Button size="sm" variant="destructive" onClick={() => onDelete(admin)} title="Delete">
-            <Trash2 className="h-3 w-3" />
-          </Button>
+          <Button size="sm" variant="outline" onClick={() => onLimits(admin)} title="Set limits"><Settings className="h-3 w-3" /></Button>
+          <Button size="sm" variant="destructive" onClick={() => onDelete(admin)} title="Delete"><Trash2 className="h-3 w-3" /></Button>
         </div>
       </TableCell>
     </TableRow>
@@ -583,26 +502,15 @@ const AdminRow = ({
         <TableCell></TableCell>
         <TableCell className="pl-8 text-sm">↳ {sub.name}</TableCell>
         <TableCell className="text-sm text-muted-foreground">{sub.email || '-'}</TableCell>
-        <TableCell>
-          <Badge variant={sub.status === 'active' ? 'default' : 'destructive'} className="text-xs">{sub.status}</Badge>
-        </TableCell>
+        <TableCell><Badge variant={sub.status === 'active' ? 'default' : 'destructive'} className="text-xs">{sub.status}</Badge></TableCell>
         <TableCell className="text-sm">{format(new Date(sub.created_at), 'PP')}</TableCell>
-        <TableCell className="text-sm">
-          {sub.last_login_at ? format(new Date(sub.last_login_at), 'PP p') : 'Never'}
-        </TableCell>
-        <TableCell colSpan={3}>
-          <Badge variant="outline" className="text-xs">{sub.role}</Badge>
-        </TableCell>
+        <TableCell className="text-sm">{sub.last_login_at ? format(new Date(sub.last_login_at), 'PP p') : 'Never'}</TableCell>
+        <TableCell colSpan={3}><Badge variant="outline" className="text-xs">{sub.role}</Badge></TableCell>
         <TableCell></TableCell>
         <TableCell>
           {sub.id !== currentUserId && (
-            <Select
-              value={sub.role}
-              onValueChange={(val) => onRoleChange(sub, val)}
-            >
-              <SelectTrigger className="w-[110px] h-7 text-xs">
-                <SelectValue />
-              </SelectTrigger>
+            <Select value={sub.role} onValueChange={(val) => onRoleChange(sub, val)}>
+              <SelectTrigger className="w-[110px] h-7 text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="manager">Manager</SelectItem>
                 <SelectItem value="user">Staff</SelectItem>
@@ -615,9 +523,7 @@ const AdminRow = ({
     {isExpanded && subUsers.length === 0 && (
       <TableRow className="bg-muted/20">
         <TableCell></TableCell>
-        <TableCell colSpan={10} className="text-sm text-muted-foreground italic">
-          No sub-users for this admin
-        </TableCell>
+        <TableCell colSpan={10} className="text-sm text-muted-foreground italic">No sub-users for this admin</TableCell>
       </TableRow>
     )}
   </>
