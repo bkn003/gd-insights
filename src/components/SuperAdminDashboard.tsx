@@ -57,6 +57,8 @@ export const SuperAdminDashboard = () => {
   const [pauseTarget, setPauseTarget] = useState<AdminProfile | null>(null);
   const [activateTarget, setActivateTarget] = useState<AdminProfile | null>(null);
   const [bulkAction, setBulkAction] = useState<'pause' | 'activate' | null>(null);
+  const [signupEnabled, setSignupEnabled] = useState(true);
+  const [signupLoading, setSignupLoading] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
