@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,22 +8,79 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { Package, AlertCircle } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { logAudit } from '@/utils/auditLog';
+
+const MAX_ATTEMPTS = 5;
+const LOCKOUT_DURATION = 60_000; // 1 minute
 
 export const AuthForm = () => {
   const [isSignUp, setIsSignUp] = useState(false);
   const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [signupSuccess, setSignupSuccess] = useState(false);
+  const [signupEnabled, setSignupEnabled] = useState<boolean | null>(null);
   const [formData, setFormData] = useState({
     email: '',
     password: '',
     name: '',
   });
 
+  // Rate limiting state
+  const [attempts, setAttempts] = useState(0);
+  const [lockedUntil, setLockedUntil] = useState<number | null>(null);
+  const [cooldownSeconds, setCooldownSeconds] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   const { signIn, signUp, resetPassword } = useAuth();
+
+  // Fetch signup visibility setting
+  useEffect(() => {
+    const fetchSignupSetting = async () => {
+      try {
+        const { data } = await (supabase.from('app_settings') as any)
+          .select('value')
+          .eq('key', 'signup_enabled')
+          .is('admin_id', null)
+          .maybeSingle();
+        setSignupEnabled(data?.value === true || data?.value === 'true');
+      } catch {
+        setSignupEnabled(true); // default to enabled if fetch fails
+      }
+    };
+    fetchSignupSetting();
+  }, []);
+
+  // Cooldown timer
+  useEffect(() => {
+    if (lockedUntil) {
+      const update = () => {
+        const remaining = Math.ceil((lockedUntil - Date.now()) / 1000);
+        if (remaining <= 0) {
+          setCooldownSeconds(0);
+          setLockedUntil(null);
+          setAttempts(0);
+          if (timerRef.current) clearInterval(timerRef.current);
+        } else {
+          setCooldownSeconds(remaining);
+        }
+      };
+      update();
+      timerRef.current = setInterval(update, 1000);
+      return () => { if (timerRef.current) clearInterval(timerRef.current); };
+    }
+  }, [lockedUntil]);
+
+  const isLocked = lockedUntil !== null && Date.now() < lockedUntil;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (isLocked) {
+      toast.error(`Too many attempts. Please wait ${cooldownSeconds} seconds.`);
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -43,7 +100,16 @@ export const AuthForm = () => {
         setSignupSuccess(true);
       } else {
         const { error } = await signIn(formData.email, formData.password);
-        if (error) throw error;
+        if (error) {
+          const newAttempts = attempts + 1;
+          setAttempts(newAttempts);
+          if (newAttempts >= MAX_ATTEMPTS) {
+            setLockedUntil(Date.now() + LOCKOUT_DURATION);
+            toast.error(`Too many failed attempts. Locked for 60 seconds.`);
+          }
+          throw error;
+        }
+        setAttempts(0);
         toast.success('Signed in successfully!');
       }
     } catch (error: any) {
@@ -175,7 +241,13 @@ export const AuthForm = () => {
               </div>
             )}
 
-            <Button type="submit" className="w-full" disabled={loading}>
+            {isLocked && (
+              <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3 text-sm text-destructive">
+                Too many failed attempts. Try again in {cooldownSeconds}s.
+              </div>
+            )}
+
+            <Button type="submit" className="w-full" disabled={loading || isLocked}>
               {loading ? 'Loading...' : isForgotPassword ? 'Send Reset Link' : isSignUp ? 'Create Account' : 'Sign In'}
             </Button>
           </form>
@@ -191,7 +263,7 @@ export const AuthForm = () => {
               >
                 Back to sign in
               </Button>
-            ) : (
+            ) : signupEnabled ? (
               <button
                 type="button"
                 onClick={() => setIsSignUp(!isSignUp)}
@@ -200,6 +272,14 @@ export const AuthForm = () => {
                 {isSignUp
                   ? 'Already have an account? Sign in'
                   : "Don't have an account? Sign up as Admin"}
+              </button>
+            ) : !isSignUp ? null : (
+              <button
+                type="button"
+                onClick={() => setIsSignUp(false)}
+                className="text-sm font-medium text-primary hover:underline"
+              >
+                Already have an account? Sign in
               </button>
             )}
           </div>
