@@ -110,6 +110,39 @@ export const SuperAdminDashboard = () => {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  // Fetch signup visibility setting
+  useEffect(() => {
+    const fetchSignupSetting = async () => {
+      try {
+        const { data } = await (supabase.from('app_settings') as any)
+          .select('value')
+          .eq('key', 'signup_enabled')
+          .is('admin_id', null)
+          .maybeSingle();
+        if (data) setSignupEnabled(data.value === true || data.value === 'true');
+      } catch {}
+    };
+    fetchSignupSetting();
+  }, []);
+
+  const handleToggleSignup = useCallback(async (enabled: boolean) => {
+    setSignupLoading(true);
+    try {
+      const { error } = await (supabase.from('app_settings') as any)
+        .update({ value: enabled })
+        .eq('key', 'signup_enabled')
+        .is('admin_id', null);
+      if (error) throw error;
+      setSignupEnabled(enabled);
+      await logAudit({ action: 'signup_toggle', details: { enabled } });
+      toast.success(`Public signup ${enabled ? 'enabled' : 'disabled'}`);
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to update signup setting');
+    } finally {
+      setSignupLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     const channel = supabase
       .channel('sa-profiles-realtime')
