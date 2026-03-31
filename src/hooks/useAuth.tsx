@@ -4,6 +4,7 @@ import { User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { Database } from '@/types/database';
 import { toast } from 'sonner';
+import { logAudit } from '@/utils/auditLog';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 
