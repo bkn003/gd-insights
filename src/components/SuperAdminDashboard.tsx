@@ -223,6 +223,7 @@ export const SuperAdminDashboard = () => {
       } catch (e) {
         if (import.meta.env.DEV) console.warn('Force logout via edge function failed:', e);
       }
+      await logAudit({ action: 'user_paused', targetType: 'profile', targetId: admin.id, details: { name: admin.name } });
       toast.success(`${admin.name} and all sub-users paused & logged out.`);
     } catch (error: any) { toast.error(error.message || 'Failed to pause'); }
     setPauseTarget(null);
