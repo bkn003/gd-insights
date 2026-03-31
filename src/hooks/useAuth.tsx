@@ -4,6 +4,7 @@ import { User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { Database } from '@/types/database';
 import { toast } from 'sonner';
+import { logAudit } from '@/utils/auditLog';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 
@@ -198,6 +199,7 @@ export const useAuth = () => {
   };
 
   const signOut = async () => {
+    await logAudit({ action: 'logout' });
     localStorage.removeItem(PROFILE_CACHE_KEY);
     localStorage.removeItem('gd_app_data');
     const { error } = await supabase.auth.signOut();

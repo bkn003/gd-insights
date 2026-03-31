@@ -8,11 +8,15 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Play, Pause, Trash2, Settings, Users, Building, Shield, Search, ChevronDown, ChevronRight, Image, CheckCircle, XCircle } from 'lucide-react';
+import { Play, Pause, Trash2, Settings, Users, Building, Shield, Search, ChevronDown, ChevronRight, Image, CheckCircle, XCircle, Activity, UserPlus } from 'lucide-react';
 import { DeleteConfirmationDialog } from './DeleteConfirmationDialog';
+import { AuditLogViewer } from './AuditLogViewer';
 import { format } from 'date-fns';
 import { useAuth } from '@/hooks/useAuth';
+import { logAudit } from '@/utils/auditLog';
 
 interface AdminProfile {
   id: string;
@@ -53,6 +57,8 @@ export const SuperAdminDashboard = () => {
   const [pauseTarget, setPauseTarget] = useState<AdminProfile | null>(null);
   const [activateTarget, setActivateTarget] = useState<AdminProfile | null>(null);
   const [bulkAction, setBulkAction] = useState<'pause' | 'activate' | null>(null);
+  const [signupEnabled, setSignupEnabled] = useState(true);
+  const [signupLoading, setSignupLoading] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -103,6 +109,39 @@ export const SuperAdminDashboard = () => {
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Fetch signup visibility setting
+  useEffect(() => {
+    const fetchSignupSetting = async () => {
+      try {
+        const { data } = await (supabase.from('app_settings') as any)
+          .select('value')
+          .eq('key', 'signup_enabled')
+          .is('admin_id', null)
+          .maybeSingle();
+        if (data) setSignupEnabled(data.value === true || data.value === 'true');
+      } catch {}
+    };
+    fetchSignupSetting();
+  }, []);
+
+  const handleToggleSignup = useCallback(async (enabled: boolean) => {
+    setSignupLoading(true);
+    try {
+      const { error } = await (supabase.from('app_settings') as any)
+        .update({ value: enabled })
+        .eq('key', 'signup_enabled')
+        .is('admin_id', null);
+      if (error) throw error;
+      setSignupEnabled(enabled);
+      await logAudit({ action: 'signup_toggle', details: { enabled } });
+      toast.success(`Public signup ${enabled ? 'enabled' : 'disabled'}`);
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to update signup setting');
+    } finally {
+      setSignupLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     const channel = supabase
@@ -164,6 +203,7 @@ export const SuperAdminDashboard = () => {
       const { error } = await (supabase.from('profiles') as any).update({ status: 'active' }).eq('id', admin.id);
       if (error) throw error;
       await (supabase.from('profiles') as any).update({ status: 'active' }).eq('admin_id', admin.id).neq('id', admin.id);
+      await logAudit({ action: 'user_activated', targetType: 'profile', targetId: admin.id, details: { name: admin.name } });
       toast.success(`${admin.name} activated successfully`);
     } catch (error: any) { toast.error(error.message || 'Failed to activate'); }
     setActivateTarget(null);
@@ -183,6 +223,7 @@ export const SuperAdminDashboard = () => {
       } catch (e) {
         if (import.meta.env.DEV) console.warn('Force logout via edge function failed:', e);
       }
+      await logAudit({ action: 'user_paused', targetType: 'profile', targetId: admin.id, details: { name: admin.name } });
       toast.success(`${admin.name} and all sub-users paused & logged out.`);
     } catch (error: any) { toast.error(error.message || 'Failed to pause'); }
     setPauseTarget(null);
@@ -205,6 +246,7 @@ export const SuperAdminDashboard = () => {
           } catch {}
         }
       }
+      await logAudit({ action: bulkAction === 'pause' ? 'bulk_pause' : 'bulk_activate', details: { count: admins.length } });
       toast.success(`All admins ${newStatus === 'active' ? 'activated' : 'paused'} successfully.`);
     } catch (error: any) { toast.error(error.message || 'Bulk action failed'); }
     setBulkAction(null);
@@ -263,6 +305,14 @@ export const SuperAdminDashboard = () => {
   }
 
   return (
+    <Tabs defaultValue="tenants" className="space-y-6">
+      <TabsList className="grid w-full grid-cols-3">
+        <TabsTrigger value="tenants" className="flex items-center gap-1"><Shield className="h-4 w-4" /> Tenants</TabsTrigger>
+        <TabsTrigger value="settings" className="flex items-center gap-1"><Settings className="h-4 w-4" /> Settings</TabsTrigger>
+        <TabsTrigger value="audit" className="flex items-center gap-1"><Activity className="h-4 w-4" /> Audit Logs</TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="tenants">
     <div className="space-y-6">
       {/* Search */}
       <div className="relative">
@@ -447,6 +497,38 @@ export const SuperAdminDashboard = () => {
         confirmLabel={bulkAction === 'pause' ? 'Pause All' : 'Activate All'}
         confirmVariant={bulkAction === 'pause' ? 'destructive' : 'default'} />
     </div>
+      </TabsContent>
+
+      <TabsContent value="settings">
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><UserPlus className="h-5 w-5" /> Public Signup Control</CardTitle>
+              <CardDescription>Control whether new admins can sign up from the login page.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between p-4 border rounded-lg">
+                <div>
+                  <p className="font-medium">Allow Public Signup</p>
+                  <p className="text-sm text-muted-foreground">
+                    {signupEnabled ? 'New admins can register from the login page' : 'Signup is hidden — only existing users can log in'}
+                  </p>
+                </div>
+                <Switch
+                  checked={signupEnabled}
+                  onCheckedChange={handleToggleSignup}
+                  disabled={signupLoading}
+                />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </TabsContent>
+
+      <TabsContent value="audit">
+        <AuditLogViewer />
+      </TabsContent>
+    </Tabs>
   );
 };
 
