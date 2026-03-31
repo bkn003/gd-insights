@@ -203,6 +203,7 @@ export const SuperAdminDashboard = () => {
       const { error } = await (supabase.from('profiles') as any).update({ status: 'active' }).eq('id', admin.id);
       if (error) throw error;
       await (supabase.from('profiles') as any).update({ status: 'active' }).eq('admin_id', admin.id).neq('id', admin.id);
+      await logAudit({ action: 'user_activated', targetType: 'profile', targetId: admin.id, details: { name: admin.name } });
       toast.success(`${admin.name} activated successfully`);
     } catch (error: any) { toast.error(error.message || 'Failed to activate'); }
     setActivateTarget(null);
