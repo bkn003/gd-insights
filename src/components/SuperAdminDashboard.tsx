@@ -8,11 +8,15 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Play, Pause, Trash2, Settings, Users, Building, Shield, Search, ChevronDown, ChevronRight, Image, CheckCircle, XCircle } from 'lucide-react';
+import { Play, Pause, Trash2, Settings, Users, Building, Shield, Search, ChevronDown, ChevronRight, Image, CheckCircle, XCircle, Activity, UserPlus } from 'lucide-react';
 import { DeleteConfirmationDialog } from './DeleteConfirmationDialog';
+import { AuditLogViewer } from './AuditLogViewer';
 import { format } from 'date-fns';
 import { useAuth } from '@/hooks/useAuth';
+import { logAudit } from '@/utils/auditLog';
 
 interface AdminProfile {
   id: string;
