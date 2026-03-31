@@ -246,6 +246,7 @@ export const SuperAdminDashboard = () => {
           } catch {}
         }
       }
+      await logAudit({ action: bulkAction === 'pause' ? 'bulk_pause' : 'bulk_activate', details: { count: admins.length } });
       toast.success(`All admins ${newStatus === 'active' ? 'activated' : 'paused'} successfully.`);
     } catch (error: any) { toast.error(error.message || 'Bulk action failed'); }
     setBulkAction(null);
