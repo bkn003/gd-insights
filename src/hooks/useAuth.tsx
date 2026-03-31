@@ -199,6 +199,7 @@ export const useAuth = () => {
   };
 
   const signOut = async () => {
+    await logAudit({ action: 'logout' });
     localStorage.removeItem(PROFILE_CACHE_KEY);
     localStorage.removeItem('gd_app_data');
     const { error } = await supabase.auth.signOut();
