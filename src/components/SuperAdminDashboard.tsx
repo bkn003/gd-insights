@@ -305,6 +305,14 @@ export const SuperAdminDashboard = () => {
   }
 
   return (
+    <Tabs defaultValue="tenants" className="space-y-6">
+      <TabsList className="grid w-full grid-cols-3">
+        <TabsTrigger value="tenants" className="flex items-center gap-1"><Shield className="h-4 w-4" /> Tenants</TabsTrigger>
+        <TabsTrigger value="settings" className="flex items-center gap-1"><Settings className="h-4 w-4" /> Settings</TabsTrigger>
+        <TabsTrigger value="audit" className="flex items-center gap-1"><Activity className="h-4 w-4" /> Audit Logs</TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="tenants">
     <div className="space-y-6">
       {/* Search */}
       <div className="relative">
@@ -489,6 +497,38 @@ export const SuperAdminDashboard = () => {
         confirmLabel={bulkAction === 'pause' ? 'Pause All' : 'Activate All'}
         confirmVariant={bulkAction === 'pause' ? 'destructive' : 'default'} />
     </div>
+      </TabsContent>
+
+      <TabsContent value="settings">
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><UserPlus className="h-5 w-5" /> Public Signup Control</CardTitle>
+              <CardDescription>Control whether new admins can sign up from the login page.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between p-4 border rounded-lg">
+                <div>
+                  <p className="font-medium">Allow Public Signup</p>
+                  <p className="text-sm text-muted-foreground">
+                    {signupEnabled ? 'New admins can register from the login page' : 'Signup is hidden — only existing users can log in'}
+                  </p>
+                </div>
+                <Switch
+                  checked={signupEnabled}
+                  onCheckedChange={handleToggleSignup}
+                  disabled={signupLoading}
+                />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </TabsContent>
+
+      <TabsContent value="audit">
+        <AuditLogViewer />
+      </TabsContent>
+    </Tabs>
   );
 };
 
