@@ -2,9 +2,10 @@
 import { useAuth } from '@/hooks/useAuth';
 import { AuthForm } from '@/components/AuthForm';
 import { MainApp } from '@/components/MainApp';
+import { EmailVerificationPending } from '@/components/EmailVerificationPending';
 
 const Index = () => {
-  const { user, loading } = useAuth();
+  const { user, loading, signOut } = useAuth();
 
   if (loading) {
     return (
@@ -14,9 +15,17 @@ const Index = () => {
     );
   }
 
-  // Only show MainApp (with navigation) when user is authenticated
-  // AuthForm handles its own layout and doesn't show navigation
-  return user ? <MainApp /> : <AuthForm />;
+  if (!user) return <AuthForm />;
+
+  // Check email verification - skip for sub-users created by admin (they won't have email_confirmed_at but are trusted)
+  const isEmailVerified = user.email_confirmed_at != null;
+  const isSubUser = user.app_metadata?.admin_id != null;
+  
+  if (!isEmailVerified && !isSubUser) {
+    return <EmailVerificationPending email={user.email || ''} onSignOut={signOut} />;
+  }
+
+  return <MainApp />;
 };
 
 export default Index;
