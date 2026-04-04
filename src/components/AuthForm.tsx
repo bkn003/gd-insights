@@ -233,6 +233,7 @@ export const AuthForm = () => {
                   onChange={handleInputChange}
                   required
                 />
+                {isSignUp && <PasswordStrengthIndicator password={formData.password} />}
               </div>
             )}
 
