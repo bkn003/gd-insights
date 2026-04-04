@@ -53,7 +53,7 @@ export const AuditLogViewer = () => {
     }
   };
 
-  useEffect(() => { fetchLogs(); }, [page, actionFilter, searchQuery]);
+  useEffect(() => { fetchLogs(); }, [page, pageSize, actionFilter, searchQuery]);
 
   const actionColors: Record<string, string> = {
     login: 'default',
