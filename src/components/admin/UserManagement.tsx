@@ -14,6 +14,8 @@ import { UserPlus, Edit, Trash2, Pause, Play, KeyRound } from 'lucide-react';
 import { Database } from '@/types/database';
 import { DeleteConfirmationDialog } from '@/components/DeleteConfirmationDialog';
 import { PasswordInput } from '@/components/ui/password-input';
+import { validatePassword } from '@/utils/passwordPolicy';
+import { PasswordStrengthIndicator } from '@/components/PasswordStrengthIndicator';
 
 type Profile = Database['public']['Tables']['profiles']['Row'] & {
   email?: string;
@@ -110,6 +112,11 @@ export const UserManagement = ({ shops: propShops, profiles: propProfiles, onRef
   const handleCreateSubUser = useCallback(async () => {
     if (!newUser.name || !newUser.email || !newUser.password) {
       toast.error('Name, email, and password are required');
+      return;
+    }
+    const pwValidation = validatePassword(newUser.password);
+    if (!pwValidation.isValid) {
+      toast.error('Password does not meet requirements: ' + pwValidation.errors.join(', '));
       return;
     }
     if (newUser.shop_id === 'none') {
@@ -382,8 +389,9 @@ export const UserManagement = ({ shops: propShops, profiles: propProfiles, onRef
                 <PasswordInput
                   value={newUser.password}
                   onChange={e => setNewUser({ ...newUser, password: e.target.value })}
-                  placeholder="Min 6 characters"
+                  placeholder="Min 8 chars, uppercase, number, special"
                 />
+                <PasswordStrengthIndicator password={newUser.password} />
               </div>
               <div className="space-y-2">
                 <Label>Role</Label>

@@ -1,10 +1,12 @@
-import { ReactNode, useState } from 'react';
+import { ReactNode, useState, useCallback } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { LogOut, Package } from 'lucide-react';
 import { toast } from 'sonner';
 import { NotificationBell } from './NotificationBell';
 import { DeleteConfirmationDialog } from './DeleteConfirmationDialog';
+import { ThemeToggle } from './ThemeToggle';
+import { useSessionTimeout } from '@/hooks/useSessionTimeout';
 
 interface LayoutProps {
   children: ReactNode;
@@ -14,6 +16,13 @@ export const Layout = ({ children }: LayoutProps) => {
   const { profile, signOut, isSuperAdmin, isAdmin, isManager } = useAuth();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+
+  const handleSessionTimeout = useCallback(async () => {
+    toast.info('Session expired due to inactivity. Please sign in again.', { duration: 6000 });
+    await signOut();
+  }, [signOut]);
+
+  useSessionTimeout(handleSessionTimeout, !!profile);
 
   const handleSignOut = async () => {
     setLoggingOut(true);
@@ -60,6 +69,8 @@ export const Layout = ({ children }: LayoutProps) => {
                   </span>
                 )}
               </div>
+              
+              <ThemeToggle />
               
               <NotificationBell />
               

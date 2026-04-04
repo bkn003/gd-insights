@@ -26,7 +26,7 @@ export const AuditLogViewer = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [actionFilter, setActionFilter] = useState('all');
   const [page, setPage] = useState(0);
-  const pageSize = 50;
+  const [pageSize, setPageSize] = useState(25);
 
   const fetchLogs = async () => {
     setLoading(true);
@@ -53,7 +53,7 @@ export const AuditLogViewer = () => {
     }
   };
 
-  useEffect(() => { fetchLogs(); }, [page, actionFilter, searchQuery]);
+  useEffect(() => { fetchLogs(); }, [page, pageSize, actionFilter, searchQuery]);
 
   const actionColors: Record<string, string> = {
     login: 'default',
@@ -139,14 +139,28 @@ export const AuditLogViewer = () => {
           </Table>
         </ScrollArea>
 
-        <div className="flex items-center justify-between">
-          <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(p => p - 1)}>
-            <ChevronLeft className="h-4 w-4 mr-1" /> Previous
-          </Button>
-          <span className="text-sm text-muted-foreground">Page {page + 1}</span>
-          <Button variant="outline" size="sm" disabled={logs.length < pageSize} onClick={() => setPage(p => p + 1)}>
-            Next <ChevronRight className="h-4 w-4 ml-1" />
-          </Button>
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Rows:</span>
+            <Select value={String(pageSize)} onValueChange={v => { setPageSize(Number(v)); setPage(0); }}>
+              <SelectTrigger className="w-[80px] h-8"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="10">10</SelectItem>
+                <SelectItem value="25">25</SelectItem>
+                <SelectItem value="50">50</SelectItem>
+                <SelectItem value="100">100</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(p => p - 1)}>
+              <ChevronLeft className="h-4 w-4 mr-1" /> Previous
+            </Button>
+            <span className="text-sm text-muted-foreground">Page {page + 1}</span>
+            <Button variant="outline" size="sm" disabled={logs.length < pageSize} onClick={() => setPage(p => p + 1)}>
+              Next <ChevronRight className="h-4 w-4 ml-1" />
+            </Button>
+          </div>
         </div>
       </CardContent>
     </Card>

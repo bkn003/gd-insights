@@ -10,6 +10,8 @@ import { toast } from 'sonner';
 import { Package, AlertCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { logAudit } from '@/utils/auditLog';
+import { validatePassword } from '@/utils/passwordPolicy';
+import { PasswordStrengthIndicator } from '@/components/PasswordStrengthIndicator';
 
 const MAX_ATTEMPTS = 5;
 const LOCKOUT_DURATION = 60_000; // 1 minute
@@ -95,6 +97,11 @@ export const AuthForm = () => {
         setIsForgotPassword(false);
         setFormData({ ...formData, email: '' });
       } else if (isSignUp) {
+        const pwValidation = validatePassword(formData.password);
+        if (!pwValidation.isValid) {
+          toast.error('Password does not meet requirements: ' + pwValidation.errors.join(', '));
+          return;
+        }
         const { error } = await signUp(formData.email, formData.password, formData.name);
         if (error) throw error;
         setSignupSuccess(true);
@@ -231,6 +238,7 @@ export const AuthForm = () => {
                   onChange={handleInputChange}
                   required
                 />
+                {isSignUp && <PasswordStrengthIndicator password={formData.password} />}
               </div>
             )}
 
