@@ -26,7 +26,7 @@ export const AuditLogViewer = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [actionFilter, setActionFilter] = useState('all');
   const [page, setPage] = useState(0);
-  const pageSize = 50;
+  const [pageSize, setPageSize] = useState(25);
 
   const fetchLogs = async () => {
     setLoading(true);
