@@ -17,6 +17,13 @@ export const Layout = ({ children }: LayoutProps) => {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
+  const handleSessionTimeout = useCallback(async () => {
+    toast.info('Session expired due to inactivity. Please sign in again.', { duration: 6000 });
+    await signOut();
+  }, [signOut]);
+
+  useSessionTimeout(handleSessionTimeout, !!profile);
+
   const handleSignOut = async () => {
     setLoggingOut(true);
     const { error } = await signOut();
