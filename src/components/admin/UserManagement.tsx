@@ -14,6 +14,8 @@ import { UserPlus, Edit, Trash2, Pause, Play, KeyRound } from 'lucide-react';
 import { Database } from '@/types/database';
 import { DeleteConfirmationDialog } from '@/components/DeleteConfirmationDialog';
 import { PasswordInput } from '@/components/ui/password-input';
+import { validatePassword } from '@/utils/passwordPolicy';
+import { PasswordStrengthIndicator } from '@/components/PasswordStrengthIndicator';
 
 type Profile = Database['public']['Tables']['profiles']['Row'] & {
   email?: string;
