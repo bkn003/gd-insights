@@ -389,8 +389,9 @@ export const UserManagement = ({ shops: propShops, profiles: propProfiles, onRef
                 <PasswordInput
                   value={newUser.password}
                   onChange={e => setNewUser({ ...newUser, password: e.target.value })}
-                  placeholder="Min 6 characters"
+                  placeholder="Min 8 chars, uppercase, number, special"
                 />
+                <PasswordStrengthIndicator password={newUser.password} />
               </div>
               <div className="space-y-2">
                 <Label>Role</Label>
