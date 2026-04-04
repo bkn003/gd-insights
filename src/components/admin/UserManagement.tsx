@@ -114,6 +114,11 @@ export const UserManagement = ({ shops: propShops, profiles: propProfiles, onRef
       toast.error('Name, email, and password are required');
       return;
     }
+    const pwValidation = validatePassword(newUser.password);
+    if (!pwValidation.isValid) {
+      toast.error('Password does not meet requirements: ' + pwValidation.errors.join(', '));
+      return;
+    }
     if (newUser.shop_id === 'none') {
       toast.error('Please select a shop');
       return;
