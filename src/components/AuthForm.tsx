@@ -10,6 +10,8 @@ import { toast } from 'sonner';
 import { Package, AlertCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { logAudit } from '@/utils/auditLog';
+import { validatePassword } from '@/utils/passwordPolicy';
+import { PasswordStrengthIndicator } from '@/components/PasswordStrengthIndicator';
 
 const MAX_ATTEMPTS = 5;
 const LOCKOUT_DURATION = 60_000; // 1 minute
