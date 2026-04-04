@@ -70,6 +70,8 @@ export const Layout = ({ children }: LayoutProps) => {
                 )}
               </div>
               
+              <ThemeToggle />
+              
               <NotificationBell />
               
               <Button

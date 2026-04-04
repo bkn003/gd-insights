@@ -97,6 +97,11 @@ export const AuthForm = () => {
         setIsForgotPassword(false);
         setFormData({ ...formData, email: '' });
       } else if (isSignUp) {
+        const pwValidation = validatePassword(formData.password);
+        if (!pwValidation.isValid) {
+          toast.error('Password does not meet requirements: ' + pwValidation.errors.join(', '));
+          return;
+        }
         const { error } = await signUp(formData.email, formData.password, formData.name);
         if (error) throw error;
         setSignupSuccess(true);
