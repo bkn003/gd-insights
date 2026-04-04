@@ -1,10 +1,12 @@
-import { ReactNode, useState } from 'react';
+import { ReactNode, useState, useCallback } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { LogOut, Package } from 'lucide-react';
 import { toast } from 'sonner';
 import { NotificationBell } from './NotificationBell';
 import { DeleteConfirmationDialog } from './DeleteConfirmationDialog';
+import { ThemeToggle } from './ThemeToggle';
+import { useSessionTimeout } from '@/hooks/useSessionTimeout';
 
 interface LayoutProps {
   children: ReactNode;
