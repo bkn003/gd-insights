@@ -20,6 +20,7 @@ import { ImageDisplay } from './ImageDisplay';
 import { VoiceNotePlayer } from './VoiceNotePlayer';
 import { NoteViewerModal } from './NoteViewerModal';
 import { AnalyticsCharts } from './AnalyticsCharts';
+import { SmartDemandInsights } from './SmartDemandInsights';
 
 interface GDEntry {
   id: string;
@@ -774,6 +775,13 @@ export const Dashboard = () => {
           {showCharts && allEntries && allEntries.length > 0 && (
             <div className="mt-6">
               <AnalyticsCharts entries={allEntries} />
+            </div>
+          )}
+
+          {/* Smart Demand Insights */}
+          {allEntries && allEntries.length >= 2 && (
+            <div className="mt-6">
+              <SmartDemandInsights entries={allEntries} />
             </div>
           )}
 
