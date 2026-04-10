@@ -125,12 +125,6 @@ export const MainApp = () => {
                   <Plus className="h-4 w-4" />GD
                 </Button>
                 {(isAdmin || isManager) && (
-                  <Button variant={activeTab === 'profile' ? 'default' : 'ghost'} onClick={() => setActiveTab('profile')}
-                    className="flex items-center gap-2 flex-shrink-0">
-                    <User className="h-4 w-4" />Profile
-                  </Button>
-                )}
-                {(isAdmin || isManager) && (
                   <Button variant={activeTab === 'dashboard' ? 'default' : 'ghost'} onClick={() => setActiveTab('dashboard')}
                     className="flex items-center gap-2 flex-shrink-0">
                     <BarChart3 className="h-4 w-4" />Dashboard
