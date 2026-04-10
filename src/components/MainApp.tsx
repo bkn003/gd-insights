@@ -14,7 +14,7 @@ import { BarChart3, Plus, Settings, FileText, Shield } from 'lucide-react';
 const Dashboard = React.lazy(() => import('@/components/Dashboard').then(m => ({ default: m.Dashboard })));
 const ReportsPanel = React.lazy(() => import('@/components/ReportsPanel').then(m => ({ default: m.ReportsPanel })));
 const AdminPanel = React.lazy(() => import('@/components/AdminPanel').then(m => ({ default: m.AdminPanel })));
-const UserProfile = React.lazy(() => import('@/components/UserProfile').then(m => ({ default: m.UserProfile })));
+
 const SuperAdminDashboard = React.lazy(() => import('@/components/SuperAdminDashboard').then(m => ({ default: m.SuperAdminDashboard })));
 
 type ActiveTab = 'gd' | 'dashboard' | 'admin' | 'reports' | 'super_admin';
