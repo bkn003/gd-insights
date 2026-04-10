@@ -8,7 +8,7 @@ import { DamagedGoodsForm } from '@/components/DamagedGoodsForm';
 import { MobileBottomNav } from '@/components/MobileBottomNav';
 import { PWAInstallPrompt } from '@/components/PWAInstallPrompt';
 import { Button } from '@/components/ui/button';
-import { BarChart3, Plus, Settings, FileText, User, Shield } from 'lucide-react';
+import { BarChart3, Plus, Settings, FileText, Shield } from 'lucide-react';
 
 // Lazy load heavy components
 const Dashboard = React.lazy(() => import('@/components/Dashboard').then(m => ({ default: m.Dashboard })));
@@ -74,10 +74,6 @@ export const MainApp = () => {
       case 'super_admin':
         return isSuperAdmin ? (
           <Suspense fallback={<LoadingSpinner />}><SuperAdminDashboard /></Suspense>
-        ) : <div className="text-center text-muted-foreground">Access denied</div>;
-      case 'profile':
-        return !isSuperAdmin ? (
-          <Suspense fallback={<LoadingSpinner />}><UserProfile /></Suspense>
         ) : <div className="text-center text-muted-foreground">Access denied</div>;
       case 'gd':
         return !isSuperAdmin ? <DamagedGoodsForm /> : <div className="text-center text-muted-foreground">Access denied</div>;
