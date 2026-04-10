@@ -25,6 +25,7 @@ import { format } from 'date-fns';
 import { Database } from '@/types/database';
 import * as XLSX from 'xlsx';
 import { exportToPDFViaHTML, exportMultiSectionPDFViaHTML, makeImageCell, type CellContent } from '@/utils/htmlPdfExport';
+import { SmartDemandInsights } from './SmartDemandInsights';
 
 interface CustomFieldDef {
   id: string;
@@ -1303,6 +1304,11 @@ export const ReportsPanel = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Smart Demand Insights */}
+      {filteredEntries.length >= 2 && (
+        <SmartDemandInsights entries={filteredEntries} customFields={customFields} />
+      )}
 
       <Card className="w-full">
         <CardHeader>
