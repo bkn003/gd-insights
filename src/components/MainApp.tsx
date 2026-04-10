@@ -17,7 +17,7 @@ const AdminPanel = React.lazy(() => import('@/components/AdminPanel').then(m => 
 const UserProfile = React.lazy(() => import('@/components/UserProfile').then(m => ({ default: m.UserProfile })));
 const SuperAdminDashboard = React.lazy(() => import('@/components/SuperAdminDashboard').then(m => ({ default: m.SuperAdminDashboard })));
 
-type ActiveTab = 'gd' | 'dashboard' | 'admin' | 'reports' | 'profile' | 'super_admin';
+type ActiveTab = 'gd' | 'dashboard' | 'admin' | 'reports' | 'super_admin';
 
 export const MainApp = () => {
   const { isSuperAdmin, isAdmin, isManager, profile, user, signOut, adminId } = useAuth();
